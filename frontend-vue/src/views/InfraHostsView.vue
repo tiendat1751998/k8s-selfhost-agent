@@ -57,16 +57,22 @@ const {
     <InfraHostsHeaderBar
       v-model:show-mobile-search="showMobileSearch"
       v-model:search-query="searchQuery"
+      v-model:show-telemetry="showTelemetry"
+      v-model:selected-type-filter="selectedTypeFilter"
+      v-model:selected-status-filter="selectedStatusFilter"
       :filtered-hosts-count="filteredHosts.length"
       :loading="loading"
       :hosts="hosts"
       :online-hosts-count="onlineHostsCount"
       :offline-hosts-count="offlineHostsCount"
       :avg-latency="avgLatency"
+      :type-counts="typeCounts"
+      :host-type-definitions="hostTypeDefinitions"
       @add-host="openAddHostModal"
       @refresh="fetchHosts"
       @open-fencing="openFencingModal($event, hosts.find(h => h.status !== 'connected')?.tenant_id || 'default')"
     />
+
 
     <!-- Unified 38px Controls Toolbar (Desktop Only) -->
     <div class="desktop-only">

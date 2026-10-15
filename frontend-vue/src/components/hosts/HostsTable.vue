@@ -4,7 +4,8 @@ import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 import type { ComputeHost } from '../../api/compute'
-import type { HostTestResult, HostTypeDefinition } from '../../types/hosts'
+import { formatHostLastSeen, type HostTestResult, type HostTypeDefinition } from '../../types/hosts'
+
 
 const props = defineProps<{
   hosts: ComputeHost[]
@@ -225,8 +226,9 @@ function handleActionSelect(actionId: string, host: ComputeHost) {
           </td>
 
           <td class="col-lastseen font-mono text-muted text-sm">
-            {{ formatDate(host.last_health_check || host.created_at) }}
+            {{ formatHostLastSeen(host, formatDate) }}
           </td>
+
 
           <td class="col-labels">
             <div v-if="host.labels && Object.keys(host.labels).length > 0" class="table-labels-wrap">

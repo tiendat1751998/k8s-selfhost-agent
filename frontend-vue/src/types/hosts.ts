@@ -260,3 +260,29 @@ export function formatUptime(seconds?: number): string {
   if (minutes > 0) return `${minutes}m ${secs}s`
   return `${secs}s`
 }
+
+export function formatHostLastSeen(
+  host: {
+    last_health_check?: string
+    status?: string
+    updated_at?: string
+    created_at?: string
+  },
+  formatDateFn: (d?: string) => string = formatDate,
+  includePrefix: boolean = false
+): string {
+  if (host.last_health_check) {
+    const formatted = formatDateFn(host.last_health_check)
+    return includePrefix ? `Last check: ${formatted}` : formatted
+  }
+  const isConnected = (host.status || 'connected').toLowerCase() === 'connected'
+  const fallbackDate = host.updated_at || host.created_at
+  if (fallbackDate && isConnected) {
+    return `Verified: ${formatDateFn(fallbackDate)}`
+  }
+  if (isConnected) {
+    return 'Awaiting probe'
+  }
+  return includePrefix ? 'Last check: Never' : 'Never'
+}
+

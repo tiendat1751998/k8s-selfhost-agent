@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import BaseIcon from '../ui/BaseIcon.vue'
 import type { ComputeHost } from '../../api/compute'
+import type { HostTypeDefinition } from '../../types/hosts'
 
 defineProps<{
   filteredHostsCount: number
@@ -11,11 +12,19 @@ defineProps<{
   onlineHostsCount: number
   offlineHostsCount: number
   avgLatency: number
+  showTelemetry?: boolean
+  selectedTypeFilter?: string
+  selectedStatusFilter?: string
+  hostTypeDefinitions?: HostTypeDefinition[]
+  typeCounts?: Record<string, number>
 }>()
 
 const emit = defineEmits<{
   (e: 'update:showMobileSearch', val: boolean): void
   (e: 'update:searchQuery', val: string): void
+  (e: 'update:showTelemetry', val: boolean): void
+  (e: 'update:selectedTypeFilter', val: string): void
+  (e: 'update:selectedStatusFilter', val: string): void
   (e: 'addHost'): void
   (e: 'refresh'): void
   (e: 'openFencing', nodeName: string, clusterId: string): void
@@ -31,6 +40,16 @@ const emit = defineEmits<{
         <span class="command-bar-title font-bold">Compute Hosts ({{ filteredHostsCount }})</span>
       </div>
       <div class="command-bar-actions">
+        <button
+          type="button"
+          class="btn-icon-cmd"
+          :class="{ active: showTelemetry }"
+          title="Toggle Fleet Telemetry"
+          aria-label="Toggle Fleet Telemetry"
+          @click="emit('update:showTelemetry', !showTelemetry)"
+        >
+          <BaseIcon name="activity" size="xs" />
+        </button>
         <button class="btn-icon-cmd" title="Add Host" @click="emit('addHost')">
           <span class="font-bold text-sm">+</span>
         </button>
@@ -61,7 +80,7 @@ const emit = defineEmits<{
       </template>
     </div>
 
-    <!-- Mobile Search Expandable Input -->
+    <!-- Mobile Search Expandable Input & Filter Controls -->
     <div v-if="showMobileSearch" class="mobile-search-box mobile-only animate-fade-in">
       <input
         :value="searchQuery"
@@ -71,7 +90,49 @@ const emit = defineEmits<{
         style="width: 100%; font-size: 12px; padding: 6px 10px;"
         @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
       />
+      <div class="mobile-filter-pills-row">
+        <div class="m-filter-group" role="group" aria-label="Filter hosts by status">
+          <button
+            type="button"
+            class="m-filter-pill"
+            :class="{ active: (selectedStatusFilter || 'all') === 'all' }"
+            @click="emit('update:selectedStatusFilter', 'all')"
+          >
+            All
+          </button>
+          <button
+            type="button"
+            class="m-filter-pill m-pill-connected"
+            :class="{ active: selectedStatusFilter === 'connected' }"
+            @click="emit('update:selectedStatusFilter', 'connected')"
+          >
+            Online ({{ onlineHostsCount }})
+          </button>
+          <button
+            v-if="offlineHostsCount > 0"
+            type="button"
+            class="m-filter-pill m-pill-disconnected"
+            :class="{ active: selectedStatusFilter === 'disconnected' }"
+            @click="emit('update:selectedStatusFilter', 'disconnected')"
+          >
+            Offline ({{ offlineHostsCount }})
+          </button>
+        </div>
+        <select
+          v-if="hostTypeDefinitions && hostTypeDefinitions.length > 0"
+          :value="selectedTypeFilter || 'all'"
+          class="m-filter-select font-mono"
+          aria-label="Filter hosts by type"
+          @change="emit('update:selectedTypeFilter', ($event.target as HTMLSelectElement).value)"
+        >
+          <option value="all">All Types</option>
+          <option v-for="def in hostTypeDefinitions" :key="def.type" :value="def.type">
+            {{ def.label }} {{ typeCounts?.[def.type] ? `(${typeCounts[def.type]})` : '' }}
+          </option>
+        </select>
+      </div>
     </div>
+
 
     <!-- SRE Storage Fencing Alert Banner (When Unready/Offline Nodes Exist) -->
     <div v-if="offlineHostsCount > 0" class="fencing-alert-strip glass-panel animate-fade-in">
