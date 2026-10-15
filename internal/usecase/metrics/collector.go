@@ -259,7 +259,15 @@ func NewCollector(dockerClient DockerAPIClient, computeHostRepo docker.ComputeHo
 	c := &Collector{
 		dockerClient:       dockerClient,
 		computeHostRepo:    computeHostRepo,
-		httpClient:         &http.Client{Timeout: 5 * time.Second},
+		httpClient: &http.Client{
+			Timeout: 5 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        512,
+				MaxIdleConnsPerHost: 4,
+				MaxConnsPerHost:     8,
+				IdleConnTimeout:     30 * time.Second,
+			},
+		},
 		agentMetrics:       make(map[string]*AgentMetrics),
 		broadcaster:        broadcaster,
 		logger:             logger,
@@ -368,14 +376,27 @@ func (c *Collector) scrapeAllAgents(ctx context.Context) {
 		currentHostIDs[host.ID] = true
 	}
 
+	const maxConcurrentScrapes = 64
+	sem := make(chan struct{}, maxConcurrentScrapes)
 	var wg sync.WaitGroup
+
 	for _, host := range hosts {
+		select {
+		case <-ctx.Done():
+			goto wait
+		case sem <- struct{}{}:
+		}
+
 		wg.Add(1)
 		go func(h docker.ComputeHost) {
-			defer wg.Done()
+			defer func() {
+				<-sem
+				wg.Done()
+			}()
 			c.ScrapeAgent(ctx, h)
 		}(host)
 	}
+wait:
 	wg.Wait()
 
 	c.agentMu.Lock()

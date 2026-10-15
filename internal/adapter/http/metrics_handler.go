@@ -72,7 +72,9 @@ func (h *OverviewHandler) RegisterRoutes(r chi.Router) {
 }
 
 // GetOverview handles GET /api/v1/overview
-// Returns the full cached SystemOverview including nodes, containers, totals, and alerts.
+// Returns the cached SystemOverview including nodes, containers, totals, and alerts.
+// Automatically strips per-node TopProcesses when len(Nodes) > 100 unless ?full=true,
+// or whenever ?summary=true is requested, to keep payloads scalable for 1,000–10,000 nodes.
 func (h *OverviewHandler) GetOverview(w http.ResponseWriter, r *http.Request) {
 	var snapshot *metrics.SystemOverview
 	if h.collector != nil {
@@ -86,6 +88,21 @@ func (h *OverviewHandler) GetOverview(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	summaryParam := r.URL.Query().Get("summary") == "true"
+	fullParam := r.URL.Query().Get("full") == "true"
+	if summaryParam || (len(snapshot.Nodes) > 100 && !fullParam) {
+		snapCopy := *snapshot
+		nodesCopy := make([]metrics.NodeMetrics, len(snapshot.Nodes))
+		for i, node := range snapshot.Nodes {
+			nodesCopy[i] = node
+			nodesCopy[i].TopProcesses = make([]metrics.ProcessMetric, 0)
+		}
+		snapCopy.Nodes = nodesCopy
+		writeJSON(w, http.StatusOK, snapCopy)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, snapshot)
 }
 
