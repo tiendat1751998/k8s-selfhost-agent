@@ -20,6 +20,7 @@ type AgentMetricRemover interface {
 func (h *DockerHandler) RegisterHostRoutes(r chi.Router) {
 	r.Get("/", h.ListHosts)
 	r.Post("/", h.CreateHost)
+	r.Post("/register", h.RegisterAgent)
 	r.Get("/{id}", h.GetHost)
 	r.Put("/{id}", h.UpdateHost)
 	r.Delete("/{id}", h.DeleteHost)

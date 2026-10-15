@@ -155,8 +155,17 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 	if platform.Backup != nil {
 		r.With(mutRoles).Route("/backup", platform.Backup.RegisterRoutes)
 	}
-	if platform.Agents != nil {
-		r.With(mutRoles).Route("/agents", platform.Agents.RegisterRoutes)
+	if platform.Agents != nil || platform.Docker != nil {
+		r.Route("/agents", func(ar chi.Router) {
+			if platform.Docker != nil {
+				ar.Post("/register", platform.Docker.RegisterAgent)
+			}
+			if platform.Agents != nil {
+				ar.With(mutRoles).Group(func(sub chi.Router) {
+					platform.Agents.RegisterRoutes(sub)
+				})
+			}
+		})
 	}
 	if platform.Tenancy != nil {
 		r.With(adminOnly).Route("/tenancy", platform.Tenancy.RegisterRoutes)

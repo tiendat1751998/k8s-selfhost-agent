@@ -127,7 +127,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		dockerClient, computeHostRepo, bridge, log,
 		usecaseMetrics.WithRequestCountFn(mw.GetRequestCount),
 		usecaseMetrics.WithIncidentRepo(incRepo),
-		usecaseMetrics.WithHostProbe(true),
+		usecaseMetrics.WithHostProbe(os.Getenv("ENABLE_LOCAL_HOST_PROBE") == "true"),
 	)
 	go metricsCollector.Start(ctx)
 
@@ -235,16 +235,6 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	go healthChecker.Start(ctx, 1*time.Minute)
 
 	obsRepo := postgres.NewObservabilityRepo(dbPool)
-	if obsRepo != nil {
-		defs, err := obsRepo.ListSLODefinitions(ctx)
-		if err != nil {
-			log.Warn("Failed to check existing SLO definitions", zap.Error(err))
-		} else if len(defs) == 0 {
-			if seedErr := usecaseSLO.SeedDefaultSLODefinitions(ctx, obsRepo, log); seedErr != nil {
-				log.Warn("Failed to seed default enterprise SLO definitions", zap.Error(seedErr))
-			}
-		}
-	}
 	sloCollector := usecaseSLO.NewSLOCollector(dockerClient, obsRepo, log)
 	go sloCollector.Start(ctx)
 
