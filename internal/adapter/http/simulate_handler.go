@@ -19,10 +19,12 @@ import (
 )
 
 type simulateIncidentRequest struct {
-	Scenario    string `json:"scenario"`
-	PodName     string `json:"pod_name"`
-	Namespace   string `json:"namespace"`
-	ClusterName string `json:"cluster_name"`
+	Scenario       string `json:"scenario"`
+	IncidentID     string `json:"incident_id,omitempty"`
+	PodName        string `json:"pod_name"`
+	TargetResource string `json:"target_resource,omitempty"`
+	Namespace      string `json:"namespace"`
+	ClusterName    string `json:"cluster_name"`
 }
 
 func (h *Handler) isProduction() bool {
@@ -69,6 +71,9 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 	}
 	namespace := strings.TrimSpace(req.Namespace)
 	podName := strings.TrimSpace(req.PodName)
+	if podName == "" {
+		podName = strings.TrimSpace(req.TargetResource)
+	}
 
 	var (
 		incType      incident.Type
@@ -90,7 +95,7 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 			namespace = "infrastructure"
 		}
 		if podName == "" {
-			podName = "k8sworker3"
+			podName = "node-sim-target"
 		}
 		incType = incident.TypeNodeNotReady
 		severity = incident.SeverityCritical
@@ -109,7 +114,7 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 			namespace = "production"
 		}
 		if podName == "" {
-			podName = "auth-api-5c79895db-j9m7w"
+			podName = "crashloop-sim-target"
 		}
 		incType = incident.TypeCrashLoopBackOff
 		severity = incident.SeverityHigh
@@ -128,7 +133,7 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 			namespace = "default"
 		}
 		if podName == "" {
-			podName = "order-processor-6b87d-8k9pq"
+			podName = "cpu-sim-target"
 		}
 		incType = incident.TypeResourceExhaust
 		severity = incident.SeverityHigh
@@ -147,7 +152,7 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 			namespace = "production"
 		}
 		if podName == "" {
-			podName = "api-gateway"
+			podName = "svc-sim-target"
 		}
 		incType = incident.TypeServiceUnhealthy
 		severity = incident.SeverityHigh
@@ -166,7 +171,7 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 			namespace = "production"
 		}
 		if podName == "" {
-			podName = "payment-service-7d4b8f9c6d-x8k2l"
+			podName = "oom-sim-target"
 		}
 		incType = incident.TypeOOMKilled
 		severity = incident.SeverityCritical
@@ -187,6 +192,10 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.IncidentID != "" {
+		inc.ID = req.IncidentID
+	}
+
 	inc.AddRawData("simulated", "true")
 	inc.AddRawData("scenario", scenario)
 
@@ -202,9 +211,9 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 	if h.reportRepo != nil {
 		rpt, err := report.New(inc.ID, rootCause, evidence, confidence, riskLevel, remediation, rollbackPlan)
 		if err == nil {
-			rpt.LLMModel = "claude-3-5-sonnet"
-			rpt.PromptTokens = 420
-			rpt.ResponseTokens = 180
+			rpt.LLMModel = "simulation-deterministic"
+			rpt.PromptTokens = 0
+			rpt.ResponseTokens = 0
 			if err := h.reportRepo.Create(r.Context(), rpt); err != nil {
 				logger.Get().Warn("failed to persist simulated RCA report", zap.Error(err))
 			}
@@ -221,12 +230,11 @@ func (h *Handler) SimulateIncident(w http.ResponseWriter, r *http.Request) {
 		branch := fmt.Sprintf("fix/incident-%s", prBranchID)
 		title := fmt.Sprintf("fix(%s): auto-remediation for %s incident", inc.Namespace, inc.Type)
 		desc := fmt.Sprintf("Automated GitOps PR to remediate %s on %s.\n\n### Root Cause\n%s\n\n### Remediation\n%s", inc.Type, inc.PodName, rootCause, remediation)
-		repoURL := "https://github.com/org/k8s-manifests"
+		repoURL := "https://git.local/cluster/manifests"
 		pr, err := domainGitops.New(inc.ID, domainGitops.ProviderGitHub, repoURL, branch, "main", title, desc)
 		if err == nil {
 			pr.AddFileChange(filePath, fileContent, domainGitops.FileActionModify)
-			prNum := 100 + int(time.Now().Unix()%900)
-			_ = pr.MarkOpen(fmt.Sprintf("%s/pull/%d", repoURL, prNum), prNum)
+			_ = pr.MarkOpen("", 0)
 			if err := h.prRepo.Create(r.Context(), pr); err != nil {
 				logger.Get().Warn("failed to persist simulated GitOps PR", zap.Error(err))
 			}

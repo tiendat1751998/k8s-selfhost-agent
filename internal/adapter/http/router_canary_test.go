@@ -59,6 +59,9 @@ func TestRouter_CanaryProgressiveDeliveryWorkflow(t *testing.T) {
 	assert.Equal(t, 10, exec.CurrentWeight)
 	assert.Equal(t, promotion.CanaryStatusProgressing, exec.Status)
 
+	// Set healthy baseline metrics for evaluation
+	engine.SetMetricsForWorkload("checkout-engine", "production", 0.001, 0.001, 50*time.Millisecond, 50*time.Millisecond)
+
 	// 2. Evaluate Canary (Healthy)
 	reqEval := httptest.NewRequest(http.MethodPost, "/api/v1/promotions/canary/"+exec.ReleaseID+"/evaluate", nil)
 	reqEval.Header.Set("Authorization", "Bearer "+adminToken)

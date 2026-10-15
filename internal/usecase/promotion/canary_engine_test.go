@@ -175,9 +175,22 @@ func TestCanary_ManualAbortRollback(t *testing.T) {
 	assert.Equal(t, "manual emergency abort by sre", exec.AbortReason)
 }
 
+func TestCanary_FailsClosedWhenMetricsUnavailable(t *testing.T) {
+	ctx := context.Background()
+	engine := usecasePromotion.NewCanaryEngine()
+
+	exec, err := engine.StartCanaryRelease(ctx, "unmonitored-service", "default", "v1", nil)
+	require.NoError(t, err)
+
+	_, err = engine.EvaluateCanaryHealth(ctx, exec.ReleaseID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "metrics provider or workload metrics override required")
+}
+
 func TestCanary_ConcurrentOperations(t *testing.T) {
 	ctx := context.Background()
 	engine := usecasePromotion.NewCanaryEngine()
+	engine.SetMetricsForWorkload("concurrent-test", "prod", 0.001, 0.001, 50*time.Millisecond, 50*time.Millisecond)
 
 	exec, err := engine.StartCanaryRelease(ctx, "concurrent-test", "prod", "v1", nil)
 	require.NoError(t, err)

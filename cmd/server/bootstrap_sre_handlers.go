@@ -52,7 +52,11 @@ func bootstrapSREHandlers(p platformHandlerParams) *adapthttp.SREResilienceHandl
 	}
 	cgroupScaler := usecaseNodeMetrics.NewCGroupScalerService(cgroupOpts...)
 	jwksShield := usecaseAuth.NewJWKSShieldManager()
-	fencingMgr := usecaseCluster.NewFencingManager(nil, nil, nil, nil, p.log)
+	var fencingVerifier usecaseCluster.FencingChannelVerifier
+	if p.infra != nil && p.infra.k8sClient != nil {
+		fencingVerifier = usecaseCluster.NewK8sNodeVerifier(p.infra.k8sClient)
+	}
+	fencingMgr := usecaseCluster.NewFencingManager(nil, fencingVerifier, nil, nil, p.log)
 	driftReconciler := usecaseSecretGuard.NewDriftReconciler(nil, nil)
 	ebpfMgr := usecaseEBPFWatch.NewWatchdogManager(usecaseEBPFWatch.WithLogger(p.log))
 	netguardMgr := usecaseNetGuard.NewTunnelManager(usecaseNetGuard.WithLogger(p.log))

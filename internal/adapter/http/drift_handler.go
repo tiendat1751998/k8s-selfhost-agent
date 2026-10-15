@@ -23,6 +23,7 @@ func NewDriftHandler(repo drift.Repository) *DriftHandler {
 func (h *DriftHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/", h.ListDrifts)
 	r.Post("/", h.CreateDrift)
+	r.Get("/{id}/diff", h.GetDriftDiff)
 	r.Put("/{id}/resolve", h.ResolveDrift)
 }
 
@@ -93,4 +94,31 @@ func (h *DriftHandler) ResolveDrift(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "resolved"})
+}
+
+// GetDriftDiff handles GET /api/v1/drift/{id}/diff
+func (h *DriftHandler) GetDriftDiff(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "drift id is required", err)
+		return
+	}
+	items, _, err := h.repo.List(r.Context(), "", nil, 500, 0)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to query drift diff", err)
+		return
+	}
+	for _, it := range items {
+		if it.ID == id {
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"id":             it.ID,
+				"diff":           it.Diff,
+				"expected_state": it.ExpectedState,
+				"actual_state":   it.ActualState,
+				"status":         it.Status,
+			})
+			return
+		}
+	}
+	writeError(w, http.StatusNotFound, "drift record not found", nil)
 }

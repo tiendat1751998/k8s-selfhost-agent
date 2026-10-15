@@ -71,7 +71,7 @@ func TestPipeline_SafetyGuardrail(t *testing.T) {
 		assert.Equal(t, datasanitizer.StatusCompleted, res.Status)
 		assert.Equal(t, int64(1), res.RowsMasked)
 		assert.NotNil(t, res.FinishedAt)
-		assert.Contains(t, dst.String(), "@staging.internal")
+		assert.Contains(t, dst.String(), "@redacted.invalid")
 		assert.NotContains(t, dst.String(), "alice@gmail.com")
 	})
 }

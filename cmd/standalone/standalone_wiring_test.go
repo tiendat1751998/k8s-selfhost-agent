@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
+	usecaseGitops "github.com/datdt/k8sselfhost/internal/usecase/gitops"
 )
 
 func TestParseDockerLogLine(t *testing.T) {
@@ -66,4 +67,64 @@ func TestStandalone_PostgresPoolFromConfig(t *testing.T) {
 	assert.Equal(t, int32(35), pgCfg.MaxConns)
 	assert.Equal(t, int32(5), pgCfg.MinConns)
 }
+
+func TestStandalone_AuxAndSREHandlersWired(t *testing.T) {
+	cfg := &config.Config{
+		GitOps: config.GitOpsConfig{
+			GitHubToken: "gh_test_token",
+			GitLabToken: "gl_test_token",
+			GitLabURL:   "https://gitlab.example.com",
+			GiteaToken:  "gt_test_token",
+			GiteaURL:    "https://gitea.example.com",
+		},
+	}
+	gitopsCtrl := usecaseGitops.NewController(nil, nil, nil)
+	registerGitopsProviders(gitopsCtrl, cfg)
+
+	aux := initStandaloneAuxHandlers(cfg, nil, nil, nil, nil, gitopsCtrl)
+
+	assert.NotNil(t, aux.Canary, "Canary handler must be wired")
+	assert.NotNil(t, aux.Mesh, "Mesh handler must be wired")
+	assert.NotNil(t, aux.GitOps, "GitOps handler must be wired")
+	assert.NotNil(t, aux.IaC, "IaC handler must be wired")
+	assert.NotNil(t, aux.Telegram, "Telegram handler must be wired")
+	assert.NotNil(t, aux.Admission, "Admission handler must be wired")
+	assert.NotNil(t, aux.MessagingSRE, "MessagingSRE handler must be wired")
+	assert.NotNil(t, aux.SRE, "SRE resilience handlers must be wired")
+
+	// Verify all critical SRE resilience sub-handlers are initialized
+	assert.NotNil(t, aux.SRE.StorageResiliency)
+	assert.NotNil(t, aux.SRE.StorageHealing)
+	assert.NotNil(t, aux.SRE.CGroup)
+	assert.NotNil(t, aux.SRE.Vault)
+	assert.NotNil(t, aux.SRE.JWKS)
+	assert.NotNil(t, aux.SRE.Fencing)
+	assert.NotNil(t, aux.SRE.SecretDrift)
+	assert.NotNil(t, aux.SRE.EBPFWatch)
+	assert.NotNil(t, aux.SRE.NetGuard)
+	assert.NotNil(t, aux.SRE.IngestGuard)
+	assert.NotNil(t, aux.SRE.RuntimeGuard)
+	assert.NotNil(t, aux.SRE.GPUWatch)
+	assert.NotNil(t, aux.SRE.DRHealing)
+	assert.NotNil(t, aux.SRE.FinOpsGuard)
+	assert.NotNil(t, aux.SRE.Netscaler)
+	assert.NotNil(t, aux.SRE.VFSWatchdog)
+	assert.NotNil(t, aux.SRE.K8sResilience)
+	assert.NotNil(t, aux.SRE.DBSafeguard)
+	assert.NotNil(t, aux.SRE.SecDefense)
+	assert.NotNil(t, aux.SRE.CloudResilience)
+	assert.NotNil(t, aux.SRE.ServiceMesh)
+	assert.NotNil(t, aux.SRE.NUMAMemory)
+	assert.NotNil(t, aux.SRE.Hardware)
+	assert.NotNil(t, aux.SRE.Crypto)
+	assert.NotNil(t, aux.SRE.GitOpsSyncWave)
+	assert.NotNil(t, aux.SRE.RDMAWatch)
+	assert.NotNil(t, aux.SRE.APFGuard)
+	assert.NotNil(t, aux.SRE.TransitNet)
+	assert.NotNil(t, aux.SRE.SPIFFEGuard)
+	assert.NotNil(t, aux.SRE.Consensus)
+	assert.NotNil(t, aux.SRE.WorkloadGuard)
+	assert.NotNil(t, aux.SRE.Messaging)
+}
+
 

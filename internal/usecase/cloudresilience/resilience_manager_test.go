@@ -373,3 +373,32 @@ func TestResilienceManager_HighConcurrencyMetrics(t *testing.T) {
 		t.Errorf("expected %d SNAT queries, got %d", expectedCalls, snatCounter.TotalQueries)
 	}
 }
+
+func TestResilienceManager_UnregisteredVolumeAndRegisterVolume(t *testing.T) {
+	ctx := context.Background()
+	mgr := usecase.NewResilienceManager()
+
+	// 1. Check volume without storageClient or registration -> should error
+	_, err := mgr.CheckEBSBurstBalance(ctx, "vol-unregistered")
+	if err == nil {
+		t.Fatalf("expected error for unregistered volume, got nil")
+	}
+
+	// 2. Register volume manually
+	status, err := domain.NewStorageBurstStatus("vol-registered-1", "gp2", 45.0, 500)
+	if err != nil {
+		t.Fatalf("failed to create status: %v", err)
+	}
+	if err := mgr.RegisterVolume(status); err != nil {
+		t.Fatalf("failed to register volume: %v", err)
+	}
+
+	// 3. Now check should succeed
+	retrieved, err := mgr.CheckEBSBurstBalance(ctx, "vol-registered-1")
+	if err != nil {
+		t.Fatalf("unexpected error after register volume: %v", err)
+	}
+	if retrieved.VolumeID != "vol-registered-1" {
+		t.Errorf("expected vol-registered-1, got %s", retrieved.VolumeID)
+	}
+}

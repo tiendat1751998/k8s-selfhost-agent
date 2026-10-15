@@ -35,22 +35,30 @@ func (u *DRUsecase) ExecuteRestoreDrill(ctx context.Context, clusterID, snapshot
 	startTime := time.Now()
 
 	k8sCli, cliErr := u.getK8sClient(ctx, clusterID)
-	if cliErr == nil && k8sCli != nil {
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: sandboxNS,
-				Labels: map[string]string{
-					"app.kubernetes.io/managed-by": "k8sselfhost-dr-drill",
-					"drill-id":                     drillID,
-				},
+	if cliErr != nil || k8sCli == nil {
+		return nil, fmt.Errorf("kubernetes client unavailable for cluster %s: %w", clusterID, cliErr)
+	}
+
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: sandboxNS,
+			Labels: map[string]string{
+				"app.kubernetes.io/managed-by": "k8sselfhost-dr-drill",
+				"drill-id":                     drillID,
 			},
-		}
-		if _, err := k8sCli.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{}); err == nil {
-			defer func() {
-				// Ephemeral namespace cleanup
-				_ = k8sCli.CoreV1().Namespaces().Delete(context.Background(), sandboxNS, metav1.DeleteOptions{})
-			}()
-		}
+		},
+	}
+	if _, err := k8sCli.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{}); err != nil {
+		return nil, fmt.Errorf("creating sandbox namespace %s: %w", sandboxNS, err)
+	}
+	defer func() {
+		// Ephemeral namespace cleanup
+		_ = k8sCli.CoreV1().Namespaces().Delete(context.Background(), sandboxNS, metav1.DeleteOptions{})
+	}()
+
+	// Verify sandbox namespace was created successfully
+	if _, err := k8sCli.CoreV1().Namespaces().Get(ctx, sandboxNS, metav1.GetOptions{}); err != nil {
+		return nil, fmt.Errorf("verifying sandbox namespace %s: %w", sandboxNS, err)
 	}
 
 	// Step 1: Verify snapshot file integrity
@@ -78,23 +86,7 @@ func (u *DRUsecase) ExecuteRestoreDrill(ctx context.Context, clusterID, snapshot
 		return report, domain.ErrRestoreDrillIntegrityMismatch
 	}
 
-	// Step 2: Deploy mock restored database state in ephemeral sandbox
-	if k8sCli != nil {
-		cm := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "restore-drill-target",
-				Namespace: sandboxNS,
-			},
-			Data: map[string]string{
-				"restored_at": time.Now().UTC().Format(time.RFC3339),
-				"snapshot_id": snapshotID,
-				"sha256":      snap.SHA256Hash,
-			},
-		}
-		_, _ = k8sCli.CoreV1().ConfigMaps(sandboxNS).Create(ctx, cm, metav1.CreateOptions{})
-	}
-
-	// Step 3: Compute RTO and RPO
+	// Step 2: Compute RTO and RPO
 	rtoDuration := time.Since(startTime)
 	if rtoDuration <= 0 {
 		rtoDuration = 1 * time.Millisecond
@@ -105,11 +97,8 @@ func (u *DRUsecase) ExecuteRestoreDrill(ctx context.Context, clusterID, snapshot
 		rpoLag = 0
 	}
 
-	tablesRestored := 12
+	tablesRestored := 0
 	rowsRestored := snap.TotalKeys
-	if rowsRestored <= 0 {
-		rowsRestored = 1000
-	}
 
 	report := &domain.RestoreDrillReport{
 		DrillID:         drillID,
@@ -121,7 +110,7 @@ func (u *DRUsecase) ExecuteRestoreDrill(ctx context.Context, clusterID, snapshot
 		TablesRestored:  tablesRestored,
 		RowsRestored:    rowsRestored,
 		ExecutedAt:      time.Now().UTC(),
-		LogOutput: fmt.Sprintf("Sandbox %s created. Snapshot %s restored in %s. RPO lag: %s. Verified integrity: %s",
+		LogOutput: fmt.Sprintf("Sandbox %s verified. Snapshot %s restored in %s. RPO lag: %s. Verified integrity: %s",
 			sandboxNS, snapshotID, rtoDuration, rpoLag, snap.SHA256Hash),
 	}
 

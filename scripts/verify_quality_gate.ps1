@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Quality Gate Verification Script for k8s-selfhost-agent.
     Enforces the Anti-Stupidity Guardrails and Architecture Standards.
@@ -69,10 +69,19 @@ if (-not $SkipBuild) {
     Write-Host "`n[4/4] Validating Backend Compilation (go build -p 2)..." -ForegroundColor Yellow
     try {
         & go build -p 2 ./cmd/standalone/...
-        if ($LASTEXITCODE -ne 0) { throw "go build failed" }
+        if ($LASTEXITCODE -ne 0) { throw "go build standalone failed" }
         Write-Host "✅ PASS: Standalone backend compiles cleanly." -ForegroundColor Green
     } catch {
-        Write-Host "❌ CRITICAL DEFECT: Backend compilation failed!" -ForegroundColor Red
+        Write-Host "❌ CRITICAL DEFECT: Standalone backend compilation failed!" -ForegroundColor Red
+        $failures++
+    }
+
+    try {
+        & go build -p 2 ./cmd/server/...
+        if ($LASTEXITCODE -ne 0) { throw "go build server failed" }
+        Write-Host "✅ PASS: Server backend compiles cleanly." -ForegroundColor Green
+    } catch {
+        Write-Host "❌ CRITICAL DEFECT: Server backend compilation failed!" -ForegroundColor Red
         $failures++
     }
 

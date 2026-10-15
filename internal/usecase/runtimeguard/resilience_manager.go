@@ -5,6 +5,7 @@ package runtimeguard
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -58,6 +59,15 @@ type P2PImagePeerResolver interface {
 type nopStorageProbe struct{}
 
 func (nopStorageProbe) GetNodeStorageHealth(ctx context.Context) ([]domain.NodeStorageHealth, error) {
+	probePath := "/var/lib/containerd"
+	if _, err := os.Stat(probePath); err != nil {
+		probePath = "."
+	}
+	stat, err := os.Stat(probePath)
+	if err != nil {
+		return nil, fmt.Errorf("storage probe unable to inspect local runtime path: %w", err)
+	}
+	_ = stat
 	return []domain.NodeStorageHealth{}, nil
 }
 

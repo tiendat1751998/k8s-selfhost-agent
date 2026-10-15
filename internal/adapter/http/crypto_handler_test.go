@@ -9,6 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -172,6 +173,30 @@ func TestCryptoHandler_HSMSessionStatus_NormalAndSaturated(t *testing.T) {
 	}
 }
 
+type mockKMSClient struct {
+	fail bool
+	key  []byte
+}
+
+func (m *mockKMSClient) DecryptDEK(ctx context.Context, keyID string) ([]byte, error) {
+	if m.fail {
+		return nil, errors.New("kms service unavailable")
+	}
+	return m.key, nil
+}
+
+func (m *mockKMSClient) GetKey(ctx context.Context) (*adapterhttp.KMSKeyDetails, error) {
+	return &adapterhttp.KMSKeyDetails{KeyID: "kms-master", Version: 1, Algorithm: "AES-256-GCM"}, nil
+}
+
+func (m *mockKMSClient) RotateKey(ctx context.Context) (*adapterhttp.KMSRotateResponse, error) {
+	return &adapterhttp.KMSRotateResponse{KeyID: "kms-master", Version: 2, RotatedAt: time.Now().UTC().Format(time.RFC3339)}, nil
+}
+
+func (m *mockKMSClient) VerifyKey(ctx context.Context) (*adapterhttp.KMSVerifyResponse, error) {
+	return &adapterhttp.KMSVerifyResponse{Verified: true, Checksum: "abc123checksum"}, nil
+}
+
 func TestCryptoHandler_EnvelopeDEK_KMSGraceAndExpiry(t *testing.T) {
 	now := time.Now()
 	manager := usecasecrypto.NewShieldManager(usecasecrypto.ShieldManagerOptions{
@@ -179,12 +204,14 @@ func TestCryptoHandler_EnvelopeDEK_KMSGraceAndExpiry(t *testing.T) {
 		DEKGracePeriod: 4 * time.Hour,
 		NowFunc:        func() time.Time { return now },
 	})
-	r := setupCryptoTestRouter(manager)
+	mockKMS := &mockKMSClient{key: []byte("raw-secret-key-32-byte-buffer000")}
+	handler := adapterhttp.NewCryptoHandler(manager, mockKMS)
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
 
 	// 1. Fetch DEK successfully
 	reqBody, _ := json.Marshal(map[string]any{
-		"key_id":             "dek-database-user-pw",
-		"mock_plaintext_key": "raw-secret-key-32-byte-buffer000",
+		"key_id": "dek-database-user-pw",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/envelope/dek", bytes.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -197,11 +224,8 @@ func TestCryptoHandler_EnvelopeDEK_KMSGraceAndExpiry(t *testing.T) {
 
 	// 2. KMS fails, but within 4h grace window -> returns 200 OK with is_stale_valid=true
 	now = now.Add(2 * time.Hour)
-	reqFailBody, _ := json.Marshal(map[string]any{
-		"key_id":          "dek-database-user-pw",
-		"force_kms_error": true,
-	})
-	reqStale := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/envelope/dek", bytes.NewReader(reqFailBody))
+	mockKMS.fail = true
+	reqStale := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/envelope/dek", bytes.NewReader(reqBody))
 	reqStale.Header.Set("Content-Type", "application/json")
 	recStale := httptest.NewRecorder()
 	r.ServeHTTP(recStale, reqStale)
@@ -209,16 +233,54 @@ func TestCryptoHandler_EnvelopeDEK_KMSGraceAndExpiry(t *testing.T) {
 	if recStale.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK during 4h grace window, got %d: %s", recStale.Code, recStale.Body.String())
 	}
+	var staleResp adapterhttp.EnvelopeDEKResponse
+	if err := json.NewDecoder(recStale.Body).Decode(&staleResp); err != nil {
+		t.Fatalf("failed to decode stale response: %v", err)
+	}
+	if !staleResp.IsStaleValid {
+		t.Errorf("expected is_stale_valid=true, got false")
+	}
 
 	// 3. KMS fails and past 4h grace window (total 6 hours) -> returns 500 ErrKMSDEKGraceExpired
 	now = now.Add(4 * time.Hour)
-	reqExpired := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/envelope/dek", bytes.NewReader(reqFailBody))
+	reqExpired := httptest.NewRequest(http.MethodPost, "/api/v1/crypto/envelope/dek", bytes.NewReader(reqBody))
 	reqExpired.Header.Set("Content-Type", "application/json")
 	recExpired := httptest.NewRecorder()
 	r.ServeHTTP(recExpired, reqExpired)
 
 	if recExpired.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 Internal Server Error when grace expired, got %d", recExpired.Code)
+	}
+}
+
+func TestCryptoHandler_KMSKeyManagementRoutes(t *testing.T) {
+	manager := usecasecrypto.NewShieldManager(usecasecrypto.ShieldManagerOptions{})
+	r := chi.NewRouter()
+	handler := adapterhttp.NewCryptoHandler(manager)
+	handler.RegisterRoutes(r)
+
+	// 1. GET /api/v1/security/kms/key
+	reqKey := httptest.NewRequest(http.MethodGet, "/api/v1/security/kms/key", nil)
+	recKey := httptest.NewRecorder()
+	r.ServeHTTP(recKey, reqKey)
+	if recKey.Code != http.StatusOK {
+		t.Fatalf("expected 200 on get kms key, got %d: %s", recKey.Code, recKey.Body.String())
+	}
+
+	// 2. POST /api/v1/security/kms/rotate
+	reqRot := httptest.NewRequest(http.MethodPost, "/api/v1/security/kms/rotate", bytes.NewReader([]byte("{}")))
+	recRot := httptest.NewRecorder()
+	r.ServeHTTP(recRot, reqRot)
+	if recRot.Code != http.StatusOK {
+		t.Fatalf("expected 200 on rotate kms key, got %d: %s", recRot.Code, recRot.Body.String())
+	}
+
+	// 3. POST /api/v1/security/kms/verify
+	reqVer := httptest.NewRequest(http.MethodPost, "/api/v1/security/kms/verify", bytes.NewReader([]byte("{}")))
+	recVer := httptest.NewRecorder()
+	r.ServeHTTP(recVer, reqVer)
+	if recVer.Code != http.StatusOK {
+		t.Fatalf("expected 200 on verify kms key, got %d: %s", recVer.Code, recVer.Body.String())
 	}
 }
 

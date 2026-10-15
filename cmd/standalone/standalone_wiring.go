@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"go.uber.org/zap"
@@ -14,13 +13,10 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/adapter/event"
 	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
-	infraClickhouse "github.com/datdt/k8sselfhost/internal/infrastructure/clickhouse"
-	usecaseLogging "github.com/datdt/k8sselfhost/internal/usecase/logging"
 	mw "github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/alert"
 	domainLB "github.com/datdt/k8sselfhost/internal/domain/loadbalancer"
 	domainDocker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
-	infraAgent "github.com/datdt/k8sselfhost/internal/infrastructure/agent"
 	infraCluster "github.com/datdt/k8sselfhost/internal/infrastructure/cluster"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
 	infraHelm "github.com/datdt/k8sselfhost/internal/infrastructure/helm"
@@ -186,6 +182,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	searchUsecase := usecaseSearch.NewUsecase(searchRepo)
 
 	gitopsController := usecaseGitops.NewController(prRepo, incRepo, txManager)
+	registerGitopsProviders(gitopsController, cfg)
 	tenancyRepo := postgres.NewTenancyRepo(dbPool)
 
 	alertRepo := postgres.NewAlertRepo(dbPool)
@@ -268,55 +265,70 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		startDockerLogStreamer(ctx, dockerClient, logAggregator, centralizedLogs, log)
 	}
 
+	backupRunner, stopBackup := initBackupRunner(backupRepo, log)
+	backupUC := usecaseBackup.NewUsecase(backupRepo)
+	backupUC.SetRunner(backupRunner)
+
+	aux := initStandaloneAuxHandlers(cfg, log, k8sClient, clientManager, dbPool, gitopsController)
+
 	platformHandlers := &adapthttp.PlatformHandlers{
-		Dashboard:     dashboardHandler,
-		Docker:        adapthttp.NewDockerHandler(dockerRepo, computeHostRepo, authUsecase, metricsCollector),
-		Overview:      overviewHandler,
-		Drift:         adapthttp.NewDriftHandler(postgres.NewDriftRepo(dbPool)),
-		Correlation:   adapthttp.NewCorrelationHandler(postgres.NewCorrelationRepo(dbPool)),
-		Compliance:    adapthttp.NewComplianceHandler(postgres.NewComplianceRepo(dbPool)),
-		Tagging:       adapthttp.NewTaggingHandler(postgres.NewTaggingRepo(dbPool)),
-		Runbook:       adapthttp.NewRunbookHandler(postgres.NewRunbookRepo(dbPool), auditRepo),
-		Observability: adapthttp.NewObservabilityHandler(obsRepo),
-		Capacity:      adapthttp.NewCapacityHandler(usecaseCapacity.NewForecaster(metricsCollector, usecaseCapacity.WithComputeHostRepo(computeHostRepo), usecaseCapacity.WithRepository(postgres.NewCapacityRepo(dbPool)))),
-		Changes:       adapthttp.NewChangeHandler(postgres.NewChangesRepo(dbPool)),
-		Promotion:     adapthttp.NewPromotionHandler(usecasePromotion.NewUsecase(postgres.NewPromotionRepo(dbPool), dockerRepo, auditRepo)),
-		Explorer:      adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager)),
-		Reporting:     adapthttp.NewReportingHandler(postgres.NewReportingRepo(dbPool)),
-		HealthCenter:  healthCenterHandler,
-		Fleet:         adapthttp.NewFleetHandler(fleetRepo, auditRepo, importUsecase),
-		Audit:         adapthttp.NewAuditHandler(auditRepo),
-		Notification:  adapthttp.NewNotificationHandler(postgres.NewNotificationRepo(dbPool)),
-		Automation:    adapthttp.NewAutomationHandler(postgres.NewAutomationRepo(dbPool)),
-		Timeline:      adapthttp.NewTimelineHandler(postgres.NewTimelineRepo(dbPool)),
-		AI:            adapthttp.NewAIHandler(registry),
-		Auth:          adapthttp.NewAuthHandler(authUsecase, userRepo, refreshTokenRepo, adapthttp.WithCookieSecure(cfg.Server.CookieSecure)),
-		Search:        adapthttp.NewSearchHandler(searchUsecase),
-		Cost:          adapthttp.NewCostHandler(usecaseCost.NewCalculator(computeHostRepo, metricsCollector)),
-		Backup:        adapthttp.NewBackupHandler(usecaseBackup.NewUsecase(backupRepo)),
-		Agents:        adapthttp.NewAgentHandler(agentRepo, orchestrator),
-		Deployments:   adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager))),
-		Tenancy:       adapthttp.NewTenancyHandler(tenancyRepo),
-		Alert:         adapthttp.NewAlertHandler(alertUsecaseInstance),
-		K8s:           adapthttp.NewK8sResourceHandler(resourceRepo, auditRepo),
-		K8sExec:       adapthttp.NewK8sExecHandler(k8sClient, clientManager),
-		K8sLogs:       adapthttp.NewK8sLogsHandler(k8sClient, clientManager),
-		K8sBootstrap:  adapthttp.NewK8sBootstrapHandler(usecaseCluster.NewBootstrapUsecase(resourceRepo, clientManager, log)),
-		Storage:       adapthttp.NewStorageHandler(usecaseStorage.NewVolumeUsecase(k8sClient, clientManager, log)),
-		DR:            adapthttp.NewDRHandler(usecaseDR.NewDRUsecase(k8sClient, clientManager, log), remediationCtrl, log),
-		Cloud:         adapthttp.NewCloudHandler(postgres.NewCloudAccountRepo(dbPool), nil, log),
-		Settings:      adapthttp.NewSettingsHandler(settingsRepo, log),
-		Catalog:       adapthttp.NewCatalogHandler(catalogRepo, log),
-		Scaffolder:    adapthttp.NewScaffoldHandler(scaffoldService, log),
-		Plugin:        adapthttp.NewPluginHandler(postgres.NewPluginRepo(dbPool), log),
-		Ecosystem:     ecosystemHandler,
+		Dashboard:       dashboardHandler,
+		Docker:          adapthttp.NewDockerHandler(dockerRepo, computeHostRepo, authUsecase, metricsCollector),
+		Overview:        overviewHandler,
+		Drift:           adapthttp.NewDriftHandler(postgres.NewDriftRepo(dbPool)),
+		Correlation:     adapthttp.NewCorrelationHandler(postgres.NewCorrelationRepo(dbPool)),
+		Compliance:      adapthttp.NewComplianceHandler(postgres.NewComplianceRepo(dbPool)),
+		Tagging:         adapthttp.NewTaggingHandler(postgres.NewTaggingRepo(dbPool)),
+		Runbook:         adapthttp.NewRunbookHandler(postgres.NewRunbookRepo(dbPool), auditRepo),
+		Observability:   adapthttp.NewObservabilityHandler(obsRepo),
+		Capacity:        adapthttp.NewCapacityHandler(usecaseCapacity.NewForecaster(metricsCollector, usecaseCapacity.WithComputeHostRepo(computeHostRepo), usecaseCapacity.WithRepository(postgres.NewCapacityRepo(dbPool)))),
+		Changes:         adapthttp.NewChangeHandler(postgres.NewChangesRepo(dbPool)),
+		Promotion:       adapthttp.NewPromotionHandler(usecasePromotion.NewUsecase(postgres.NewPromotionRepo(dbPool), dockerRepo, auditRepo)),
+		Canary:          aux.Canary,
+		Mesh:            aux.Mesh,
+		Explorer:        adapthttp.NewExplorerHandler(infraK8s.NewExplorerRepo(k8sClient, dockerRepo, clientManager)),
+		Reporting:       adapthttp.NewReportingHandler(postgres.NewReportingRepo(dbPool)),
+		HealthCenter:    healthCenterHandler,
+		Fleet:           adapthttp.NewFleetHandler(fleetRepo, auditRepo, importUsecase),
+		Audit:           adapthttp.NewAuditHandler(auditRepo),
+		Notification:    adapthttp.NewNotificationHandler(postgres.NewNotificationRepo(dbPool)),
+		Automation:      adapthttp.NewAutomationHandler(postgres.NewAutomationRepo(dbPool)),
+		Timeline:        adapthttp.NewTimelineHandler(postgres.NewTimelineRepo(dbPool)),
+		AI:              adapthttp.NewAIHandler(registry),
+		Auth:            adapthttp.NewAuthHandler(authUsecase, userRepo, refreshTokenRepo, adapthttp.WithCookieSecure(cfg.Server.CookieSecure)),
+		Search:          adapthttp.NewSearchHandler(searchUsecase),
+		Cost:            adapthttp.NewCostHandler(usecaseCost.NewCalculator(computeHostRepo, metricsCollector)),
+		Backup:          adapthttp.NewBackupHandler(backupUC),
+		Agents:          adapthttp.NewAgentHandler(agentRepo, orchestrator),
+		Deployments:     adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager))),
+		Tenancy:         adapthttp.NewTenancyHandler(tenancyRepo),
+		Alert:           adapthttp.NewAlertHandler(alertUsecaseInstance),
+		K8s:             adapthttp.NewK8sResourceHandler(resourceRepo, auditRepo),
+		K8sExec:         adapthttp.NewK8sExecHandler(k8sClient, clientManager),
+		K8sLogs:         adapthttp.NewK8sLogsHandler(k8sClient, clientManager),
+		K8sBootstrap:    adapthttp.NewK8sBootstrapHandler(usecaseCluster.NewBootstrapUsecase(resourceRepo, clientManager, log)),
+		Storage:         adapthttp.NewStorageHandler(usecaseStorage.NewVolumeUsecase(k8sClient, clientManager, log)),
+		DR:              adapthttp.NewDRHandler(usecaseDR.NewDRUsecase(k8sClient, clientManager, log), remediationCtrl, log),
+		Cloud:           adapthttp.NewCloudHandler(postgres.NewCloudAccountRepo(dbPool), nil, log),
+		Settings:        adapthttp.NewSettingsHandler(settingsRepo, log),
+		Catalog:         adapthttp.NewCatalogHandler(catalogRepo, log),
+		Scaffolder:      adapthttp.NewScaffoldHandler(scaffoldService, log),
+		Plugin:          adapthttp.NewPluginHandler(postgres.NewPluginRepo(dbPool), log),
+		Ecosystem:       ecosystemHandler,
 		LogStream:       logStreamHandler,
 		CentralizedLogs: centralizedLogs,
 		Helm:            helmHandler,
+		GitOps:          aux.GitOps,
+		IaC:             aux.IaC,
+		Telegram:        aux.Telegram,
+		Admission:       aux.Admission,
+		MessagingSRE:    aux.MessagingSRE,
+		SRE:             aux.SRE,
 	}
 
 	router := adapthttp.NewRouterWithWS(healthHandler, wsHub, platformHandlers)
 	cleanup := func() {
+		stopBackup()
 		pgClient.Close()
 		if chCleanup != nil {
 			chCleanup()
@@ -349,88 +361,4 @@ func initLLMRegistry(cfg *config.Config, log *zap.Logger) *llm.ProviderRegistry 
 		registry.Register("default", cb, llm.ProviderInfo{Type: "ollama", Model: cfg.LLM.Model, Endpoint: cfg.LLM.Endpoint, Default: true})
 	}
 	return registry
-}
-
-
-func wireCentralizedLogging(ctx context.Context, log *zap.Logger, computeHostRepo domainDocker.ComputeHostRepository) (*adapthttp.LogHandler, func()) {
-	chHost := os.Getenv("CLICKHOUSE_HOST")
-	if chHost == "" {
-		chHost = os.Getenv("K8S_CLICKHOUSE_HOST")
-	}
-	chDSN := os.Getenv("CLICKHOUSE_DSN")
-	if chDSN == "" {
-		chDSN = os.Getenv("K8S_CLICKHOUSE_DSN")
-	}
-
-	if chHost != "" || chDSN != "" {
-		cfg := infraClickhouse.DefaultConfig()
-		cfg.Host = chHost
-		if p, err := strconv.Atoi(os.Getenv("CLICKHOUSE_PORT")); err == nil {
-			cfg.Port = p
-		}
-		if db := os.Getenv("CLICKHOUSE_DB"); db != "" {
-			cfg.Database = db
-		}
-		if u := os.Getenv("CLICKHOUSE_USER"); u != "" {
-			cfg.Username = u
-		}
-		cfg.Password = os.Getenv("CLICKHOUSE_PASSWORD")
-		cfg.DialTimeout = 3 * time.Second
-
-		cCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		client, err := infraClickhouse.NewClient(cCtx, cfg)
-		cancel()
-		if err == nil {
-			log.Info("ClickHouse centralized logging connected", zap.String("host", cfg.Host))
-			if conn, cErr := client.Conn(ctx); cErr == nil {
-				if mErr := infraClickhouse.RunMigrations(ctx, conn); mErr != nil {
-					log.Warn("ClickHouse migration failed", zap.Error(mErr))
-				}
-			}
-			batchWriter := infraClickhouse.NewBatchWriter(client, infraClickhouse.BatchConfig{BatchSize: 5000, FlushInterval: 2 * time.Second, BufferCap: 50000})
-			batchWriter.Start(ctx)
-			repo := infraClickhouse.NewLogRepository(client, batchWriter)
-			service := usecaseLogging.NewService(repo)
-			return adapthttp.NewLogHandler(service, &chStatusProvider{client: client, repo: repo}), func() {
-				_ = batchWriter.Stop()
-				_ = client.Close()
-			}
-		}
-		log.Warn("ClickHouse connection failed, falling back to distributed edge log engine", zap.Error(err))
-	} else {
-		log.Info("ClickHouse not configured, activating distributed edge log engine")
-	}
-
-	memRepo := logging.NewMemoryLogRepo(50000)
-	distRepo := infraAgent.NewDistributedAgentLogRepo(computeHostRepo, infraAgent.NewAgentLogClient(), memRepo)
-	return adapthttp.NewLogHandler(usecaseLogging.NewService(distRepo), distRepo), nil
-}
-
-type chStatusProvider struct {
-	client *infraClickhouse.Client
-	repo   *infraClickhouse.LogRepository
-}
-
-func (p *chStatusProvider) GetStatus(ctx context.Context) (*adapthttp.LogEngineStatus, error) {
-	start := time.Now()
-	err := p.client.Ping(ctx)
-	latency := float64(time.Since(start).Microseconds()) / 1000.0
-	status := "connected"
-	if err != nil {
-		status = "fallback"
-	}
-	var total int64
-	if conn, cErr := p.client.Conn(ctx); cErr == nil {
-		var cnt uint64
-		if scanErr := conn.QueryRow(ctx, "SELECT count() FROM cluster_logs").Scan(&cnt); scanErr == nil {
-			total = int64(cnt)
-		}
-	}
-	return &adapthttp.LogEngineStatus{
-		Engine:        "ClickHouse MergeTree",
-		Status:        status,
-		LatencyMS:     latency,
-		TotalRecords:  total,
-		RetentionDays: 30,
-	}, nil
 }

@@ -253,4 +253,54 @@ func TestDeploymentHandler_OtherRoutes(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201 for create, got %d", rec.Code)
 	}
+
+	// POST /rollback
+	rbBody := `{"type":"kubernetes","namespace":"default","name":"app1","revision":2}`
+	req = httptest.NewRequest(http.MethodPost, "/deployments/rollback", bytes.NewBufferString(rbBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for rollback, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// POST /canary
+	canaryBody := `{"type":"kubernetes","namespace":"default","name":"app1","weight":25}`
+	req = httptest.NewRequest(http.MethodPost, "/deployments/canary", bytes.NewBufferString(canaryBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for canary, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// POST /bluegreen
+	bgBody := `{"type":"kubernetes","namespace":"default","name":"app1","targetColor":"green"}`
+	req = httptest.NewRequest(http.MethodPost, "/deployments/bluegreen", bytes.NewBufferString(bgBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for bluegreen, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// POST /pause
+	pauseBody := `{"type":"kubernetes","namespace":"default","name":"app1"}`
+	req = httptest.NewRequest(http.MethodPost, "/deployments/pause", bytes.NewBufferString(pauseBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for pause, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// POST /resume
+	resumeBody := `{"type":"kubernetes","namespace":"default","name":"app1"}`
+	req = httptest.NewRequest(http.MethodPost, "/deployments/resume", bytes.NewBufferString(resumeBody))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for resume, got %d: %s", rec.Code, rec.Body.String())
+	}
 }
