@@ -68,6 +68,20 @@ func (c *SystemCollector) collectNetwork(now time.Time) NetworkMetrics {
 			continue
 		}
 
+		var rxErrors, rxDrops, txErrors, txDrops int64
+		if len(fields) > 2 {
+			rxErrors, _ = strconv.ParseInt(fields[2], 10, 64)
+		}
+		if len(fields) > 3 {
+			rxDrops, _ = strconv.ParseInt(fields[3], 10, 64)
+		}
+		if len(fields) > 10 {
+			txErrors, _ = strconv.ParseInt(fields[10], 10, 64)
+		}
+		if len(fields) > 11 {
+			txDrops, _ = strconv.ParseInt(fields[11], 10, 64)
+		}
+
 		var rxRate, txRate int64
 		prev, ok := prevNetStats[iface]
 		if ok && elapsed > 0 {
@@ -88,6 +102,10 @@ func (c *SystemCollector) collectNetwork(now time.Time) NetworkMetrics {
 			Name:          iface,
 			RxBytesPerSec: rxRate,
 			TxBytesPerSec: txRate,
+			RxErrors:      rxErrors,
+			RxDrops:       rxDrops,
+			TxErrors:      txErrors,
+			TxDrops:       txDrops,
 		})
 
 		if isPhysicalNetworkInterface(iface) {
@@ -101,10 +119,22 @@ func (c *SystemCollector) collectNetwork(now time.Time) NetworkMetrics {
 	c.prevNetTime = now
 	c.mu.Unlock()
 
+	var conntrackCount, conntrackMax int64
+	conntrackPath := filepath.Join(c.procPath, "sys", "net", "netfilter", "nf_conntrack_count")
+	if data, err := os.ReadFile(conntrackPath); err == nil {
+		conntrackCount, _ = strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
+	}
+	conntrackMaxPath := filepath.Join(c.procPath, "sys", "net", "netfilter", "nf_conntrack_max")
+	if data, err := os.ReadFile(conntrackMaxPath); err == nil {
+		conntrackMax, _ = strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
+	}
+
 	return NetworkMetrics{
 		Interfaces:         interfaces,
 		TotalRxBytesPerSec: totalRx,
 		TotalTxBytesPerSec: totalTx,
+		ConntrackCount:     conntrackCount,
+		ConntrackMax:       conntrackMax,
 	}
 }
 

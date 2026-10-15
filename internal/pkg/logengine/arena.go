@@ -1,4 +1,4 @@
-﻿package logengine
+package logengine
 
 import (
 	"runtime/debug"
@@ -17,10 +17,10 @@ var BlockBufferPool = sync.Pool{
 }
 
 // InitEngineRuntime tunes the Go runtime memory limits and garbage collection
-// to keep total process RSS strictly under 100MB (<50MB typical).
+// to keep total process RSS strictly under 45-50MB.
 func InitEngineRuntime() {
-	debug.SetMemoryLimit(85 * 1024 * 1024)
-	debug.SetGCPercent(50)
+	debug.SetMemoryLimit(38 * 1024 * 1024)
+	debug.SetGCPercent(25)
 }
 
 // GetBlockBuffer retrieves a 256KB slice from the pool.

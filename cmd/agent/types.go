@@ -16,13 +16,17 @@ type MemoryMetrics struct {
 	UsagePercent   float64 `json:"usage_percent"`
 }
 
-// DiskMetrics holds filesystem disk mount usage metrics.
+// DiskMetrics holds filesystem disk mount usage metrics and inode stats.
 type DiskMetrics struct {
-	MountPoint   string  `json:"mount_point"`
-	TotalBytes   int64   `json:"total_bytes"`
-	UsedBytes    int64   `json:"used_bytes"`
-	UsagePercent float64 `json:"usage_percent"`
-	Filesystem   string  `json:"filesystem"`
+	MountPoint         string  `json:"mount_point"`
+	TotalBytes         int64   `json:"total_bytes"`
+	UsedBytes          int64   `json:"used_bytes"`
+	UsagePercent       float64 `json:"usage_percent"`
+	Filesystem         string  `json:"filesystem"`
+	InodesTotal        int64   `json:"inodes_total"`
+	InodesUsed         int64   `json:"inodes_used"`
+	InodesFree         int64   `json:"inodes_free"`
+	InodesUsagePercent float64 `json:"inodes_usage_percent"`
 }
 
 // DiskIOStats represents real-time I/O performance and latency metrics for a block device.
@@ -50,18 +54,46 @@ type DiskIOMetrics struct {
 	Devices               []DiskIOStats `json:"devices"`
 }
 
-// NetworkInterfaceMetrics holds network rates for an interface.
+// NetworkInterfaceMetrics holds network rates and error/drop counters for an interface.
 type NetworkInterfaceMetrics struct {
 	Name          string `json:"name"`
 	RxBytesPerSec int64  `json:"rx_bytes_per_sec"`
 	TxBytesPerSec int64  `json:"tx_bytes_per_sec"`
+	RxErrors      int64  `json:"rx_errors"`
+	RxDrops       int64  `json:"rx_drops"`
+	TxErrors      int64  `json:"tx_errors"`
+	TxDrops       int64  `json:"tx_drops"`
 }
 
-// NetworkMetrics holds per-interface and total throughput metrics.
+// NetworkMetrics holds per-interface, total throughput, and conntrack metrics.
 type NetworkMetrics struct {
 	Interfaces         []NetworkInterfaceMetrics `json:"interfaces"`
 	TotalRxBytesPerSec int64                     `json:"total_rx_bytes_per_sec"`
 	TotalTxBytesPerSec int64                     `json:"total_tx_bytes_per_sec"`
+	ConntrackCount     int64                     `json:"conntrack_count"`
+	ConntrackMax       int64                     `json:"conntrack_max"`
+}
+
+// PSIResourceStats holds Linux Pressure Stall Information (PSI) statistics.
+type PSIResourceStats struct {
+	Avg10       float64 `json:"avg10"`
+	Avg60       float64 `json:"avg60"`
+	Avg300      float64 `json:"avg300,omitempty"`
+	TotalMicros uint64  `json:"total_micros"`
+}
+
+// PSIMetrics aggregates Linux PSI statistics for CPU, Memory, and IO.
+type PSIMetrics struct {
+	CPU    PSIResourceStats `json:"cpu"`
+	Memory PSIResourceStats `json:"memory"`
+	IO     PSIResourceStats `json:"io"`
+}
+
+// K8sNodeMetrics holds Kubernetes node-level container and kernel metrics.
+type K8sNodeMetrics struct {
+	PodCount            int   `json:"pod_count"`
+	OOMKills            int64 `json:"oom_kills"`
+	CPUThrottledPeriods int64 `json:"cpu_throttled_periods"`
 }
 
 // ProcessMetric holds resource consumption details for a single OS process.
@@ -97,6 +129,8 @@ type MetricsResponse struct {
 	Network            NetworkMetrics  `json:"network"`
 	Processes          int             `json:"processes"`
 	TopProcesses       []ProcessMetric `json:"top_processes"`
+	PSI                PSIMetrics      `json:"psi"`
+	K8s                K8sNodeMetrics  `json:"k8s"`
 	CollectedAt        time.Time       `json:"collected_at"`
 }
 

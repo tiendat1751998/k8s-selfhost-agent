@@ -1,37 +1,154 @@
-﻿package logengine
+package logengine
 
 import (
 	"encoding/binary"
 	"io"
 	"math"
 	"sort"
+	"strings"
 )
 
-// BlockMarkSize is the fixed size of a block mark on disk (20 bytes).
-const BlockMarkSize = 20
+// BlockMarkSize is the fixed size of a block mark on disk (32 bytes).
+const BlockMarkSize = 32
 
 // BlockMark stores offsets and sizes for locating and reading a compressed block.
 type BlockMark struct {
-	CompressedOffset uint64 // 8 bytes
-	CompressedLength uint32 // 4 bytes
-	UncompressedSize uint32 // 4 bytes
-	RowCount         uint32 // 4 bytes
+	CompressedOffset uint64 // 8 bytes (offset 0..8)
+	CompressedLength uint32 // 4 bytes (offset 8..12)
+	UncompressedSize uint32 // 4 bytes (offset 12..16)
+	RowCount         uint32 // 4 bytes (offset 16..20)
+	LevelMask        uint16 // 2 bytes (offset 20..22)
+	Reserved         uint16 // 2 bytes (offset 22..24)
+	ServiceBloom     uint64 // 8 bytes (offset 24..32)
 }
 
-// Encode writes the 20-byte binary representation of the mark to dst.
+// Encode writes the 32-byte binary representation of the mark to dst.
 func (m *BlockMark) Encode(dst []byte) {
 	binary.LittleEndian.PutUint64(dst[0:8], m.CompressedOffset)
 	binary.LittleEndian.PutUint32(dst[8:12], m.CompressedLength)
 	binary.LittleEndian.PutUint32(dst[12:16], m.UncompressedSize)
 	binary.LittleEndian.PutUint32(dst[16:20], m.RowCount)
+	binary.LittleEndian.PutUint16(dst[20:22], m.LevelMask)
+	binary.LittleEndian.PutUint16(dst[22:24], 0)
+	binary.LittleEndian.PutUint64(dst[24:32], m.ServiceBloom)
 }
 
-// Decode reads a 20-byte binary representation into the mark.
+// Decode reads a 32-byte binary representation into the mark.
 func (m *BlockMark) Decode(src []byte) {
 	m.CompressedOffset = binary.LittleEndian.Uint64(src[0:8])
 	m.CompressedLength = binary.LittleEndian.Uint32(src[8:12])
 	m.UncompressedSize = binary.LittleEndian.Uint32(src[12:16])
 	m.RowCount = binary.LittleEndian.Uint32(src[16:20])
+	m.LevelMask = binary.LittleEndian.Uint16(src[20:22])
+	m.ServiceBloom = binary.LittleEndian.Uint64(src[24:32])
+}
+
+const (
+	LevelBitTrace uint16 = 1 << 0
+	LevelBitDebug uint16 = 1 << 1
+	LevelBitInfo  uint16 = 1 << 2
+	LevelBitWarn  uint16 = 1 << 3
+	LevelBitError uint16 = 1 << 4
+	LevelBitFatal uint16 = 1 << 5
+	LevelBitOther uint16 = 1 << 6
+)
+
+const (
+	LevelUnknown uint16 = 0
+	LevelTrace   uint16 = 1
+	LevelDebug   uint16 = 2
+	LevelInfo    uint16 = 3
+	LevelWarn    uint16 = 4
+	LevelError   uint16 = 5
+	LevelFatal   uint16 = 6
+)
+
+func ParseLevelID(lvl string) uint16 {
+	switch strings.ToLower(strings.TrimSpace(lvl)) {
+	case "trace":
+		return LevelTrace
+	case "debug":
+		return LevelDebug
+	case "info":
+		return LevelInfo
+	case "warn", "warning":
+		return LevelWarn
+	case "error", "err":
+		return LevelError
+	case "fatal", "critical", "panic":
+		return LevelFatal
+	default:
+		return LevelUnknown
+	}
+}
+
+func LevelIDToString(id uint16) string {
+	switch id {
+	case LevelTrace:
+		return "trace"
+	case LevelDebug:
+		return "debug"
+	case LevelInfo:
+		return "info"
+	case LevelWarn:
+		return "warn"
+	case LevelError:
+		return "error"
+	case LevelFatal:
+		return "fatal"
+	default:
+		return "info"
+	}
+}
+
+func LevelToBit(lvl string) uint16 {
+	switch strings.ToLower(strings.TrimSpace(lvl)) {
+	case "trace":
+		return LevelBitTrace
+	case "debug":
+		return LevelBitDebug
+	case "info":
+		return LevelBitInfo
+	case "warn", "warning":
+		return LevelBitWarn
+	case "error", "err":
+		return LevelBitError
+	case "fatal", "critical", "panic":
+		return LevelBitFatal
+	default:
+		return LevelBitOther
+	}
+}
+
+func LevelFilterMask(filter string) uint16 {
+	filter = strings.ToLower(strings.TrimSpace(filter))
+	if filter == "" {
+		return 0xFFFF
+	}
+	switch filter {
+	case "error", "err", "fatal", "critical":
+		return LevelBitError | LevelBitFatal
+	case "warn", "warning":
+		return LevelBitWarn | LevelBitError | LevelBitFatal
+	case "info":
+		return LevelBitInfo | LevelBitWarn | LevelBitError | LevelBitFatal
+	case "debug", "trace":
+		return 0xFFFF
+	default:
+		return LevelBitOther | LevelBitInfo | LevelBitWarn | LevelBitError | LevelBitFatal
+	}
+}
+
+func ServiceBloomBit(serviceID uint16) uint64 {
+	// 64-bit FNV-1a hash mask of serviceID
+	var h uint64 = 14695981039346656037
+	h ^= uint64(byte(serviceID))
+	h *= 1099511628211
+	h ^= uint64(byte(serviceID >> 8))
+	h *= 1099511628211
+	b1 := uint64(1) << (h % 64)
+	b2 := uint64(1) << ((h >> 6) % 64)
+	return b1 | b2
 }
 
 // PrimaryIndexEntry stores the time boundaries of a block for sparse indexing.
