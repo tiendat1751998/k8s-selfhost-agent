@@ -1,9 +1,35 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
-import { settingsApi, type Setting, type SettingUpdate, type IntegrationTestResult } from '../api/settings'
+import {
+  settingsApi,
+  apiKeysApi,
+  type Setting,
+  type SettingUpdate,
+  type IntegrationTestResult,
+  type ApiKeyItem,
+} from '../api/settings'
 import { authApi, type TOTPStatusResponse } from '../api/auth'
 
 export type TabKey = 'general' | 'security' | 'tenancy' | 'notifications' | 'apikeys' | 'telemetry' | 'backup' | 'integrations' | 'about'
 export type CategoryKey = 'platform' | 'security' | 'tenancy' | 'notifications' | 'apikeys' | 'telemetry' | 'backup' | 'integrations'
+
+export interface SettingsTabItem {
+  id: TabKey
+  label: string
+  icon: string
+  category?: CategoryKey
+  count?: number
+}
+
+export function buildSettingsTabsList(keys: ApiKeyItem[] = []): SettingsTabItem[] {
+  return [
+    { id: 'general', label: 'General', icon: 'sliders', category: 'platform' },
+    { id: 'security', label: 'Security', icon: 'shield', category: 'security' },
+    { id: 'tenancy', label: 'Tenancy', icon: 'server', category: 'tenancy' },
+    { id: 'notifications', label: 'Notifications', icon: 'bell', category: 'notifications' },
+    { id: 'apikeys', label: 'API Keys', icon: 'key', category: 'apikeys', count: keys.length },
+    { id: 'about', label: 'About', icon: 'help-circle' },
+  ]
+}
 
 export interface TestState {
   testing: boolean
@@ -96,50 +122,19 @@ export const backupProviderOptions = [
 ]
 
 const initialDefaults: SettingsFormState = {
-  name: 'K8s Self-Host Platform',
-  environment: 'production',
-  maintenance_mode: false,
-  timezone: 'UTC',
-  language: 'en',
-  require_2fa: false,
-  session_timeout_minutes: 60,
-  jwt_session_duration_hours: 8,
-  password_min_length: 8,
-  rate_limit_enabled: true,
-  rate_limit_requests_per_min: 600,
-  rate_limit_burst: 120,
-  ip_allowlist: '',
-  prometheus_endpoint: 'http://prometheus-k8s.monitoring.svc:9090',
-  prometheus_scrape_interval_sec: 15,
-  loki_endpoint: 'http://loki-gateway.logging.svc:3100',
-  loki_retention_days: 30,
-  alertmanager_endpoint: 'http://alertmanager.monitoring.svc:9093',
-  alertmanager_webhook_url: '',
-  smtp_enabled: false,
-  smtp_host: '',
-  smtp_port: 587,
-  webhook_url: '',
-  backup_provider: 'minio',
-  backup_s3_endpoint: 'http://minio.backup.svc:9000',
-  backup_s3_bucket: 'k8s-platform-snapshots',
-  backup_s3_region: 'us-east-1',
-  backup_schedule_cron: '0 2 * * *',
-  backup_retention_days: 30,
-  backup_encryption_enabled: true,
-  backup_compression_level: 'fast',
-  backup_auto_verify: true,
-  argocd_url: '',
-  trivy_url: '',
-  vault_url: '',
-  grafana_url: '',
-  isolation_mode: 'namespace',
-  default_cpu_limit: '16',
-  default_memory_limit: '32',
-  default_storage_limit: '200',
-  strict_network_isolation: true,
-  auto_provision_ingress: false,
-  apikeys_rotation_days: 90,
-  apikeys_require_expiry: true,
+  name: 'K8s Self-Host Platform', environment: 'production', maintenance_mode: false, timezone: 'UTC', language: 'en',
+  require_2fa: false, session_timeout_minutes: 60, jwt_session_duration_hours: 8, password_min_length: 8,
+  rate_limit_enabled: true, rate_limit_requests_per_min: 600, rate_limit_burst: 120, ip_allowlist: '',
+  prometheus_endpoint: 'http://prometheus-k8s.monitoring.svc:9090', prometheus_scrape_interval_sec: 15,
+  loki_endpoint: 'http://loki-gateway.logging.svc:3100', loki_retention_days: 30,
+  alertmanager_endpoint: 'http://alertmanager.monitoring.svc:9093', alertmanager_webhook_url: '',
+  smtp_enabled: false, smtp_host: '', smtp_port: 587, webhook_url: '',
+  backup_provider: 'minio', backup_s3_endpoint: 'http://minio.backup.svc:9000', backup_s3_bucket: 'k8s-platform-snapshots',
+  backup_s3_region: 'us-east-1', backup_schedule_cron: '0 2 * * *', backup_retention_days: 30,
+  backup_encryption_enabled: true, backup_compression_level: 'fast', backup_auto_verify: true,
+  argocd_url: '', trivy_url: '', vault_url: '', grafana_url: '',
+  isolation_mode: 'namespace', default_cpu_limit: '16', default_memory_limit: '32', default_storage_limit: '200',
+  strict_network_isolation: true, auto_provision_ingress: false, apikeys_rotation_days: 90, apikeys_require_expiry: true,
 }
 
 export function useSettings() {
@@ -288,55 +283,36 @@ export function useSettings() {
   function populateFormFromSettings(settingsList: Setting[]) {
     for (const item of settingsList) {
       const val = item.value
-      switch (item.key) {
-        // Platform
-        case 'name': form.name = val || 'K8s Self-Host Platform'; break
-        case 'environment': form.environment = (val as any) || 'production'; break
-        case 'maintenance_mode': form.maintenance_mode = val === 'true'; break
-        case 'timezone': form.timezone = val || 'UTC'; break
-        case 'language': form.language = val || 'en'; break
-
-        // Security
-        case 'session_timeout_minutes': form.session_timeout_minutes = parseInt(val, 10) || 60; break
-        case 'jwt_session_duration_hours': form.jwt_session_duration_hours = parseInt(val, 10) || 8; break
-        case 'password_min_length': form.password_min_length = parseInt(val, 10) || 8; break
-        case 'require_2fa': form.require_2fa = val === 'true'; break
-        case 'rate_limit_enabled': form.rate_limit_enabled = val !== 'false'; break
-        case 'rate_limit_requests_per_min': form.rate_limit_requests_per_min = parseInt(val, 10) || 600; break
-        case 'rate_limit_burst': form.rate_limit_burst = parseInt(val, 10) || 120; break
-        case 'ip_allowlist': form.ip_allowlist = val || ''; break
-
-        // Telemetry
-        case 'prometheus_endpoint': form.prometheus_endpoint = val || ''; break
-        case 'prometheus_scrape_interval_sec': form.prometheus_scrape_interval_sec = parseInt(val, 10) || 15; break
-        case 'loki_endpoint': form.loki_endpoint = val || ''; break
-        case 'loki_retention_days': form.loki_retention_days = parseInt(val, 10) || 30; break
-        case 'alertmanager_endpoint': form.alertmanager_endpoint = val || ''; break
-        case 'alertmanager_webhook_url': form.alertmanager_webhook_url = val || ''; break
-
-        // Notifications
-        case 'smtp_enabled': form.smtp_enabled = val === 'true'; break
-        case 'smtp_host': form.smtp_host = val || ''; break
-        case 'smtp_port': form.smtp_port = parseInt(val, 10) || 587; break
-        case 'webhook_url': form.webhook_url = val || ''; break
-
-        // Backup
-        case 'backup_provider': form.backup_provider = (val as any) || 'minio'; break
-        case 'backup_s3_endpoint': form.backup_s3_endpoint = val || ''; break
-        case 'backup_s3_bucket': form.backup_s3_bucket = val || ''; break
-        case 'backup_s3_region': form.backup_s3_region = val || 'us-east-1'; break
-        case 'backup_schedule_cron': form.backup_schedule_cron = val || '0 2 * * *'; break
-        case 'backup_retention_days': form.backup_retention_days = parseInt(val, 10) || 30; break
-        case 'backup_encryption_enabled': form.backup_encryption_enabled = val !== 'false'; break
-        case 'backup_compression_level': form.backup_compression_level = (val as any) || 'fast'; break
-        case 'backup_auto_verify': form.backup_auto_verify = val !== 'false'; break
-
-        // Integrations
-        case 'argocd_url': form.argocd_url = val || ''; break
-        case 'trivy_url': form.trivy_url = val || ''; break
-        case 'vault_url': form.vault_url = val || ''; break
-        case 'grafana_url': form.grafana_url = val || ''; break
+      const k = item.key as keyof SettingsFormState
+      if (!(k in form)) continue
+      const defaultVal = (initialDefaults as any)[k]
+      if (typeof defaultVal === 'boolean') {
+        ;(form as any)[k] = val === 'false' ? false : (val === 'true' ? true : defaultVal)
+      } else if (typeof defaultVal === 'number') {
+        const parsed = parseInt(val, 10)
+        ;(form as any)[k] = isNaN(parsed) ? defaultVal : parsed
+      } else {
+        ;(form as any)[k] = val || defaultVal
       }
+    }
+  }
+
+  // API Keys state
+  const apiKeys = ref<ApiKeyItem[]>([])
+  const loadingApiKeys = ref(false)
+  const apiKeysError = ref<string | null>(null)
+
+  async function loadApiKeys() {
+    loadingApiKeys.value = true
+    apiKeysError.value = null
+    try {
+      const res = await apiKeysApi.list()
+      apiKeys.value = Array.isArray(res) ? res : []
+    } catch (err: unknown) {
+      apiKeys.value = []
+      apiKeysError.value = err instanceof Error ? err.message : 'Failed to retrieve API keys'
+    } finally {
+      loadingApiKeys.value = false
     }
   }
 
@@ -352,7 +328,10 @@ export function useSettings() {
       }
       defaultSettings.value = defaults
 
-      const settingsList = await settingsApi.getAll()
+      const [settingsList] = await Promise.all([
+        settingsApi.getAll(),
+        loadApiKeys().catch(() => {})
+      ])
       if (Array.isArray(settingsList) && settingsList.length > 0) {
         populateFormFromSettings(settingsList)
       }
@@ -472,6 +451,7 @@ export function useSettings() {
   onMounted(() => {
     loadSettings()
     fetchTOTPStatus()
+    loadApiKeys()
   })
 
   onUnmounted(() => {
@@ -487,6 +467,7 @@ export function useSettings() {
     disableTotpCode, disabling2FA, disableError, fetchTOTPStatus, handleDisable2FA,
     integrationTests, testService, configuredIntegrationsCount,
     activeSecurityPolicyCount, telemetryHealthStatus, backupStatusSummary,
+    apiKeys, loadingApiKeys, apiKeysError, loadApiKeys,
   }
 }
 

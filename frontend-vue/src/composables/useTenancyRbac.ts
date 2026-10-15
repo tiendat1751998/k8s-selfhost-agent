@@ -46,7 +46,7 @@ export function useTenancyRbac() {
 
   // Form State
   const newOrg = ref<Partial<Organization>>({ id: '', name: '', tier: 'Enterprise Tier-1', quotaPreset: 'standard' })
-  const newProj = ref({ id: '', orgId: '', name: '', envs: 'dev, staging, prod', workloads: 5 })
+  const newProj = ref({ id: '', orgId: '', name: '', envs: 'dev, staging, prod', workloads: 0 })
   const newMember = ref({ id: '', orgId: '', user: '', role: 'developer', scope: 'project-wide' })
   const isSubmitting = ref(false)
   const feedbackMessage = ref<string | null>(null)
@@ -252,7 +252,7 @@ export function useTenancyRbac() {
       projects.value.push(created || proj)
       showProjectModal.value = false
       showFeedback(`Project ${proj.name} successfully created.`)
-      newProj.value = { id: '', orgId: '', name: '', envs: 'dev, staging, prod', workloads: 5 }
+      newProj.value = { id: '', orgId: '', name: '', envs: 'dev, staging, prod', workloads: 0 }
     } catch (e: unknown) {
       showFeedback(`Failed to create project: ${e instanceof Error ? e.message : 'Unknown error'}`)
     } finally {

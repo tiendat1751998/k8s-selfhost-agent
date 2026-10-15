@@ -39,7 +39,7 @@ export function useIncidents() {
   const prForm = ref<PRFormData>({
     title: '',
     description: '',
-    repoUrl: 'https://github.com/org/k8s-gitops-manifests',
+    repoUrl: '',
     branch: 'fix/incident-auto-remediation',
     baseBranch: 'main'
   })

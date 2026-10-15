@@ -1,72 +1,88 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { apiKeysApi, type ApiKeyItem } from '../../api/settings'
 import BaseIcon from '../ui/BaseIcon.vue'
 
-defineProps<{
-  saving: boolean
-}>()
+const props = withDefaults(defineProps<{
+  saving?: boolean
+  keys?: ApiKeyItem[]
+}>(), {
+  saving: false,
+})
 
 const emit = defineEmits<{
   (e: 'save', category: 'apikeys'): void
+  (e: 'update:keys', keys: ApiKeyItem[]): void
+  (e: 'refresh'): void
 }>()
 
-const keys = ref<ApiKeyItem[]>([])
+const localKeys = ref<ApiKeyItem[]>([])
+const activeKeys = computed<ApiKeyItem[]>({
+  get() {
+    return props.keys !== undefined ? props.keys : localKeys.value
+  },
+  set(val: ApiKeyItem[]) {
+    if (props.keys !== undefined) {
+      emit('update:keys', val)
+    } else {
+      localKeys.value = val
+    }
+  }
+})
+
 const newKeyName = ref('')
 const newKeyRole = ref('developer')
 const showCreateForm = ref(false)
 const copiedId = ref<string | null>(null)
 const loadingKeys = ref(false)
+const isCreating = ref(false)
+const createError = ref<string | null>(null)
+const actionError = ref<string | null>(null)
+const revokingId = ref<string | null>(null)
 
 async function loadKeys() {
   loadingKeys.value = true
+  actionError.value = null
   try {
     const res = await apiKeysApi.list()
-    keys.value = Array.isArray(res) ? res : []
-  } catch {
-    keys.value = []
+    activeKeys.value = Array.isArray(res) ? res : []
+  } catch (err: unknown) {
+    activeKeys.value = []
+    actionError.value = err instanceof Error ? err.message : 'Failed to retrieve API keys'
   } finally {
     loadingKeys.value = false
   }
 }
 
 onMounted(() => {
-  loadKeys()
+  if (props.keys === undefined || props.keys.length === 0) {
+    loadKeys()
+  }
 })
 
 async function handleCreateKey() {
   if (!newKeyName.value.trim()) return
+  isCreating.value = true
+  createError.value = null
+  actionError.value = null
   try {
     const created = await apiKeysApi.create({
       name: newKeyName.value.trim(),
       role: newKeyRole.value,
     })
     if (created && created.id) {
-      keys.value.push(created)
+      activeKeys.value = [...activeKeys.value, created]
+      newKeyName.value = ''
+      showCreateForm.value = false
+      emit('save', 'apikeys')
     } else {
-      throw new Error('Key generation failed')
+      throw new Error('Key generation failed: server returned invalid response')
     }
-  } catch {
-    const bytes = new Uint8Array(24)
-    window.crypto.getRandomValues(bytes)
-    const token = 'k8s_live_' + Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
-    const roleMap: Record<string, string> = {
-      admin: 'Cluster Admin (Full Access)',
-      readonly: 'Auditor (Read-Only)',
-      developer: 'Cluster Operator (Read/Write)',
-    }
-    keys.value.push({
-      id: `key-${Date.now()}`,
-      name: newKeyName.value.trim(),
-      prefix: token.slice(0, 16) + '...',
-      role: roleMap[newKeyRole.value] || 'Cluster Operator (Read/Write)',
-      created_at: new Date().toISOString().split('T')[0],
-      last_used: 'Never',
-    })
+  } catch (err: unknown) {
+    createError.value = err instanceof Error ? err.message : 'Failed to generate API key. Server error.'
+  } finally {
+    isCreating.value = false
   }
-  newKeyName.value = ''
-  showCreateForm.value = false
-  emit('save', 'apikeys')
 }
 
 async function handleCopyKey(prefix: string, id: string) {
@@ -85,13 +101,17 @@ async function handleCopyKey(prefix: string, id: string) {
 }
 
 async function handleRevokeKey(id: string) {
+  revokingId.value = id
+  actionError.value = null
   try {
     await apiKeysApi.revoke(id)
-  } catch {
-    // Graceful offline fallback
+    activeKeys.value = activeKeys.value.filter(k => k.id !== id)
+    emit('save', 'apikeys')
+  } catch (err: unknown) {
+    actionError.value = err instanceof Error ? err.message : 'Failed to revoke API key. Request failed.'
+  } finally {
+    revokingId.value = null
   }
-  keys.value = keys.value.filter(k => k.id !== id)
-  emit('save', 'apikeys')
 }
 </script>
 
@@ -113,6 +133,21 @@ async function handleRevokeKey(id: string) {
       </button>
     </div>
 
+    <!-- Top Action Error Banner -->
+    <div
+      v-if="actionError"
+      class="alert-banner alert-banner-danger animate-fade-in"
+      style="margin-bottom: 16px; padding: 10px 14px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; background: rgba(225, 29, 72, 0.15); border: 1px solid rgba(225, 29, 72, 0.3); color: #f43f5e;"
+    >
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+        <BaseIcon name="alert-triangle" size="xs" />
+        <span>{{ actionError }}</span>
+      </div>
+      <button type="button" class="btn-icon-cmd" style="background: none; border: none; color: inherit; cursor: pointer;" aria-label="Dismiss error" @click="actionError = null">
+        <BaseIcon name="x" size="xs" />
+      </button>
+    </div>
+
     <!-- Generate API Key Form -->
     <div
       v-if="showCreateForm"
@@ -120,6 +155,13 @@ async function handleRevokeKey(id: string) {
       style="padding: 16px; margin-bottom: 20px; border-radius: 12px; background: rgba(0,0,0,0.25);"
     >
       <h3 class="subsection-title" style="margin-bottom: 12px;">Generate New Machine-to-Machine Token</h3>
+      <div
+        v-if="createError"
+        class="alert-banner alert-banner-danger"
+        style="margin-bottom: 12px; padding: 8px 12px; border-radius: 6px; font-size: 13px; background: rgba(225, 29, 72, 0.15); border: 1px solid rgba(225, 29, 72, 0.3); color: #f43f5e;"
+      >
+        {{ createError }}
+      </div>
       <form class="settings-form" @submit.prevent="handleCreateKey">
         <div class="form-row" style="align-items: flex-end; gap: 16px;">
           <div class="form-group" style="max-width: 360px; flex: 1;">
@@ -132,19 +174,31 @@ async function handleRevokeKey(id: string) {
               class="input-glass form-input"
               style="max-width: 360px;"
               placeholder="e.g. Jenkins Staging Runner"
+              :disabled="isCreating || saving"
             />
           </div>
           <div class="form-group" style="max-width: 200px; flex: 1;">
             <label class="form-label" for="api-key-role">Permission Scope</label>
-            <select id="api-key-role" v-model="newKeyRole" class="input-glass form-select" style="max-width: 200px;">
+            <select
+              id="api-key-role"
+              v-model="newKeyRole"
+              class="input-glass form-select"
+              style="max-width: 200px;"
+              :disabled="isCreating || saving"
+            >
               <option value="developer">Operator (Read/Write)</option>
               <option value="admin">Admin (Full Access)</option>
               <option value="readonly">Auditor (Read-Only)</option>
             </select>
           </div>
           <div class="form-group" style="flex: 0 0 auto;">
-            <button type="submit" class="btn btn-primary btn-sm" style="min-height: 40px;" :disabled="saving">
-              <span>{{ saving ? 'Generating...' : 'Confirm Key Creation' }}</span>
+            <button
+              type="submit"
+              class="btn btn-primary btn-sm"
+              style="min-height: 40px;"
+              :disabled="saving || isCreating"
+            >
+              <span>{{ isCreating ? 'Generating...' : (saving ? 'Saving...' : 'Confirm Key Creation') }}</span>
             </button>
           </div>
         </div>
@@ -153,7 +207,7 @@ async function handleRevokeKey(id: string) {
 
     <!-- API Keys Data Table (Fixed 100% Column Widths & Zero Horizontal Overflow) -->
     <div class="keys-list-wrapper">
-      <div v-if="keys.length > 0" class="keys-table-container">
+      <div v-if="activeKeys.length > 0" class="keys-table-container">
         <table class="keys-table">
           <colgroup>
             <col style="width: 32%;">
@@ -170,7 +224,7 @@ async function handleRevokeKey(id: string) {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="k in keys" :key="k.id">
+            <tr v-for="k in activeKeys" :key="k.id">
               <td>
                 <div class="key-cell-primary">
                   <span class="key-name-text">{{ k.name }}</span>
@@ -200,11 +254,12 @@ async function handleRevokeKey(id: string) {
                   <button
                     type="button"
                     class="btn-action-compact btn-action-danger"
+                    :disabled="revokingId === k.id"
                     title="Revoke API Key"
                     :aria-label="'Revoke ' + k.name"
                     @click="handleRevokeKey(k.id)"
                   >
-                    <BaseIcon name="trash" size="xs" /> <span>Revoke</span>
+                    <BaseIcon name="trash" size="xs" /> <span>{{ revokingId === k.id ? 'Revoking...' : 'Revoke' }}</span>
                   </button>
                 </div>
               </td>
