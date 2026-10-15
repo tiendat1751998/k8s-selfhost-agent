@@ -2,6 +2,8 @@ package http
 
 import (
 	"context"
+	cryptorand "crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -45,6 +47,9 @@ func (h *SettingsHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/api-keys", h.ListAPIKeys)
 	r.Post("/api-keys", h.CreateAPIKey)
 	r.Delete("/api-keys/{id}", h.DeleteAPIKey)
+	r.Get("/keys", h.ListAPIKeys)
+	r.Post("/keys", h.CreateAPIKey)
+	r.Delete("/keys/{id}", h.DeleteAPIKey)
 }
 
 func isSensitiveKey(k string) bool {
@@ -59,6 +64,10 @@ func isSensitiveKey(k string) bool {
 
 // GetSettings handles GET / - returns settings for a tenant, optionally filtered by ?category=
 func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, []settings.Setting{})
+		return
+	}
 	tenantID := tenancy.TenantIDFromContext(r.Context())
 	if tenantID == "" {
 		tenantID = "default-tenant"
@@ -126,6 +135,10 @@ func (r *updateSettingsRequest) Validate() error {
 func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	req, ok := decodeJSON[updateSettingsRequest](w, r)
 	if !ok {
+		return
+	}
+	if h.repo == nil {
+		writeError(w, http.StatusServiceUnavailable, "settings repository unavailable", nil)
 		return
 	}
 
@@ -240,6 +253,7 @@ type ApiKeyItem struct {
 	Role      string `json:"role"`
 	CreatedAt string `json:"created_at"`
 	LastUsed  string `json:"last_used"`
+	Token     string `json:"token,omitempty"`
 }
 
 type createApiKeyRequest struct {
@@ -263,6 +277,10 @@ func (r *createApiKeyRequest) Validate() error {
 
 // ListAPIKeys handles GET /api-keys - returns all active API keys for tenant.
 func (h *SettingsHandler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, []ApiKeyItem{})
+		return
+	}
 	tenantID := tenancy.TenantIDFromContext(r.Context())
 	if tenantID == "" {
 		tenantID = "default-tenant"
@@ -292,13 +310,26 @@ func (h *SettingsHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if h.repo == nil {
+		writeError(w, http.StatusServiceUnavailable, "settings repository unavailable", nil)
+		return
+	}
 	tenantID := tenancy.TenantIDFromContext(r.Context())
 	if tenantID == "" {
 		tenantID = "default-tenant"
 	}
 	userID := tenancy.UserIDFromContext(r.Context())
+
+	rawBytes := make([]byte, 24)
+	if _, err := cryptorand.Read(rawBytes); err != nil {
+		h.logger.Error("failed to generate random bytes for api key", zap.Error(err))
+		writeError(w, http.StatusInternalServerError, "failed to generate api key", err)
+		return
+	}
+	token := fmt.Sprintf("k8s_live_%s", hex.EncodeToString(rawBytes))
+	prefix := fmt.Sprintf("%s...", token[:16])
+
 	id := uuid.NewString()
-	prefix := fmt.Sprintf("k8s_%s", id[:8])
 	keyItem := ApiKeyItem{
 		ID:        id,
 		Name:      req.Name,
@@ -307,7 +338,10 @@ func (h *SettingsHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 		LastUsed:  "never",
 	}
-	valBytes, err := json.Marshal(keyItem)
+
+	storedItem := keyItem
+	storedItem.Token = ""
+	valBytes, err := json.Marshal(storedItem)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to encode api key", err)
 		return
@@ -323,11 +357,17 @@ func (h *SettingsHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to store api key", err)
 		return
 	}
+
+	keyItem.Token = token
 	writeJSON(w, http.StatusCreated, keyItem)
 }
 
 // DeleteAPIKey handles DELETE /api-keys/{id} - revokes an API key.
 func (h *SettingsHandler) DeleteAPIKey(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeError(w, http.StatusServiceUnavailable, "settings repository unavailable", nil)
+		return
+	}
 	id := chi.URLParam(r, "id")
 	if id == "" {
 		writeError(w, http.StatusBadRequest, "api key id is required", nil)

@@ -135,6 +135,7 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 	}
 	if platform.Docker != nil {
 		r.With(mutRoles).Route("/docker", platform.Docker.RegisterRoutes)
+		r.With(mutRoles).Route("/hosts", platform.Docker.RegisterHostRoutes)
 	}
 	if platform.Overview != nil {
 		r.With(mutRoles).Route("/overview", platform.Overview.RegisterRoutes)
@@ -169,6 +170,11 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 	}
 	if platform.Settings != nil {
 		r.With(adminOnly).Route("/settings", platform.Settings.RegisterRoutes)
+		r.With(adminOnly).Route("/apikeys", func(ar chi.Router) {
+			ar.Get("/", platform.Settings.ListAPIKeys)
+			ar.Post("/", platform.Settings.CreateAPIKey)
+			ar.Delete("/{id}", platform.Settings.DeleteAPIKey)
+		})
 	}
 	if platform.Catalog != nil {
 		r.With(mutRoles).Route("/catalog", platform.Catalog.RegisterRoutes)

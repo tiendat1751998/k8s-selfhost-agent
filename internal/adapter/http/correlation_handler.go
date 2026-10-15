@@ -28,6 +28,10 @@ func (h *CorrelationHandler) RegisterRoutes(r chi.Router) {
 
 // ListCorrelated handles GET /api/v1/correlation
 func (h *CorrelationHandler) ListCorrelated(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []correlation.CorrelatedEvent{}, "total": 0})
+		return
+	}
 	limit := parseIntParam(r, "limit", 50)
 	offset := parseIntParam(r, "offset", 0)
 	status := r.URL.Query().Get("status")
@@ -36,6 +40,9 @@ func (h *CorrelationHandler) ListCorrelated(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list correlated events", err)
 		return
+	}
+	if items == nil {
+		items = []correlation.CorrelatedEvent{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }

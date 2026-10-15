@@ -32,10 +32,17 @@ func (h *AutomationHandler) RegisterRoutes(r chi.Router) {
 
 // ListRules handles GET /api/v1/automation/rules
 func (h *AutomationHandler) ListRules(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []automation.Rule{}})
+		return
+	}
 	rules, err := h.repo.ListRules(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list rules", err)
 		return
+	}
+	if rules == nil {
+		rules = []automation.Rule{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": rules})
 }
@@ -152,12 +159,19 @@ func (h *AutomationHandler) ToggleRule(w http.ResponseWriter, r *http.Request) {
 
 // ListExecutions handles GET /api/v1/automation/executions
 func (h *AutomationHandler) ListExecutions(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []automation.Execution{}, "total": 0})
+		return
+	}
 	limit := parseIntParam(r, "limit", 50)
 	offset := parseIntParam(r, "offset", 0)
 	items, total, err := h.repo.ListExecutions(r.Context(), limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list executions", err)
 		return
+	}
+	if items == nil {
+		items = []automation.Execution{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }

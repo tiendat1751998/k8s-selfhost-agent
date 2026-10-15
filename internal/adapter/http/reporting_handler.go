@@ -31,6 +31,10 @@ func (h *ReportingHandler) RegisterRoutes(r chi.Router) {
 
 // ListReports handles GET /api/v1/reports
 func (h *ReportingHandler) ListReports(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []reporting.Report{}, "total": 0})
+		return
+	}
 	limit := parseIntParam(r, "limit", 50)
 	offset := parseIntParam(r, "offset", 0)
 
@@ -38,6 +42,9 @@ func (h *ReportingHandler) ListReports(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list reports", err)
 		return
+	}
+	if items == nil {
+		items = []reporting.Report{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }

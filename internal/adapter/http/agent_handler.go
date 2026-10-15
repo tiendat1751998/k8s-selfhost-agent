@@ -44,10 +44,17 @@ func (h *AgentHandler) GetState(w http.ResponseWriter, r *http.Request) {
 
 // ListTasks handles GET /api/v1/agents/tasks
 func (h *AgentHandler) ListTasks(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []agent.Task{}})
+		return
+	}
 	tasks, err := h.repo.ListTasks(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list agent tasks", err)
 		return
+	}
+	if tasks == nil {
+		tasks = []agent.Task{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": tasks})
 }
@@ -101,6 +108,10 @@ func (h *AgentHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
+		if h.repo == nil {
+			writeError(w, http.StatusServiceUnavailable, "repository unavailable", nil)
+			return
+		}
 		if err := h.repo.CreateTask(r.Context(), task); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to create task", err)
 			return
@@ -112,11 +123,18 @@ func (h *AgentHandler) CreateTask(w http.ResponseWriter, r *http.Request) {
 
 // ListRuns handles GET /api/v1/agents/runs
 func (h *AgentHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []agent.Execution{}})
+		return
+	}
 	taskID := r.URL.Query().Get("task_id")
 	runs, err := h.repo.ListExecutions(r.Context(), taskID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list agent runs", err)
 		return
+	}
+	if runs == nil {
+		runs = []agent.Execution{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": runs})
 }

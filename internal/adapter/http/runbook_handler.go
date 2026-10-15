@@ -38,6 +38,10 @@ func (h *RunbookHandler) RegisterRoutes(r chi.Router) {
 
 // List handles GET /api/v1/runbooks
 func (h *RunbookHandler) List(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []runbook.Runbook{}, "total": 0})
+		return
+	}
 	limit := parseIntParam(r, "limit", 50)
 	offset := parseIntParam(r, "offset", 0)
 	category := r.URL.Query().Get("category")
@@ -45,6 +49,9 @@ func (h *RunbookHandler) List(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list runbooks", err)
 		return
+	}
+	if items == nil {
+		items = []runbook.Runbook{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }

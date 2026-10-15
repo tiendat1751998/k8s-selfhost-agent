@@ -33,12 +33,19 @@ func (h *NotificationHandler) RegisterRoutes(r chi.Router) {
 
 // ListNotifications handles GET /api/v1/notifications
 func (h *NotificationHandler) ListNotifications(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []notification.Notification{}, "total": 0})
+		return
+	}
 	limit := parseIntParam(r, "limit", 50)
 	offset := parseIntParam(r, "offset", 0)
 	items, total, err := h.repo.ListNotifications(r.Context(), limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list notifications", err)
 		return
+	}
+	if items == nil {
+		items = []notification.Notification{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }
@@ -68,10 +75,17 @@ func (h *NotificationHandler) MarkAllRead(w http.ResponseWriter, r *http.Request
 
 // ListChannels handles GET /api/v1/notifications/channels
 func (h *NotificationHandler) ListChannels(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []notification.Channel{}})
+		return
+	}
 	channels, err := h.repo.ListChannels(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list channels", err)
 		return
+	}
+	if channels == nil {
+		channels = []notification.Channel{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": channels})
 }
@@ -123,12 +137,19 @@ func (h *NotificationHandler) DeleteChannel(w http.ResponseWriter, r *http.Reque
 
 // ListHistory handles GET /api/v1/notifications/history
 func (h *NotificationHandler) ListHistory(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []notification.Notification{}, "total": 0})
+		return
+	}
 	limit := parseIntParam(r, "limit", 50)
 	offset := parseIntParam(r, "offset", 0)
 	items, total, err := h.repo.ListHistory(r.Context(), limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list history", err)
 		return
+	}
+	if items == nil {
+		items = []notification.Notification{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }

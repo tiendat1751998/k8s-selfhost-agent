@@ -30,6 +30,10 @@ func (h *ChangeHandler) RegisterRoutes(r chi.Router) {
 
 // ListChanges handles GET /api/v1/changes
 func (h *ChangeHandler) ListChanges(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []changes.ChangeRequest{}, "total": 0})
+		return
+	}
 	limit := parseIntParam(r, "limit", 50)
 	offset := parseIntParam(r, "offset", 0)
 
@@ -43,6 +47,9 @@ func (h *ChangeHandler) ListChanges(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list change requests", err)
 		return
+	}
+	if items == nil {
+		items = []changes.ChangeRequest{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }
