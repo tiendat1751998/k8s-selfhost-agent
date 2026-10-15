@@ -1,12 +1,18 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
+	mw "github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
+	"github.com/datdt/k8sselfhost/internal/pkg/health"
 	usecaseGitops "github.com/datdt/k8sselfhost/internal/usecase/gitops"
 )
 
@@ -125,6 +131,38 @@ func TestStandalone_AuxAndSREHandlersWired(t *testing.T) {
 	assert.NotNil(t, aux.SRE.Consensus)
 	assert.NotNil(t, aux.SRE.WorkloadGuard)
 	assert.NotNil(t, aux.SRE.Messaging)
+}
+
+func TestStandalone_SettingsWired(t *testing.T) {
+	settingsRepo := postgres.NewSettingsRepo(nil)
+	settingsHandler := adapthttp.NewSettingsHandler(settingsRepo, nil)
+	assert.NotNil(t, settingsHandler, "SettingsHandler must not be nil")
+
+	platform := &adapthttp.PlatformHandlers{
+		Settings: settingsHandler,
+	}
+	healthHandler := health.NewHandler(time.Second)
+	router := adapthttp.NewRouterWithPlatform(healthHandler, nil, platform)
+	assert.NotNil(t, router)
+
+	token, err := mw.GenerateToken("admin", "platform_admin", "default-tenant")
+	assert.NoError(t, err)
+
+	endpoints := []string{
+		"/api/v1/settings",
+		"/api/v1/settings/defaults",
+		"/api/v1/settings/api-keys",
+		"/api/v1/settings/keys",
+		"/api/v1/apikeys",
+	}
+
+	for _, ep := range endpoints {
+		req := httptest.NewRequest(http.MethodGet, ep, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		assert.NotEqual(t, http.StatusNotFound, rec.Code, "endpoint %s must be mounted", ep)
+	}
 }
 
 

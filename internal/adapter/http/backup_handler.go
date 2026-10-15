@@ -86,12 +86,19 @@ func (h *BackupHandler) CreateStorage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BackupHandler) ListStorages(w http.ResponseWriter, r *http.Request) {
+	if h.usecase == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []*backup.BackupStorage{}})
+		return
+	}
 	tenantID := normalizeTenantID(r)
 
 	storages, err := h.usecase.ListStorages(r.Context(), tenantID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list backup storages", err)
 		return
+	}
+	if storages == nil {
+		storages = []*backup.BackupStorage{}
 	}
 	for _, s := range storages {
 		if s != nil {
@@ -158,12 +165,19 @@ func (h *BackupHandler) CreatePolicy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BackupHandler) ListPolicies(w http.ResponseWriter, r *http.Request) {
+	if h.usecase == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []*backup.BackupPolicy{}})
+		return
+	}
 	tenantID := normalizeTenantID(r)
 
 	policies, err := h.usecase.ListPolicies(r.Context(), tenantID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list backup policies", err)
 		return
+	}
+	if policies == nil {
+		policies = []*backup.BackupPolicy{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": policies})
 }
@@ -209,12 +223,19 @@ func (h *BackupHandler) TriggerBackup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BackupHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
+	if h.usecase == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []*backup.BackupJob{}})
+		return
+	}
 	tenantID := normalizeTenantID(r)
 
 	jobs, err := h.usecase.ListJobs(r.Context(), tenantID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list backup jobs", err)
 		return
+	}
+	if jobs == nil {
+		jobs = []*backup.BackupJob{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": jobs})
 }
@@ -260,12 +281,19 @@ func (h *BackupHandler) TriggerRestore(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BackupHandler) ListRestores(w http.ResponseWriter, r *http.Request) {
+	if h.usecase == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []*backup.RestoreJob{}})
+		return
+	}
 	tenantID := normalizeTenantID(r)
 
 	restores, err := h.usecase.ListRestores(r.Context(), tenantID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list restores", err)
 		return
+	}
+	if restores == nil {
+		restores = []*backup.RestoreJob{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": restores})
 }

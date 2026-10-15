@@ -31,6 +31,9 @@ func (h *ComplianceHandler) ListFrameworks(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, "failed to list frameworks", err)
 		return
 	}
+	if frameworks == nil {
+		frameworks = make([]compliance.Framework, 0)
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": frameworks})
 }
 
@@ -47,6 +50,9 @@ func (h *ComplianceHandler) ListViolations(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list violations", err)
 		return
+	}
+	if items == nil {
+		items = make([]compliance.Violation, 0)
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }

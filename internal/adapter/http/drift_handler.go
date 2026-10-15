@@ -29,6 +29,10 @@ func (h *DriftHandler) RegisterRoutes(r chi.Router) {
 
 // ListDrifts handles GET /api/v1/drift
 func (h *DriftHandler) ListDrifts(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []drift.DriftRecord{}, "total": 0})
+		return
+	}
 	limit := parseIntParam(r, "limit", 50)
 	offset := parseIntParam(r, "offset", 0)
 
@@ -44,6 +48,9 @@ func (h *DriftHandler) ListDrifts(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list drift records", err)
 		return
+	}
+	if items == nil {
+		items = []drift.DriftRecord{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }

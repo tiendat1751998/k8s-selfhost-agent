@@ -32,10 +32,17 @@ func (h *TaggingHandler) RegisterRoutes(r chi.Router) {
 
 // ListTags handles GET /api/v1/tags
 func (h *TaggingHandler) ListTags(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []tagging.Tag{}})
+		return
+	}
 	items, err := h.repo.ListTags(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list tags", err)
 		return
+	}
+	if items == nil {
+		items = []tagging.Tag{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items})
 }
@@ -87,11 +94,18 @@ func (h *TaggingHandler) DeleteTag(w http.ResponseWriter, r *http.Request) {
 
 // GetResourceTags handles GET /api/v1/tags/resource/{resourceID}
 func (h *TaggingHandler) GetResourceTags(w http.ResponseWriter, r *http.Request) {
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": []tagging.Tag{}})
+		return
+	}
 	resID := chi.URLParam(r, "resourceID")
 	items, err := h.repo.GetResourceTags(r.Context(), resID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to get resource tags", err)
 		return
+	}
+	if items == nil {
+		items = []tagging.Tag{}
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items})
 }
