@@ -1,8 +1,8 @@
 /* 5. Table View - Proportional 100% Width with Zero Overflow */
 .hosts-table-container {
-  border-radius: 12px;
-  background: #0f172a;
-  border: 1px solid #1e293b;
+  border-radius: 8px;
+  background: var(--bg-card, #141516);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
   width: 100%;
   overflow: hidden;
 }
@@ -15,8 +15,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
-  background: rgba(15, 23, 42, 0.9);
-  border-bottom: 1px solid #1e293b;
+  background: var(--bg-surface, #0f1012);
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
   box-sizing: border-box;
 }
 
@@ -27,7 +27,7 @@
 }
 
 .topbar-icon {
-  color: #38bdf8;
+  color: var(--text-secondary, #9ca3af);
   display: flex;
   align-items: center;
 }
@@ -35,7 +35,7 @@
 .topbar-title {
   font-size: 13px;
   font-weight: 600;
-  color: #f8fafc;
+  color: var(--text-primary, #f3f4f6);
   letter-spacing: 0.01em;
 }
 
@@ -44,9 +44,9 @@
   font-family: var(--font-mono, monospace);
   padding: 2px 8px;
   border-radius: 9999px;
-  background: rgba(30, 41, 59, 0.8);
-  border: 1px solid #475569;
-  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, #9ca3af);
 }
 
 .topbar-right {
@@ -59,9 +59,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: #2563eb !important;
-  color: #ffffff !important;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #f3f4f6 !important;
+  color: #08090a !important;
+  border: 1px solid #ffffff;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
@@ -69,12 +69,12 @@
   height: 28px;
   cursor: pointer;
   transition: all 0.15s ease;
-  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.35);
+  box-shadow: none;
 }
 
 .add-host-btn:hover {
-  background: #1d4ed8 !important;
-  border-color: rgba(255, 255, 255, 0.2);
+  background: #ffffff !important;
+  opacity: 0.9;
   transform: translateY(-0.5px);
 }
 
@@ -93,9 +93,9 @@
   padding: 10px 14px;
   font-family: var(--font-mono, monospace);
   font-size: 11px;
-  font-weight: 700;
-  color: #cbd5e1;
-  border-bottom: 1px solid #1e293b;
+  font-weight: 600;
+  color: var(--text-secondary, #9ca3af);
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
   letter-spacing: 0.05em;
   white-space: nowrap;
 }
@@ -121,19 +121,19 @@
 
 .hosts-table td {
   padding: 10px 14px;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
   vertical-align: middle;
 }
 
 .host-row:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 /* Empty State inside table */
 .table-empty-cell {
   padding: 48px 16px !important;
   text-align: center;
-  background: rgba(15, 23, 42, 0.4);
+  background: var(--bg-surface, #0f1012);
 }
 
 .table-empty-state {
@@ -174,12 +174,12 @@
 }
 
 .row-name {
-  color: #f8fafc;
+  color: var(--text-primary, #f3f4f6);
   font-size: 13px;
 }
 
 .row-name:hover {
-  color: #38bdf8;
+  color: var(--text-primary, #ffffff);
 }
 
 .row-id {
@@ -202,9 +202,9 @@
 
 .host-tag-sm {
   font-size: 10px;
-  background: #131b2e;
-  border: 1px solid #1e293b;
-  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, #9ca3af);
   padding: 1px 6px;
   border-radius: 4px;
 }
