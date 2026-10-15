@@ -257,10 +257,10 @@
 .palette-clear { position: absolute; right: 14px; cursor: pointer; color: var(--text-muted); }
 .palette-results { max-height: 380px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
 .palette-group-section { display: flex; flex-direction: column; gap: 6px; }
-.palette-group-header { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--accent-sky, #38bdf8); padding: 4px 6px 2px; }
+.palette-group-header { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-secondary, #9ca3af); padding: 4px 6px 2px; }
 .palette-group-items { display: flex; flex-direction: column; gap: 6px; }
 .palette-item { padding: 10px 14px; border-radius: 10px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); display: flex; align-items: center; gap: 14px; cursor: pointer; transition: all 0.15s ease; }
-.palette-item:hover, .palette-item-active { background: rgba(6, 182, 212, 0.12); border-color: rgba(6, 182, 212, 0.4); }
+.palette-item:hover, .palette-item-active { background: var(--bg-elevated, #1a1b1e); border-color: rgba(255, 255, 255, 0.16); }
 .p-item-icon { font-size: 20px; flex-shrink: 0; }
 .p-item-info { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 2px; }
 .p-item-name { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -271,7 +271,7 @@
 .btn-sm { padding: 6px 12px; font-size: 12px; }
 .text-emerald { color: #34d399; }
 .text-amber { color: #fbbf24; }
-.text-cyan { color: #38bdf8; }
+.text-cyan { color: var(--text-secondary, #9ca3af); }
 .font-mono { font-family: var(--font-mono); }
 .login-container, .standalone-layout { width: 100vw; min-height: 100vh; display: flex; flex-direction: column; }
 
@@ -465,7 +465,7 @@ button:focus-visible, [role="button"]:focus-visible, .btn:focus-visible, .tab-bt
 .command-search-btn:focus-visible, .sidebar-toggle-btn:focus-visible, .sidebar-close-btn:focus-visible,
 .hud-bell-pill:focus-visible, .hud-logout-btn:focus-visible, .drawer-logout-btn:focus-visible,
 .nav-item:focus-visible, .palette-item:focus-visible, select:focus-visible, input:focus-visible {
-  outline: 2px solid var(--color-primary, #3b82f6) !important; outline-offset: 2px !important;
+  outline: 2px solid rgba(255, 255, 255, 0.45) !important; outline-offset: 2px !important;
 }
 
 .mobile-tips { display: none; }
