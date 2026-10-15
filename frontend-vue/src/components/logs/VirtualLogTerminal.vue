@@ -4,6 +4,7 @@ import type { LogEntry } from '../../stores/logStore'
 import { useLogStore } from '../../stores/logStore'
 import { calculateVirtualWindow } from '../../utils/virtualWindow'
 import { detectStackTrace, type StackTraceInfo } from '../../utils/stackTraceParser'
+import { formatTime, getTargetBadge } from './virtualLogUtils'
 import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
@@ -19,14 +20,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  isConnected: true,
-  isPaused: false,
-  autoScroll: true,
-  isScrollLocked: false,
-  targetName: 'cluster',
-  latency: 0,
-  wrapLines: true,
-  rowHeight: 24,
+  isConnected: true, isPaused: false, autoScroll: true, isScrollLocked: false,
+  targetName: 'cluster', latency: 0, wrapLines: true, rowHeight: 24,
 })
 
 const emit = defineEmits<{
@@ -148,27 +143,6 @@ watch(
     }
   }
 )
-
-function formatTime(t: string): string {
-  if (!t) return ''
-  if (t.includes('T')) {
-    const p = t.split('T')[1]
-    return p ? p.slice(0, 8) : t
-  }
-  if (t.length > 8 && t[2] === ':' && t[5] === ':') {
-    return t.slice(0, 8)
-  }
-  return t
-}
-
-function getTargetBadge(log: LogEntry): string {
-  if (log.node && log.service && log.node !== log.service) return `${log.node}/${log.service}`
-  if (log.node && log.pod && log.node !== log.pod) return `${log.node}/${log.pod}`
-  if (log.service) return log.service
-  if (log.node) return log.node
-  if (log.pod) return (log.namespace && log.namespace !== 'default') ? `${log.namespace}/${log.pod}` : log.pod
-  return log.namespace || 'system'
-}
 
 function handleTraceClick(traceId: string) {
   emit('openTrace', traceId)

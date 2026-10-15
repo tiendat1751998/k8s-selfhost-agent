@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
+import { useTrendChart } from '../../../composables/useTrendChart'
 import BaseIcon from '../../ui/BaseIcon.vue'
 
 export interface TrendPoint {
@@ -31,213 +32,29 @@ const emit = defineEmits<{
   (e: 'openDeepDive'): void
 }>()
 
-function computeCeiling(rawMax: number): number {
-  if (rawMax <= 0 || isNaN(rawMax)) return 10
-  const padded = rawMax * 1.25
-  if (padded <= 10) return 10
-  if (padded <= 20) return Math.ceil(padded)
-  if (padded <= 50) return Math.ceil(padded / 5) * 5
-  if (padded <= 200) return Math.ceil(padded / 10) * 10
-  if (padded <= 1000) return Math.ceil(padded / 50) * 50
-  if (padded <= 10000) return Math.ceil(padded / 500) * 500
-  return Math.ceil(padded / 1000) * 1000
-}
-
-function buildSmoothSpline(points: Array<{ x: number; y: number }>, smoothing = 0.18, minY = 10, maxY = 194): string {
-  if (!points || points.length === 0) return ''
-  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
-  if (points.length === 2) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)} L ${points[1].x.toFixed(1)} ${points[1].y.toFixed(1)}`
-
-  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[Math.max(0, i - 1)]
-    const p1 = points[i]
-    const p2 = points[i + 1]
-    const p3 = points[Math.min(points.length - 1, i + 2)]
-
-    const minLocalX = Math.min(p1.x, p2.x), maxLocalX = Math.max(p1.x, p2.x)
-    const cp1x = Math.max(minLocalX, Math.min(maxLocalX, p1.x + ((p2.x - p0.x) / 6) * (1 - smoothing)))
-    const cp2x = Math.max(minLocalX, Math.min(maxLocalX, p2.x - ((p3.x - p1.x) / 6) * (1 - smoothing)))
-    const cp1y = Math.max(minY, Math.min(maxY, p1.y + ((p2.y - p0.y) / 6) * (1 - smoothing)))
-    const cp2y = Math.max(minY, Math.min(maxY, p2.y - ((p3.y - p1.y) / 6) * (1 - smoothing)))
-
-    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
-  }
-  return d
-}
-
-function formatMetricRate(val: number, withUnit = false): string {
-  if (val === undefined || val === null || isNaN(val)) return withUnit ? '0 rps' : '0'
-  let str = '0'
-  if (val >= 1000000) str = `${(val / 1000000).toFixed(1)}M`
-  else if (val >= 1000) str = `${(val / 1000).toFixed(1)}k`
-  else if (val >= 100) str = Math.round(val).toString()
-  else if (val > 0) str = val.toFixed(1)
-  return withUnit ? `${str} rps` : str
-}
-
-const latestCpu = computed(() => {
-  if (!props.trendHistory.length) return 0
-  return props.trendHistory[props.trendHistory.length - 1].cpu || 0
+const {
+  latestCpu,
+  latestMem,
+  latestReqs,
+  trendChartMaxReqs,
+  trendChartCpuPath,
+  trendChartCpuArea,
+  trendChartMemPath,
+  trendChartMemArea,
+  trendChartReqsPath,
+  trendChartReqsArea,
+  trendTimeAxisMarkers,
+  hoveredPoint,
+  hoveredElapsed,
+  hoverCoords,
+  tooltipStyle,
+  handleChartHover,
+  handleChartLeave,
+  formatMetricRate,
+} = useTrendChart({
+  trendHistory: computed(() => props.trendHistory),
+  effectiveHttpRps: computed(() => props.effectiveHttpRps),
 })
-
-const latestMem = computed(() => {
-  if (!props.trendHistory.length) return 0
-  return props.trendHistory[props.trendHistory.length - 1].mem || 0
-})
-
-const latestReqs = computed(() => {
-  if (!props.trendHistory.length) return props.effectiveHttpRps || 0
-  return props.trendHistory[props.trendHistory.length - 1].reqs || 0
-})
-
-const trendChartMaxReqs = computed(() => {
-  const rawMax = Math.max(0, ...props.trendHistory.map(p => p.reqs || 0), Math.round(props.effectiveHttpRps || 0))
-  return computeCeiling(rawMax)
-})
-
-const trendChartCpuPath = computed(() => {
-  const history = props.trendHistory
-  if (history.length < 2) return ''
-  const step = 988 / (history.length - 1)
-  const points = history.map((h, i) => ({
-    x: 6 + i * step,
-    y: Math.max(10, Math.min(194, 194 - (Math.min(100, Math.max(0, h.cpu)) / 100) * 184)),
-  }))
-  return buildSmoothSpline(points, 0.18, 10, 194)
-})
-
-const trendChartCpuArea = computed(() => {
-  if (!trendChartCpuPath.value || !props.trendHistory.length) return ''
-  const history = props.trendHistory
-  const step = history.length > 1 ? 988 / (history.length - 1) : 0
-  const lastX = 6 + (history.length - 1) * step
-  return `${trendChartCpuPath.value} L ${lastX.toFixed(1)} 194 L 6.0 194 Z`
-})
-
-const trendChartMemPath = computed(() => {
-  const history = props.trendHistory
-  if (history.length < 2) return ''
-  const step = 988 / (history.length - 1)
-  const points = history.map((h, i) => ({
-    x: 6 + i * step,
-    y: Math.max(10, Math.min(194, 194 - (Math.min(100, Math.max(0, h.mem)) / 100) * 184)),
-  }))
-  return buildSmoothSpline(points, 0.18, 10, 194)
-})
-
-const trendChartMemArea = computed(() => {
-  if (!trendChartMemPath.value || !props.trendHistory.length) return ''
-  const history = props.trendHistory
-  const step = history.length > 1 ? 988 / (history.length - 1) : 0
-  const lastX = 6 + (history.length - 1) * step
-  return `${trendChartMemPath.value} L ${lastX.toFixed(1)} 194 L 6.0 194 Z`
-})
-
-const trendChartReqsPath = computed(() => {
-  const history = props.trendHistory
-  if (history.length < 2) return ''
-  const step = 988 / (history.length - 1)
-  const maxR = trendChartMaxReqs.value
-  const points = history.map((h, i) => ({
-    x: 6 + i * step,
-    y: Math.max(10, Math.min(194, 194 - (Math.min(maxR, Math.max(0, h.reqs)) / maxR) * 184)),
-  }))
-  return buildSmoothSpline(points, 0.18, 10, 194)
-})
-
-const trendChartReqsArea = computed(() => {
-  if (!trendChartReqsPath.value || !props.trendHistory.length) return ''
-  const history = props.trendHistory
-  const step = history.length > 1 ? 988 / (history.length - 1) : 0
-  const lastX = 6 + (history.length - 1) * step
-  return `${trendChartReqsPath.value} L ${lastX.toFixed(1)} 194 L 6.0 194 Z`
-})
-
-const trendTimeAxisMarkers = computed(() => {
-  const history = props.trendHistory
-  if (history.length < 2) return []
-  const count = Math.min(5, history.length)
-  const markers = []
-  const step = 988 / (history.length - 1)
-  for (let i = 0; i < count; i++) {
-    const idx = Math.round((i / (count - 1)) * (history.length - 1))
-    const pt = history[idx]
-    if (pt) {
-      markers.push({
-        x: 6 + idx * step,
-        time: (pt.time || '').replace(/\s*[AP]M$/i, ''),
-      })
-    }
-  }
-  return markers
-})
-
-const hoveredIndex = ref<number | null>(null)
-const tooltipPos = ref({ x: 0, y: 0 })
-
-const hoveredPoint = computed<TrendPoint | null>(() => {
-  if (hoveredIndex.value === null || hoveredIndex.value < 0 || hoveredIndex.value >= props.trendHistory.length) {
-    return null
-  }
-  return props.trendHistory[hoveredIndex.value]
-})
-
-const hoveredElapsed = computed<string>(() => {
-  if (hoveredIndex.value === null) return ''
-  const offset = (props.trendHistory.length - 1 - hoveredIndex.value) * 10
-  if (offset === 0) return 'Now (Live)'
-  const mins = Math.floor(offset / 60)
-  const secs = offset % 60
-  if (mins === 0) return `${secs}s ago`
-  return `${mins}m ${secs > 0 ? secs + 's' : ''} ago`
-})
-
-const hoverCoords = computed(() => {
-  if (hoveredIndex.value === null || !props.trendHistory.length) return null
-  const history = props.trendHistory
-  const step = history.length > 1 ? 988 / (history.length - 1) : 0
-  const idx = hoveredIndex.value
-  const pt = history[idx]
-  if (!pt) return null
-  const x = 6 + idx * step
-  const maxR = trendChartMaxReqs.value
-  const yCpu = Math.max(10, Math.min(194, 194 - (Math.min(100, Math.max(0, pt.cpu)) / 100) * 184))
-  const yMem = Math.max(10, Math.min(194, 194 - (Math.min(100, Math.max(0, pt.mem)) / 100) * 184))
-  const yReq = Math.max(10, Math.min(194, 194 - (Math.min(maxR, Math.max(0, pt.reqs)) / maxR) * 184))
-  return { x, yCpu, yMem, yReq }
-})
-
-const tooltipStyle = computed(() => {
-  if (hoveredIndex.value === null) return { display: 'none' }
-  const { x, y } = tooltipPos.value
-  const isRightSide = x > 380
-  return {
-    left: isRightSide ? `${Math.max(10, x - 235)}px` : `${x + 16}px`,
-    top: y > 75 ? `${Math.max(8, y - 125)}px` : `${Math.min(55, y + 15)}px`,
-    pointerEvents: 'none' as const,
-  }
-})
-
-function handleChartHover(event: MouseEvent) {
-  const history = props.trendHistory
-  if (history.length < 2) return
-  const target = event.currentTarget as HTMLElement
-  const rect = target.getBoundingClientRect()
-  const mouseX = Math.max(0, Math.min(rect.width, event.clientX - rect.left))
-  const mouseY = Math.max(0, Math.min(rect.height, event.clientY - rect.top))
-  const scaleX = rect.width / 1000
-  const svgX = mouseX / scaleX
-  const boundedSvgX = Math.max(6, Math.min(994, svgX))
-  const ratio = (boundedSvgX - 6) / 988
-  const idx = Math.round(ratio * (history.length - 1))
-  hoveredIndex.value = Math.max(0, Math.min(history.length - 1, idx))
-  tooltipPos.value = { x: mouseX, y: mouseY }
-}
-
-function handleChartLeave() {
-  hoveredIndex.value = null
-}
 </script>
 
 <template>

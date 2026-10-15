@@ -1,14 +1,37 @@
 <script setup lang="ts">
+import { ref, computed, watch } from 'vue'
 import type { Cluster } from '../../api/fleet'
 import StatusBadge from '../ui/StatusBadge.vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 
-defineProps<{
+const props = defineProps<{
   clusters: Cluster[]
   totalClustersCount?: number
   actionLoading?: string | null
   loading?: boolean
 }>()
+
+const pageSize = 48
+const currentPage = ref(1)
+const totalPages = computed(() => Math.max(1, Math.ceil(props.clusters.length / pageSize)))
+
+watch(() => props.clusters.length, () => {
+  if (currentPage.value > totalPages.value) currentPage.value = 1
+})
+
+const startIndex = computed(() => (currentPage.value - 1) * pageSize)
+const endIndex = computed(() => Math.min(startIndex.value + pageSize, props.clusters.length))
+const paginatedClusters = computed(() => {
+  if (props.clusters.length <= pageSize) return props.clusters
+  return props.clusters.slice(startIndex.value, endIndex.value)
+})
+
+function prevPage() {
+  if (currentPage.value > 1) currentPage.value--
+}
+function nextPage() {
+  if (currentPage.value < totalPages.value) currentPage.value++
+}
 
 const emit = defineEmits<{
   (e: 'discover', cluster: Cluster): void
@@ -88,8 +111,17 @@ const emit = defineEmits<{
     </div>
 
     <!-- Unified Clusters Cards Grid -->
-    <div v-else class="clusters-card-grid">
-      <div v-for="cluster in clusters" :key="cluster.id" class="cluster-card glass-panel">
+    <div v-else class="clusters-grid-section">
+      <div v-if="clusters.length > pageSize" class="fleet-pagination-bar font-mono" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin-bottom: 12px; border-radius: 6px;">
+        <span class="text-xs text-muted">Showing {{ startIndex + 1 }}–{{ endIndex }} of {{ clusters.length }} clusters</span>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button type="button" class="btn btn-secondary btn-xs" :disabled="currentPage <= 1" @click="prevPage">Prev</button>
+          <span class="text-xs">{{ currentPage }} / {{ totalPages }}</span>
+          <button type="button" class="btn btn-secondary btn-xs" :disabled="currentPage >= totalPages" @click="nextPage">Next</button>
+        </div>
+      </div>
+      <div class="clusters-card-grid">
+        <div v-for="cluster in paginatedClusters" :key="cluster.id" class="cluster-card glass-panel">
         <div class="card-top">
           <div class="cluster-brand">
             <span
@@ -189,6 +221,7 @@ const emit = defineEmits<{
       </div>
     </div>
   </div>
+</div>
 </template>
 
 <style scoped>

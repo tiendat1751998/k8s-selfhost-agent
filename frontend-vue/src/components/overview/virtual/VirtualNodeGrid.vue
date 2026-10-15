@@ -13,7 +13,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   nodes: () => [],
   rowHeight: 180,
-  columns: 3,
+  columns: 0,
   viewportHeight: 720,
   overscanRows: 3,
 })
@@ -26,12 +26,20 @@ const emit = defineEmits<{
 const containerRef = ref<HTMLElement | null>(null)
 const scrollTop = ref(0)
 const measuredHeight = ref(props.viewportHeight)
+const containerWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1200)
 let resizeObserver: ResizeObserver | null = null
+
+const effectiveColumns = computed(() => {
+  const w = containerWidth.value
+  if (w < 640) return 1
+  if (w < 1024) return Math.min(props.columns || 2, 2)
+  return props.columns || 3
+})
 
 const windowState = computed(() => {
   return calculateVirtualNodeWindow({
     totalCount: props.nodes.length,
-    columns: props.columns,
+    columns: effectiveColumns.value,
     rowHeight: props.rowHeight,
     viewportHeight: measuredHeight.value,
     scrollTop: scrollTop.value,
@@ -51,12 +59,32 @@ function onScroll(e: Event) {
   }
 }
 
+function updateDimensions() {
+  if (containerRef.value) {
+    if (containerRef.value.clientWidth > 0) {
+      containerWidth.value = containerRef.value.clientWidth
+    }
+    if (containerRef.value.clientHeight > 0) {
+      measuredHeight.value = containerRef.value.clientHeight
+    }
+  } else if (typeof window !== 'undefined') {
+    containerWidth.value = window.innerWidth
+  }
+}
+
 onMounted(() => {
+  updateDimensions()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('resize', updateDimensions, { passive: true })
+  }
   if (containerRef.value && typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.contentRect.height > 0) {
           measuredHeight.value = entry.contentRect.height
+        }
+        if (entry.contentRect.width > 0) {
+          containerWidth.value = entry.contentRect.width
         }
       }
     })
@@ -65,6 +93,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('resize', updateDimensions)
+  }
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
@@ -92,7 +123,7 @@ onUnmounted(() => {
       >
         <div
           class="virtual-grid"
-          :style="{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }"
+          :style="{ gridTemplateColumns: `repeat(${effectiveColumns}, minmax(0, 1fr))` }"
         >
           <div
             v-for="(node, idx) in visibleNodes"
@@ -131,111 +162,4 @@ onUnmounted(() => {
   </div>
 </template>
 
-<style scoped>
-.virtual-node-viewport {
-  position: relative;
-  overflow-y: auto;
-  overflow-x: hidden;
-  width: 100%;
-  border-radius: 8px;
-  contain: strict;
-  outline: none;
-}
-.virtual-node-viewport:focus-visible {
-  box-shadow: 0 0 0 2px var(--color-primary, #38bdf8);
-}
-.virtual-phantom-spacer {
-  position: relative;
-  width: 100%;
-  pointer-events: none;
-}
-.virtual-card-track {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  pointer-events: auto;
-  will-change: transform;
-}
-.virtual-grid {
-  display: grid;
-  gap: 16px;
-  padding: 8px 4px;
-}
-.virtual-grid-item {
-  min-width: 0;
-}
-.default-virtual-card {
-  background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 14px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, transform 0.15s ease;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.default-virtual-card:hover {
-  border-color: rgba(56, 189, 248, 0.4);
-  transform: translateY(-1px);
-}
-.card-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.status-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 9999px;
-  background: #10b981;
-}
-.status-indicator.warning { background: #f59e0b; }
-.status-indicator.critical, .status-indicator.offline, .status-indicator.down { background: #f43f5e; }
-.status-indicator.cordoned { background: #64748b; }
-.node-title {
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: #f1f5f9;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-}
-.node-badge {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #94a3b8;
-  letter-spacing: 0.05em;
-}
-.metrics-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.metric {
-  display: flex;
-  justify-content: space-between;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 6px 8px;
-  border-radius: 4px;
-}
-.metric-label {
-  font-size: 0.6875rem;
-  color: #94a3b8;
-  font-weight: 600;
-}
-.metric-val {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #e2e8f0;
-}
-.tabular-nums {
-  font-variant-numeric: tabular-nums;
-}
-</style>
+<style scoped src="../../../assets/styles/components/virtual-node-grid.css"></style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, defineAsyncComponent } from 'vue'
+import { ref, watch, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { useOverviewDashboard } from '../composables/useOverviewDashboard'
 
@@ -16,7 +16,8 @@ import type { MutedAlertConfig } from '../stores/alertStore'
 export type { MutedAlertConfig }
 
 const router = useRouter()
-const nodeViewMode = ref<'grid' | 'table'>('table')
+const nodeViewMode = ref<'grid' | 'table' | 'matrix'>('table')
+let hasAutoSwitchedMatrix = false
 
 const {
   overview,
@@ -73,6 +74,13 @@ const {
   loadNodeHistory,
   applyCustomHistoryPreset,
 } = useOverviewDashboard()
+
+watch(filteredTopologyNodes, (newNodes) => {
+  if (!hasAutoSwitchedMatrix && newNodes && newNodes.length >= 500) {
+    nodeViewMode.value = 'matrix'
+    hasAutoSwitchedMatrix = true
+  }
+}, { immediate: true })
 </script>
 
 <template>
@@ -251,6 +259,7 @@ const {
         :drag-over-node-id="dragOverNodeId"
         @reset-node-order="resetNodeOrder"
         @card-click="handleNodeCardClick"
+        @select-node="handleNodeCardClick"
         @inspect="inspectNode"
         @manage="manageNode"
         @logs="viewNodeLogs"

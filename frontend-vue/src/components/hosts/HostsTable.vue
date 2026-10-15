@@ -84,6 +84,24 @@ const sortedHosts = computed<ComputeHost[]>(() => {
   })
 })
 
+const pageSize = 48
+const currentPage = ref(1)
+const totalPages = computed(() => Math.max(1, Math.ceil(sortedHosts.value.length / pageSize)))
+
+const startIndex = computed(() => (currentPage.value - 1) * pageSize)
+const endIndex = computed(() => Math.min(startIndex.value + pageSize, sortedHosts.value.length))
+const paginatedHosts = computed(() => {
+  if (sortedHosts.value.length <= pageSize) return sortedHosts.value
+  return sortedHosts.value.slice(startIndex.value, endIndex.value)
+})
+
+function prevPage() {
+  if (currentPage.value > 1) currentPage.value--
+}
+function nextPage() {
+  if (currentPage.value < totalPages.value) currentPage.value++
+}
+
 function getRowActions(): ActionItem[] {
   return [
     { id: 'select', label: 'View Host Details', icon: 'search' },
@@ -106,7 +124,16 @@ function handleActionSelect(actionId: string, host: ComputeHost) {
       <div class="topbar-left">
         <BaseIcon name="server" size="sm" class="topbar-icon" />
         <span class="topbar-title">Compute Fleet Registry</span>
-        <span class="topbar-badge">{{ sortedHosts.length }} of {{ totalCount ?? hosts.length }} hosts</span>
+        <span class="topbar-badge">Showing {{ startIndex + 1 }}–{{ endIndex }} of {{ sortedHosts.length }} hosts</span>
+      </div>
+      <div v-if="sortedHosts.length > pageSize" class="topbar-pagination font-mono" style="display: flex; gap: 8px; align-items: center; margin-left: auto; margin-right: 12px;">
+        <button type="button" class="btn btn-secondary btn-xs" :disabled="currentPage <= 1" @click="prevPage">
+          Prev
+        </button>
+        <span class="text-xs">{{ currentPage }} / {{ totalPages }}</span>
+        <button type="button" class="btn btn-secondary btn-xs" :disabled="currentPage >= totalPages" @click="nextPage">
+          Next
+        </button>
       </div>
       <div class="topbar-right">
         <button type="button" class="btn btn-primary btn-sm add-host-btn" @click="emit('add-host')">
@@ -155,7 +182,7 @@ function handleActionSelect(actionId: string, host: ComputeHost) {
             </div>
           </td>
         </tr>
-        <tr v-for="host in sortedHosts" v-else :key="host.id" class="host-row">
+        <tr v-for="host in paginatedHosts" v-else :key="host.id" class="host-row">
           <td class="col-name" @click="emit('select', host)">
             <div class="row-name-group">
               <span class="row-type-icon"><BaseIcon :name="getHostTypeMeta(host.host_type).icon" size="sm" /></span>
@@ -249,32 +276,9 @@ function handleActionSelect(actionId: string, host: ComputeHost) {
 </template>
 
 <style scoped>
-/* Inherited via InfraHostsView.vue: assets/styles/views/infra-hosts.css */
-
-.sortable-th {
-  cursor: pointer;
-  user-select: none;
-  transition: color 0.15s ease;
-}
-
-.sortable-th:hover {
-  color: var(--text-primary, #fff);
-}
-
-.th-sort-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sort-icon {
-  font-size: 10px;
-  opacity: 0.4;
-}
-
-.sort-icon.active {
-  opacity: 1;
-  color: var(--color-cyan, #06b6d4);
-  font-weight: bold;
-}
+.sortable-th { cursor: pointer; user-select: none; transition: color 0.15s ease; }
+.sortable-th:hover { color: var(--text-primary, #fff); }
+.th-sort-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.sort-icon { font-size: 10px; opacity: 0.4; }
+.sort-icon.active { opacity: 1; color: var(--color-cyan, #06b6d4); font-weight: bold; }
 </style>

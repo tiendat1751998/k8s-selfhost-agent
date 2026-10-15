@@ -1,0 +1,106 @@
+.virtual-node-viewport {
+  position: relative;
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+  border-radius: 8px;
+  contain: strict;
+  outline: none;
+}
+.virtual-node-viewport:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-primary, #38bdf8);
+}
+.virtual-phantom-spacer {
+  position: relative;
+  width: 100%;
+  pointer-events: none;
+}
+.virtual-card-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: auto;
+  will-change: transform;
+}
+.virtual-grid {
+  display: grid;
+  gap: 16px;
+  padding: 8px 4px;
+}
+.virtual-grid-item {
+  min-width: 0;
+}
+.default-virtual-card {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.default-virtual-card:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  transform: translateY(-1px);
+}
+.card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #10b981;
+}
+.status-indicator.warning { background: #f59e0b; }
+.status-indicator.critical, .status-indicator.offline, .status-indicator.down { background: #f43f5e; }
+.status-indicator.cordoned { background: #64748b; }
+.node-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+.node-badge {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+}
+.metrics-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.metric {
+  display: flex;
+  justify-content: space-between;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+.metric-label {
+  font-size: 0.6875rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.metric-val {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
