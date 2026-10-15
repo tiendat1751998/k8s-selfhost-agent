@@ -166,14 +166,8 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var responseHeader http.Header
-	if secProto := r.Header.Get("Sec-WebSocket-Protocol"); secProto != "" {
-		if strings.Contains(strings.ToLower(secProto), "bearer") {
-			responseHeader = http.Header{"Sec-WebSocket-Protocol": []string{"bearer"}}
-		}
-	}
-
-	conn, err := upgrader.Upgrade(w, r, responseHeader)
+	w.Header().Del("Sec-WebSocket-Protocol")
+	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.Get().Error("failed to upgrade websocket for log streaming", zap.Error(err))
 		return
