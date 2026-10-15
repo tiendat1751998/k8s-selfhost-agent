@@ -2,6 +2,7 @@ package promotion
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -186,11 +187,7 @@ func (e *CanaryEngine) EvaluateCanaryHealth(ctx context.Context, releaseID strin
 			return nil, fmt.Errorf("querying live metrics for %s: %w", workload, err)
 		}
 	} else {
-		// Default healthy baseline if no provider or override configured
-		baselineErr = 0.001
-		canaryErr = 0.001
-		baselineP99 = 50 * time.Millisecond
-		canaryP99 = 50 * time.Millisecond
+		return nil, errors.New("metrics provider or workload metrics override required for canary health evaluation")
 	}
 
 	comparison := promotion.CalculateMetricsComparison(baselineErr, canaryErr, baselineP99, canaryP99)

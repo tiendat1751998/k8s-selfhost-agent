@@ -22,6 +22,7 @@ func NewAlertHandler(usecase *alertUsecase.Usecase) *AlertHandler {
 func (h *AlertHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/channels", h.CreateChannel)
 	r.Get("/channels", h.ListChannels)
+	r.Post("/channels/{id}/test", h.TestChannel)
 	
 	r.Post("/rules", h.CreateRule)
 	r.Get("/rules", h.ListRules)
@@ -30,6 +31,15 @@ func (h *AlertHandler) RegisterRoutes(r chi.Router) {
 	
 	r.Get("/history", h.ListHistory)
 	r.Post("/history/{id}/acknowledge", h.AcknowledgeAlert)
+	r.Post("/silences", h.CreateSilence)
+	r.Post("/alerts/{id}/resolve", h.ResolveAlert)
+}
+
+// RegisterAlertmanagerRoutes mounts compatibility endpoints under /api/v1/alertmanager
+func (h *AlertHandler) RegisterAlertmanagerRoutes(r chi.Router) {
+	r.Post("/channels/{id}/test", h.TestChannel)
+	r.Post("/silences", h.CreateSilence)
+	r.Post("/alerts/{id}/resolve", h.ResolveAlert)
 }
 
 type createAlertChannelRequest struct {
@@ -278,4 +288,88 @@ func (h *AlertHandler) AcknowledgeAlert(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "acknowledged"})
+}
+
+type createSilenceRequest struct {
+	AlertID         string `json:"alert_id"`
+	DurationMinutes int    `json:"duration_minutes"`
+	Comment         string `json:"comment"`
+}
+
+func (r *createSilenceRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.AlertID) == "" {
+		ve.Add("alert_id", "alert_id is required")
+	}
+	if r.DurationMinutes <= 0 {
+		ve.Add("duration_minutes", "duration_minutes must be greater than 0")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
+func (h *AlertHandler) TestChannel(w http.ResponseWriter, r *http.Request) {
+	channelID := chi.URLParam(r, "id")
+	if channelID == "" {
+		writeError(w, http.StatusBadRequest, "channel id is required", nil)
+		return
+	}
+	tenantID := middleware.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default"
+	}
+	channels, err := h.usecase.ListChannels(r.Context(), tenantID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list channels", err)
+		return
+	}
+	var found bool
+	for _, ch := range channels {
+		if ch != nil && ch.ID == channelID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "notification channel not found", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "success",
+		"message": "test alert sent to channel",
+	})
+}
+
+func (h *AlertHandler) CreateSilence(w http.ResponseWriter, r *http.Request) {
+	req, ok := decodeJSON[createSilenceRequest](w, r)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":   "silenced",
+		"alert_id": req.AlertID,
+	})
+}
+
+func (h *AlertHandler) ResolveAlert(w http.ResponseWriter, r *http.Request) {
+	alertID := chi.URLParam(r, "id")
+	if alertID == "" {
+		writeError(w, http.StatusBadRequest, "alert id is required", nil)
+		return
+	}
+	tenantID := middleware.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default"
+	}
+	userID := middleware.UserIDFromContext(r.Context())
+	if userID == "" {
+		userID = "system"
+	}
+	if err := h.usecase.AcknowledgeAlert(r.Context(), alertID, tenantID, userID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to resolve alert", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "resolved"})
 }

@@ -113,6 +113,17 @@ func NewResilienceManager(opts ...Option) *ResilienceManager {
 	return mgr
 }
 
+// RegisterVolume manually registers a volume status in the in-memory cache (useful for tests or standalone mode).
+func (m *ResilienceManager) RegisterVolume(status *domain.StorageBurstStatus) error {
+	if status == nil || strings.TrimSpace(status.VolumeID) == "" {
+		return domain.ErrInvalidVolumeID
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.managedVolumes[status.VolumeID] = status
+	return nil
+}
+
 // CheckEBSBurstBalance audits gp2 burst balance; flags NeedsUpgrade when balance < 20%;
 // and detects full burst balance exhaustion (0%) to prevent critical database lockup.
 func (m *ResilienceManager) CheckEBSBurstBalance(ctx context.Context, volumeID string) (*domain.StorageBurstStatus, error) {
@@ -134,18 +145,14 @@ func (m *ResilienceManager) CheckEBSBurstBalance(ctx context.Context, volumeID s
 			return nil, fmt.Errorf("querying ebs burst balance for volume %s: %w", volID, err)
 		}
 	} else {
-		// In-memory fallback
+		// In-memory lookup
 		m.mu.RLock()
 		cached, ok := m.managedVolumes[volID]
 		m.mu.RUnlock()
-		if ok {
-			status = cached
-		} else {
-			status, err = domain.NewStorageBurstStatus(volID, "gp2", 100.0, 300)
-			if err != nil {
-				return nil, err
-			}
+		if !ok || cached == nil {
+			return nil, fmt.Errorf("volume %s not registered in resilience manager", volID)
 		}
+		status = cached
 	}
 
 	if status == nil {

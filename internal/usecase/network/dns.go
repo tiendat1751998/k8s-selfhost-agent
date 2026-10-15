@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -40,15 +41,31 @@ func (p *DefaultDNSMetricsProvider) SetMetrics(clusterID string, p99Latency time
 }
 
 // GetDNSMetrics retrieves P99 latency and error rate for a cluster.
-func (p *DefaultDNSMetricsProvider) GetDNSMetrics(_ context.Context, clusterID string) (time.Duration, float64, error) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	latency, ok := p.latencies[clusterID]
-	if !ok {
-		latency = 5 * time.Millisecond // default healthy latency
+func (p *DefaultDNSMetricsProvider) GetDNSMetrics(ctx context.Context, clusterID string) (time.Duration, float64, error) {
+	if clusterID == "" {
+		return 0, 0, fmt.Errorf("clusterID is required")
 	}
+	p.mu.RLock()
+	latency, ok := p.latencies[clusterID]
 	rate := p.errorRates[clusterID]
-	return latency, rate, nil
+	p.mu.RUnlock()
+
+	if ok {
+		return latency, rate, nil
+	}
+
+	// Probe actual cluster DNS resolution latency via net.DefaultResolver
+	start := time.Now()
+	_, probeErr := net.DefaultResolver.LookupHost(ctx, "kubernetes.default.svc.cluster.local")
+	elapsed := time.Since(start)
+
+	measuredLatency := elapsed
+	measuredErrorRate := 0.0
+	if probeErr != nil {
+		measuredErrorRate = 1.0
+	}
+
+	return measuredLatency, measuredErrorRate, nil
 }
 
 // JSONPatchOp represents an RFC 6902 JSON patch operation.

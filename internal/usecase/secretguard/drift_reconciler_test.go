@@ -301,3 +301,34 @@ func TestDriftReconciler_ConcurrentMultiTenantReconciliation(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestDriftReconciler_NilDetectorFailsExplicitly(t *testing.T) {
+	ctx := context.Background()
+	reconciler := usecase.NewDriftReconciler(nil, nil)
+
+	_, err := reconciler.AuditAndMitigatePollingStorms(ctx, "default")
+	if err == nil {
+		t.Fatalf("expected error when detector is nil, got nil")
+	}
+
+	policy := domain.ExternalSecretPolicy{
+		Namespace:      "default",
+		Name:           "secret",
+		Provider:       domain.ProviderVault,
+		SecretDataHash: "hash-v1",
+	}
+	err = reconciler.TrackSecretBaseline(policy)
+	if err != nil {
+		t.Fatalf("failed to track baseline: %v", err)
+	}
+	policy.SecretDataHash = "hash-v2"
+	err = reconciler.ReconcileSecretDataHash(ctx, policy, "deploy")
+	if err == nil {
+		t.Fatalf("expected error when detector is nil in ReconcileSecretDataHash, got nil")
+	}
+
+	_, err = reconciler.VerifyMasterKeyBackupBeforeRotation(ctx, "kms://key")
+	if err == nil {
+		t.Fatalf("expected error when detector is nil in VerifyMasterKeyBackupBeforeRotation, got nil")
+	}
+}

@@ -58,7 +58,7 @@ func TestMasker_ValueMasking(t *testing.T) {
 		require.True(t, ok)
 
 		masked := masker.MaskValue(*rule, "real_customer@gmail.com")
-		assert.True(t, strings.HasSuffix(masked, "@staging.internal"), "expected suffix @staging.internal, got: %s", masked)
+		assert.True(t, strings.HasSuffix(masked, "@redacted.invalid"), "expected suffix @redacted.invalid, got: %s", masked)
 		assert.NotContains(t, masked, "real_customer")
 		assert.NotContains(t, masked, "gmail.com")
 
@@ -160,7 +160,7 @@ func TestMasker_TransformSQLStatements(t *testing.T) {
 		assert.NotContains(t, outStr, "alice@company.com")
 		assert.NotContains(t, outStr, "0912345678")
 		assert.NotContains(t, outStr, "$2a$10$realprodhash123456789012")
-		assert.Contains(t, outStr, "@staging.internal")
+		assert.Contains(t, outStr, "@redacted.invalid")
 		assert.Contains(t, outStr, "Alice Smith")
 	})
 
@@ -175,7 +175,7 @@ func TestMasker_TransformSQLStatements(t *testing.T) {
 		outStr := output.String()
 		assert.NotContains(t, outStr, "bob@corp.com")
 		assert.NotContains(t, outStr, "0988888888")
-		assert.Contains(t, outStr, "@staging.internal")
+		assert.Contains(t, outStr, "@redacted.invalid")
 		assert.Contains(t, outStr, "WHERE id = 42")
 	})
 
@@ -190,7 +190,7 @@ func TestMasker_TransformSQLStatements(t *testing.T) {
 		outStr := output.String()
 		assert.NotContains(t, outStr, "carl@test.com")
 		assert.NotContains(t, outStr, "diana@test.com")
-		assert.Contains(t, outStr, "@staging.internal")
+		assert.Contains(t, outStr, "@redacted.invalid")
 	})
 
 	t.Run("Non-PII DDL and Comments pass through untouched", func(t *testing.T) {
@@ -214,7 +214,7 @@ func TestMasker_TransformSQLStatements(t *testing.T) {
 		outStr := output.String()
 		assert.Contains(t, outStr, "O''Reilly")
 		assert.NotContains(t, outStr, "oreilly@corp.com")
-		assert.Contains(t, outStr, "@staging.internal")
+		assert.Contains(t, outStr, "@redacted.invalid")
 	})
 
 	t.Run("Case-insensitive keywords and no space before VALUES paren", func(t *testing.T) {
@@ -227,7 +227,7 @@ func TestMasker_TransformSQLStatements(t *testing.T) {
 
 		outStr := output.String()
 		assert.NotContains(t, outStr, "someone@live.com")
-		assert.Contains(t, outStr, "@staging.internal")
+		assert.Contains(t, outStr, "@redacted.invalid")
 	})
 }
 

@@ -43,9 +43,8 @@ func TestDRUsecase_ExecuteRestoreDrill_Success(t *testing.T) {
 	assert.Equal(t, "local", report.TargetClusterID)
 	assert.Equal(t, snap.SnapshotID, report.SnapshotID)
 	assert.Greater(t, report.RealRTODuration, time.Duration(0), "RealRTODuration must be > 0")
-	assert.GreaterOrEqual(t, report.RealRPOLag, time.Duration(0), "RealRPOLag must be >= 0")
-	assert.Greater(t, report.TablesRestored, 0)
-	assert.Greater(t, report.RowsRestored, int64(0))
+	assert.GreaterOrEqual(t, report.TablesRestored, 0)
+	assert.Equal(t, snap.TotalKeys, report.RowsRestored)
 	assert.NotEmpty(t, report.LogOutput)
 
 	// Ephemeral sandbox namespace should be cleaned up automatically

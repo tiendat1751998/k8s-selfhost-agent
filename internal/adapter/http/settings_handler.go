@@ -2,12 +2,14 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/domain/settings"
@@ -40,6 +42,9 @@ func (h *SettingsHandler) RegisterRoutes(r chi.Router) {
 	r.Put("/", h.UpdateSettings)
 	r.Get("/defaults", h.GetDefaults)
 	r.Post("/integrations/test", h.TestIntegration)
+	r.Get("/api-keys", h.ListAPIKeys)
+	r.Post("/api-keys", h.CreateAPIKey)
+	r.Delete("/api-keys/{id}", h.DeleteAPIKey)
 }
 
 func isSensitiveKey(k string) bool {
@@ -225,4 +230,124 @@ func (h *SettingsHandler) TestIntegration(w http.ResponseWriter, r *http.Request
 		StatusCode: resp.StatusCode,
 		LatencyMS:  latency,
 	})
+}
+
+// ApiKeyItem represents an API token metadata record.
+type ApiKeyItem struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Prefix    string `json:"prefix"`
+	Role      string `json:"role"`
+	CreatedAt string `json:"created_at"`
+	LastUsed  string `json:"last_used"`
+}
+
+type createApiKeyRequest struct {
+	Name string `json:"name"`
+	Role string `json:"role"`
+}
+
+func (r *createApiKeyRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if strings.TrimSpace(r.Name) == "" {
+		ve.Add("name", "name is required")
+	}
+	if strings.TrimSpace(r.Role) == "" {
+		ve.Add("role", "role is required")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
+// ListAPIKeys handles GET /api-keys - returns all active API keys for tenant.
+func (h *SettingsHandler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
+	tenantID := tenancy.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+	items, err := h.repo.GetByCategory(r.Context(), tenantID, "api_keys")
+	if err != nil {
+		h.logger.Error("failed to get api keys", zap.Error(err), zap.String("tenant_id", tenantID))
+		writeError(w, http.StatusInternalServerError, "failed to get api keys", err)
+		return
+	}
+	res := make([]ApiKeyItem, 0)
+	for _, it := range items {
+		if it.Value == "" || it.Value == "deleted" {
+			continue
+		}
+		var key ApiKeyItem
+		if err := json.Unmarshal([]byte(it.Value), &key); err == nil && key.ID != "" {
+			res = append(res, key)
+		}
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// CreateAPIKey handles POST /api-keys - generates and stores a new API key.
+func (h *SettingsHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
+	req, ok := decodeJSON[createApiKeyRequest](w, r)
+	if !ok {
+		return
+	}
+	tenantID := tenancy.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+	userID := tenancy.UserIDFromContext(r.Context())
+	id := uuid.NewString()
+	prefix := fmt.Sprintf("k8s_%s", id[:8])
+	keyItem := ApiKeyItem{
+		ID:        id,
+		Name:      req.Name,
+		Prefix:    prefix,
+		Role:      req.Role,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		LastUsed:  "never",
+	}
+	valBytes, err := json.Marshal(keyItem)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to encode api key", err)
+		return
+	}
+	if err := h.repo.Upsert(r.Context(), &settings.Setting{
+		ID:        id,
+		TenantID:  tenantID,
+		Category:  "api_keys",
+		Key:       id,
+		Value:     string(valBytes),
+		UpdatedBy: userID,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to store api key", err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, keyItem)
+}
+
+// DeleteAPIKey handles DELETE /api-keys/{id} - revokes an API key.
+func (h *SettingsHandler) DeleteAPIKey(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "api key id is required", nil)
+		return
+	}
+	tenantID := tenancy.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+	userID := tenancy.UserIDFromContext(r.Context())
+	if err := h.repo.Upsert(r.Context(), &settings.Setting{
+		ID:        id,
+		TenantID:  tenantID,
+		Category:  "api_keys",
+		Key:       id,
+		Value:     "",
+		UpdatedBy: userID,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete api key", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

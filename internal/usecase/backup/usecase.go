@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/domain/backup"
@@ -42,6 +43,9 @@ func (u *Usecase) ListPolicies(ctx context.Context, tenantID string) ([]*backup.
 }
 
 func (u *Usecase) TriggerBackup(ctx context.Context, job *backup.BackupJob) error {
+	if u.runner == nil {
+		return fmt.Errorf("backup runner is not configured")
+	}
 	if job.Status == "" {
 		job.Status = backup.StatusPending
 	}
@@ -54,9 +58,7 @@ func (u *Usecase) TriggerBackup(ctx context.Context, job *backup.BackupJob) erro
 	if err := u.repo.CreateJob(ctx, job); err != nil {
 		return err
 	}
-	if u.runner != nil {
-		u.runner.EnqueueBackup(job.ID)
-	}
+	u.runner.EnqueueBackup(job.ID)
 	return nil
 }
 
@@ -65,6 +67,9 @@ func (u *Usecase) ListJobs(ctx context.Context, tenantID string) ([]*backup.Back
 }
 
 func (u *Usecase) TriggerRestore(ctx context.Context, restore *backup.RestoreJob) error {
+	if u.runner == nil {
+		return fmt.Errorf("backup runner is not configured")
+	}
 	if restore.Status == "" {
 		restore.Status = backup.StatusPending
 	}
@@ -77,9 +82,7 @@ func (u *Usecase) TriggerRestore(ctx context.Context, restore *backup.RestoreJob
 	if err := u.repo.CreateRestore(ctx, restore); err != nil {
 		return err
 	}
-	if u.runner != nil {
-		u.runner.EnqueueRestore(restore.ID)
-	}
+	u.runner.EnqueueRestore(restore.ID)
 	return nil
 }
 

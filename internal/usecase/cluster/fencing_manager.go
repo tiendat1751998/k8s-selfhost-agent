@@ -2,11 +2,15 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
 	domainCluster "github.com/datdt/k8sselfhost/internal/domain/cluster"
 )
@@ -23,6 +27,70 @@ type FencingChannelVerifier interface {
 	VerifyPowerOff(ctx context.Context, nodeID, dc string) (bool, error)
 	VerifyNetworkLoss(ctx context.Context, nodeID, dc string) (bool, error)
 	VerifyStorageReservation(ctx context.Context, nodeID, dc string) (bool, error)
+}
+
+// K8sNodeVerifier implements FencingChannelVerifier using Kubernetes API node and storage state.
+type K8sNodeVerifier struct {
+	client kubernetes.Interface
+}
+
+// NewK8sNodeVerifier creates a new K8sNodeVerifier instance.
+func NewK8sNodeVerifier(client kubernetes.Interface) *K8sNodeVerifier {
+	return &K8sNodeVerifier{client: client}
+}
+
+// VerifyPowerOff checks if the node has transitioned to NotReady or disappeared.
+func (v *K8sNodeVerifier) VerifyPowerOff(ctx context.Context, nodeID, dc string) (bool, error) {
+	if v.client == nil {
+		return false, errors.New("k8s client is unconfigured")
+	}
+	node, err := v.client.CoreV1().Nodes().Get(ctx, nodeID, metav1.GetOptions{})
+	if err != nil {
+		return true, nil
+	}
+	for _, cond := range node.Status.Conditions {
+		if cond.Type == corev1.NodeReady && cond.Status != corev1.ConditionTrue {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// VerifyNetworkLoss checks if the node reports network partition conditions.
+func (v *K8sNodeVerifier) VerifyNetworkLoss(ctx context.Context, nodeID, dc string) (bool, error) {
+	if v.client == nil {
+		return false, errors.New("k8s client is unconfigured")
+	}
+	node, err := v.client.CoreV1().Nodes().Get(ctx, nodeID, metav1.GetOptions{})
+	if err != nil {
+		return true, nil
+	}
+	for _, cond := range node.Status.Conditions {
+		if cond.Type == corev1.NodeNetworkUnavailable && cond.Status == corev1.ConditionTrue {
+			return true, nil
+		}
+		if cond.Type == corev1.NodeReady && cond.Status == corev1.ConditionUnknown {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// VerifyStorageReservation checks if SCSI / volume attachments are revoked.
+func (v *K8sNodeVerifier) VerifyStorageReservation(ctx context.Context, nodeID, dc string) (bool, error) {
+	if v.client == nil {
+		return false, errors.New("k8s client is unconfigured")
+	}
+	attachments, err := v.client.StorageV1().VolumeAttachments().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return true, nil
+	}
+	for _, att := range attachments.Items {
+		if att.Spec.NodeName == nodeID && att.Status.Attached {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // ClusterStateProvider provides topology, role assignments, and replication lag metrics.
@@ -172,35 +240,34 @@ func (m *FencingManager) ExecuteSTONITH(ctx context.Context, targetNodeID, dc st
 
 	// Step 2: Multi-Channel Verification
 	// Must have at least 2 independent validation channels confirming the node cannot execute writes.
+	if m.verifier == nil {
+		return nil, errors.New("fencing channel verifier is unconfigured")
+	}
+
 	confirmedChannels := 0
-	if m.verifier != nil {
-		// Channel 1: Out-of-band power off status (IPMI chassis power status off / Cloud instance stopped)
-		powerOffConfirmed, err := m.verifier.VerifyPowerOff(ctx, targetNodeID, dc)
-		if err == nil && powerOffConfirmed {
-			confirmedChannels++
-			logs = append(logs, "Channel 1 (Out-of-band hardware power status): CONFIRMED (Chassis is unpowered)")
-		} else {
-			logs = append(logs, fmt.Sprintf("Channel 1 (Hardware power status): UNVERIFIED (%v)", err))
-		}
-
-		// Channel 2: Network isolation & ping loss
-		pingLossConfirmed, err := m.verifier.VerifyNetworkLoss(ctx, targetNodeID, dc)
-		if err == nil && pingLossConfirmed {
-			confirmedChannels++
-			logs = append(logs, "Channel 2 (Network isolation / Ping loss): CONFIRMED (100% packet loss, TCP unreachable)")
-		} else {
-			logs = append(logs, fmt.Sprintf("Channel 2 (Network loss): UNVERIFIED (%v)", err))
-		}
-
-		// Channel 3: Storage SCSI reservation / disk release
-		storageConfirmed, err := m.verifier.VerifyStorageReservation(ctx, targetNodeID, dc)
-		if err == nil && storageConfirmed {
-			confirmedChannels++
-			logs = append(logs, "Channel 3 (Storage lock fencing): CONFIRMED (SCSI-3 PR reservation revoked)")
-		}
+	// Channel 1: Out-of-band power off status (IPMI chassis power status off / Cloud instance stopped)
+	powerOffConfirmed, err := m.verifier.VerifyPowerOff(ctx, targetNodeID, dc)
+	if err == nil && powerOffConfirmed {
+		confirmedChannels++
+		logs = append(logs, "Channel 1 (Out-of-band hardware power status): CONFIRMED (Chassis is unpowered)")
 	} else {
-		// In self-contained mode without verifier, multi-channel verification cannot succeed
-		logs = append(logs, "Fencing channel verifier unconfigured; cannot confirm multi-channel isolation")
+		logs = append(logs, fmt.Sprintf("Channel 1 (Hardware power status): UNVERIFIED (%v)", err))
+	}
+
+	// Channel 2: Network isolation & ping loss
+	pingLossConfirmed, err := m.verifier.VerifyNetworkLoss(ctx, targetNodeID, dc)
+	if err == nil && pingLossConfirmed {
+		confirmedChannels++
+		logs = append(logs, "Channel 2 (Network isolation / Ping loss): CONFIRMED (100% packet loss, TCP unreachable)")
+	} else {
+		logs = append(logs, fmt.Sprintf("Channel 2 (Network loss): UNVERIFIED (%v)", err))
+	}
+
+	// Channel 3: Storage SCSI reservation / disk release
+	storageConfirmed, err := m.verifier.VerifyStorageReservation(ctx, targetNodeID, dc)
+	if err == nil && storageConfirmed {
+		confirmedChannels++
+		logs = append(logs, "Channel 3 (Storage lock fencing): CONFIRMED (SCSI-3 PR reservation revoked)")
 	}
 
 	duration := time.Since(startTime)

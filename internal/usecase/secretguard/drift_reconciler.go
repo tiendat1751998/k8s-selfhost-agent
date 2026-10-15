@@ -5,6 +5,7 @@ package secretguard
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -90,10 +91,7 @@ func (r *DriftReconciler) AuditAndMitigatePollingStorms(ctx context.Context, nam
 	atomic.AddUint64(&r.telemetry.AuditRuns, 1)
 
 	if r.detector == nil {
-		return &ReconcileResult{
-			AuditedCount: 0,
-			Policies:     make([]domain.ExternalSecretPolicy, 0),
-		}, nil
+		return nil, errors.New("secret drift detector is unconfigured")
 	}
 
 	policies, err := r.detector.AuditExternalSecrets(ctx, namespace)
@@ -182,6 +180,9 @@ func (r *DriftReconciler) ReconcileSecretDataHash(ctx context.Context, policy do
 	}
 
 	// Trigger controlled graceful rolling restart
+	if r.detector == nil {
+		return errors.New("secret drift detector is unconfigured")
+	}
 	if err := r.detector.TriggerGracefulRollout(ctx, targetDeployment); err != nil {
 		return fmt.Errorf("triggering rollout for %s: %w", targetDeployment, err)
 	}
@@ -200,6 +201,10 @@ func (r *DriftReconciler) ReconcileSecretDataHash(ctx context.Context, policy do
 func (r *DriftReconciler) VerifyMasterKeyBackupBeforeRotation(ctx context.Context, kmsKeyURI string) (bool, error) {
 	if kmsKeyURI == "" {
 		return false, fmt.Errorf("kms key URI cannot be empty: %w", domain.ErrMasterKeyBackupMissing)
+	}
+
+	if r.detector == nil {
+		return false, errors.New("secret drift detector is unconfigured")
 	}
 
 	verified, err := r.detector.VerifySealedKeyBackup(ctx, kmsKeyURI)

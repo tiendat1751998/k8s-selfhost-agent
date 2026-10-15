@@ -1,6 +1,7 @@
 package http
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ func NewReportingHandler(repo reporting.Repository) *ReportingHandler {
 func (h *ReportingHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/", h.ListReports)
 	r.Post("/", h.GenerateReport)
+	r.Get("/{id}/download", h.DownloadReport)
 	r.Delete("/{id}", h.DeleteReport)
 }
 
@@ -87,4 +89,26 @@ func (h *ReportingHandler) DeleteReport(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// DownloadReport handles GET /api/v1/reports-center/{id}/download
+func (h *ReportingHandler) DownloadReport(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "report id is required", err)
+		return
+	}
+	rep, err := h.repo.GetReport(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "report not found", err)
+		return
+	}
+	format := rep.Format
+	if format == "" {
+		format = "pdf"
+	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"report-%s.%s\"", rep.ID, format))
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(fmt.Sprintf("# Report: %s\nType: %s\nStatus: %s\nGenerated: %s\n", rep.Title, rep.Type, rep.Status, rep.CreatedAt.Format(time.RFC3339))))
 }

@@ -128,6 +128,7 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 	}
 	if platform.Fleet != nil {
 		r.With(adminOnly).Route("/fleet", platform.Fleet.RegisterRoutes)
+		r.With(mutRoles).Get("/clusters", platform.Fleet.ListClusters)
 	}
 	if platform.Audit != nil {
 		r.With(adminOnly).Route("/audit", platform.Audit.RegisterRoutes)
@@ -161,6 +162,7 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 	}
 	if platform.Alert != nil {
 		r.With(mutRoles).Route("/alerts", platform.Alert.RegisterRoutes)
+		r.With(mutRoles).Route("/alertmanager", platform.Alert.RegisterAlertmanagerRoutes)
 	}
 	if platform.Cloud != nil {
 		r.With(adminOnly).Route("/cloud", platform.Cloud.RegisterRoutes)

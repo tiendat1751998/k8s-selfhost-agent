@@ -92,7 +92,7 @@ func (m *SQLMasker) MaskValue(rule datasanitizer.MaskingColumnRule, rawVal strin
 func (m *SQLMasker) maskEmail(rawVal, salt string) string {
 	h := sha256.Sum256([]byte(rawVal + salt))
 	hexStr := hex.EncodeToString(h[:])
-	return hexStr[:10] + "@staging.internal"
+	return hexStr[:10] + "@redacted.invalid"
 }
 
 func (m *SQLMasker) maskPhone(rawVal, salt string) string {

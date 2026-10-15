@@ -11,6 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 
 	domainCluster "github.com/datdt/k8sselfhost/internal/domain/cluster"
 	usecaseCluster "github.com/datdt/k8sselfhost/internal/usecase/cluster"
@@ -349,4 +352,44 @@ func TestConcurrentHeartbeatAndFencing_RaceSafety(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+func TestFencingManager_NilVerifierFailsExplicitly(t *testing.T) {
+	ctx := context.Background()
+	executor := &mockSTONITHExecutor{}
+	stateProvider := &mockClusterStateProvider{primaryNodeID: "node-1"}
+	k8sApplier := newMockK8sSecurityApplier()
+
+	manager := usecaseCluster.NewFencingManager(executor, nil, stateProvider, k8sApplier, zap.NewNop())
+	_, err := manager.ExecuteSTONITH(ctx, "node-1", "dc-1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "fencing channel verifier is unconfigured")
+}
+
+func TestK8sNodeVerifier_Success(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewSimpleClientset(
+		&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "dead-node"},
+			Status: corev1.NodeStatus{
+				Conditions: []corev1.NodeCondition{
+					{Type: corev1.NodeReady, Status: corev1.ConditionFalse},
+					{Type: corev1.NodeNetworkUnavailable, Status: corev1.ConditionTrue},
+				},
+			},
+		},
+	)
+
+	verifier := usecaseCluster.NewK8sNodeVerifier(client)
+	powerOff, err := verifier.VerifyPowerOff(ctx, "dead-node", "dc-1")
+	require.NoError(t, err)
+	assert.True(t, powerOff)
+
+	netLoss, err := verifier.VerifyNetworkLoss(ctx, "dead-node", "dc-1")
+	require.NoError(t, err)
+	assert.True(t, netLoss)
+
+	storageOk, err := verifier.VerifyStorageReservation(ctx, "dead-node", "dc-1")
+	require.NoError(t, err)
+	assert.True(t, storageOk)
 }

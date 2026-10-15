@@ -184,3 +184,37 @@ func TestUsecase_TriggerRestore(t *testing.T) {
 		t.Fatalf("expected 1 restore listed, got %d", len(restores))
 	}
 }
+
+func TestUsecase_TriggerBackup_NoRunner_ReturnsError(t *testing.T) {
+	repo := newMockBackupRepo()
+	uc := usecaseBackup.NewUsecase(repo)
+
+	job := backup.NewBackupJob("policy-1", "storage-1", "production_db")
+	job.TenantID = "tenant-test"
+
+	err := uc.TriggerBackup(context.Background(), job)
+	if err == nil {
+		t.Fatal("expected error when TriggerBackup called with nil runner, got nil")
+	}
+	expected := "backup runner is not configured"
+	if err.Error() != expected {
+		t.Fatalf("expected error '%s', got '%s'", expected, err.Error())
+	}
+}
+
+func TestUsecase_TriggerRestore_NoRunner_ReturnsError(t *testing.T) {
+	repo := newMockBackupRepo()
+	uc := usecaseBackup.NewUsecase(repo)
+
+	restore := backup.NewRestoreJob("job-1", "localhost", "production_db_restored")
+	restore.TenantID = "tenant-test"
+
+	err := uc.TriggerRestore(context.Background(), restore)
+	if err == nil {
+		t.Fatal("expected error when TriggerRestore called with nil runner, got nil")
+	}
+	expected := "backup runner is not configured"
+	if err.Error() != expected {
+		t.Fatalf("expected error '%s', got '%s'", expected, err.Error())
+	}
+}

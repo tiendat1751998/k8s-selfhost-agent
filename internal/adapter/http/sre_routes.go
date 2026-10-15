@@ -219,6 +219,11 @@ func RegisterSRERoutes(r chi.Router, handlers *SREResilienceHandlers) {
 	// 20. Enterprise PKI & HSM Pool (Crypto)
 	if handlers.Crypto != nil {
 		r.With(mutRoles).Route("/crypto", handlers.Crypto.RegisterRoutes)
+		r.With(mutRoles).Route("/security/kms", func(kr chi.Router) {
+			kr.Get("/key", handlers.Crypto.GetKMSKey)
+			kr.Post("/rotate", handlers.Crypto.RotateKMSKey)
+			kr.Post("/verify", handlers.Crypto.VerifyKMSKey)
+		})
 	}
 
 	// 21. GitOps Sync-Wave DAG (mounted via platform_routes /gitops)

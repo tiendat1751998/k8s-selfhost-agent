@@ -76,6 +76,9 @@ func TestCanaryHandler_EvaluateCanary(t *testing.T) {
 	exec, err := engine.StartCanaryRelease(t.Context(), "user-service", "prod", "user:v2", nil)
 	require.NoError(t, err)
 
+	// Set healthy baseline metrics for evaluation
+	engine.SetMetricsForWorkload("user-service", "prod", 0.001, 0.001, 50*time.Millisecond, 50*time.Millisecond)
+
 	// Normal healthy evaluation
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/promotions/canary/"+exec.ReleaseID+"/evaluate", nil)
 	rec := httptest.NewRecorder()
