@@ -283,4 +283,12 @@ function handleActionSelect(actionId: string, host: ComputeHost) {
 .th-sort-wrap { display: inline-flex; align-items: center; gap: 6px; }
 .sort-icon { font-size: 10px; opacity: 0.4; }
 .sort-icon.active { opacity: 1; color: var(--color-cyan, #06b6d4); font-weight: bold; }
+.type-badge {
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+}
+.col-lastseen {
+  white-space: nowrap;
+}
 </style>

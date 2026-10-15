@@ -164,6 +164,58 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-/* Inherited via InfraHostsView.vue: assets/styles/views/infra-hosts.css */
+.fencing-alert-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.fencing-alert-info { display: flex; align-items: center; gap: 10px; }
+.fencing-alert-icon-box { color: #f59e0b; flex-shrink: 0; }
+.fencing-alert-texts { display: flex; flex-direction: column; font-size: 12px; line-height: 1.3; }
+.fencing-alert-title { font-size: 12px; }
+.fencing-alert-sub { font-size: 11px; }
+.fencing-alert-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn-action-fence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-action-fence:hover {
+  background: #f59e0b;
+  color: #0f172a;
+}
+@media (max-width: 640px) {
+  .fencing-alert-strip {
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    gap: 8px;
+  }
+  .fencing-alert-title {
+    font-size: 11px;
+  }
+  .fencing-alert-sub {
+    display: none;
+  }
+  .btn-action-fence {
+    padding: 4px 8px;
+    font-size: 10.5px;
+  }
+}
 </style>
 
