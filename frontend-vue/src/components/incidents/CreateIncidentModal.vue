@@ -22,7 +22,7 @@ const activeTab = ref<'simulate' | 'report'>('simulate')
 const form = ref<CreateIncidentPayload>({
   pod_name: '',
   namespace: 'ecommerce',
-  cluster_name: 'prod-us-east-1',
+  cluster_name: 'default',
   type: 'CrashLoopBackOff',
   severity: 'high',
   message: ''
@@ -161,7 +161,7 @@ function handleFormSubmit() {
                 v-model="form.cluster_name"
                 type="text"
                 class="input-glass font-mono"
-                placeholder="e.g. prod-us-east-1"
+                placeholder="e.g. default"
                 required
               />
             </div>

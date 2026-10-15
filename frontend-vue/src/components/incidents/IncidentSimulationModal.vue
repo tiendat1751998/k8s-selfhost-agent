@@ -35,7 +35,7 @@ const simulationScenarios: SimulationScenario[] = [
     subtitle: 'JVM Heap Memory Exhaustion on checkout-api',
     workload: 'checkout-api-7b9c6f8d-4x2kl',
     namespace: 'ecommerce',
-    cluster: 'prod-us-east-1',
+    cluster: 'default',
     type: 'OOMKilled',
     severity: 'critical',
     description: 'cgroup memory limit reached (512Mi). Kubernetes Linux kernel OOM killer terminated container with exit code 137.',
@@ -48,7 +48,7 @@ const simulationScenarios: SimulationScenario[] = [
     subtitle: 'Infrastructure Host masterdb Unreachable',
     workload: 'masterdb',
     namespace: 'kube-system',
-    cluster: 'prod-eu-west-1',
+    cluster: 'default',
     type: 'NodeNotReady',
     severity: 'critical',
     description: 'Host node heartbeat lease failed. Kubelet stopped posting status (NodeStatusUnknown), causing node eviction.',
@@ -61,10 +61,10 @@ const simulationScenarios: SimulationScenario[] = [
     subtitle: 'PostgreSQL Connection Refused on payment-gateway',
     workload: 'payment-gateway-5f8d9b-w9z7x',
     namespace: 'payments',
-    cluster: 'prod-us-east-1',
+    cluster: 'default',
     type: 'CrashLoopBackOff',
     severity: 'high',
-    description: 'PostgreSQL Connection Refused on payment-gateway (dial tcp 10.96.12.44:5432). Repeated container exits triggered CrashLoopBackOff.',
+    description: 'PostgreSQL Connection Refused on payment-gateway. Repeated container exits triggered CrashLoopBackOff.',
     badgeText: 'DB Connection Refused'
   }
 ]

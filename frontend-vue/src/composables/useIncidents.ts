@@ -47,7 +47,7 @@ export function useIncidents() {
   const createForm = ref<CreateIncidentPayload>({
     pod_name: '',
     namespace: 'default',
-    cluster_name: 'prod-us-east-1',
+    cluster_name: 'default',
     type: 'CrashLoopBackOff',
     severity: 'high',
     message: ''

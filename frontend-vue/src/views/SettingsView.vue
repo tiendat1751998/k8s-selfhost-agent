@@ -44,7 +44,7 @@ const tabsList: { id: TabKey; label: string; icon: string; category?: CategoryKe
   { id: 'security', label: 'Security', icon: 'shield', category: 'security' },
   { id: 'tenancy', label: 'Tenancy', icon: 'server', category: 'tenancy' },
   { id: 'notifications', label: 'Notifications', icon: 'bell', category: 'notifications' },
-  { id: 'apikeys', label: 'API Keys', icon: 'key', category: 'apikeys', count: 3 },
+  { id: 'apikeys', label: 'API Keys', icon: 'key', category: 'apikeys' },
   { id: 'about', label: 'About', icon: 'help-circle' },
 ]
 
@@ -163,7 +163,7 @@ function handleResetSettings() {
       <span class="tel-sep">·</span>
       <span class="tel-item tel-sec"><BaseIcon name="shield" size="xs" /> {{ totpStatus?.enabled ? '2FA' : 'No 2FA' }}</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-alert"><BaseIcon name="key" size="xs" /> 3 Keys</span>
+      <span class="tel-item tel-alert"><BaseIcon name="key" size="xs" /> API Keys</span>
       <span class="tel-sep">·</span>
       <span class="tel-item tel-tenancy"><BaseIcon name="server" size="xs" /> {{ form.name ? 'Active' : 'Default' }}</span>
     </div>
