@@ -60,8 +60,8 @@ func (c *TPSCollector) enrichServicesWithLBStats(ctx context.Context, services [
 			services[i].MaxLatencyMs = stat.MaxLatencyMs
 		}
 
-		// 1. Ingress gateway mapping (tiki_traefik / traefik)
-		if isTraefikService(sName) {
+		// 1. Ingress gateway mapping (tiki_traefik / traefik / api-server)
+		if isTraefikService(sName) || sName == "api-server" {
 			services[i].RequestsPerSec = httpTPS.RequestsPerSec
 			services[i].ErrorRate = httpTPS.ErrorRate
 			services[i].AvgLatencyMs = httpTPS.AvgLatencyMs

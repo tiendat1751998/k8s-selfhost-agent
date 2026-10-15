@@ -74,18 +74,9 @@ describe('Task 015: Workload Logs Drawer & Log Stream Integration Specification'
     assert.ok(lineCount < 500, `LogTargetTree.vue length (${lineCount}) must be strictly < 500 lines`)
   })
 
-  it('5. mock-preview-server.js implements workload log endpoints for authentic workloads', () => {
-    assert.ok(fs.existsSync(mockServerJsPath), 'mock-preview-server.js must exist')
-    const serverContent = fs.readFileSync(mockServerJsPath, 'utf-8')
-
-    assert.match(serverContent, /workloads/, 'mock-preview-server.js must support workloads log route')
-    assert.match(serverContent, /ingress-traefik/, 'mock server must include ingress-traefik logs')
-    assert.match(serverContent, /api-gateway/, 'mock server must include api-gateway logs')
-    assert.match(serverContent, /auth-service/, 'mock server must include auth-service logs')
-    assert.match(serverContent, /redis-master/, 'mock server must include redis-master logs')
-    assert.match(serverContent, /postgres-operator/, 'mock server must include postgres-operator logs')
-
-    const lineCount = serverContent.split('\n').length
-    assert.ok(lineCount < 500, `mock-preview-server.js length (${lineCount}) must be strictly < 500 lines`)
+  it('5. mock-preview-server.js is completely eradicated and k8s API defines workload endpoints', () => {
+    assert.ok(!fs.existsSync(mockServerJsPath), 'mock-preview-server.js must be completely deleted to prevent fake telemetry')
+    const k8sContent = fs.readFileSync(k8sTsPath, 'utf-8')
+    assert.match(k8sContent, /getWorkloadLogs/, 'k8sApi must define authentic getWorkloadLogs')
   })
 })

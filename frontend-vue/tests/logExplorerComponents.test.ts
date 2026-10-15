@@ -44,7 +44,6 @@ const __dirname = path.dirname(__filename)
 const rootDir = path.resolve(__dirname, '..')
 
 const { normalizeHistogramBuckets } = await import('../src/api/logging.ts')
-const { createMockServer } = await import('../scripts/mock-preview-server.js')
 
 describe('Phase 8B: Log Histogram Response Unwrapping & Mock Parity', () => {
   describe('normalizeHistogramBuckets unwrapping logic', () => {
@@ -122,28 +121,10 @@ describe('Phase 8B: Log Histogram Response Unwrapping & Mock Parity', () => {
     })
   })
 
-  describe('mock-preview-server.js /api/v1/logs/histogram parity', () => {
-    it('1. Responds to /api/v1/logs/histogram with realistic LogAggregationBucket array', async () => {
-      const server = createMockServer()
-      await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(null)))
-      const addr = server.address()
-      const port = typeof addr === 'object' && addr ? addr.port : 8080
-
-      try {
-        const res = await fetch(`http://127.0.0.1:${port}/api/v1/logs/histogram?interval_seconds=60`)
-        assert.equal(res.status, 200, 'HTTP status must be 200')
-        const body = (await res.json()) as any
-
-        assert.ok(Array.isArray(body), 'Response must be a direct JSON array matching Go backend')
-        assert.ok(body.length > 0, 'Must return at least one bucket')
-
-        const bucket = body[0]
-        assert.ok('timestamp' in bucket || 'time_bucket' in bucket, 'Bucket must have timestamp or time_bucket')
-        assert.ok('total' in bucket || 'total_count' in bucket, 'Bucket must have total or total_count')
-        assert.ok('error_count' in bucket || 'level_count' in bucket, 'Bucket must have error_count or level_count')
-      } finally {
-        await new Promise((resolve) => server.close(() => resolve(null)))
-      }
+  describe('Mock Server Eradication & Backend Parity', () => {
+    it('1. mock-preview-server.js must not exist in repository', () => {
+      const mockServerPath = path.join(rootDir, 'scripts', 'mock-preview-server.js')
+      assert.ok(!fs.existsSync(mockServerPath), 'mock-preview-server.js must be completely deleted')
     })
   })
 
@@ -152,7 +133,6 @@ describe('Phase 8B: Log Histogram Response Unwrapping & Mock Parity', () => {
       const filesToCheck = [
         path.join(rootDir, 'src', 'api', 'logging.ts'),
         path.join(rootDir, 'src', 'components', 'logs', 'LogVolumeHistogram.vue'),
-        path.join(rootDir, 'scripts', 'mock-preview-server.js'),
         path.join(rootDir, 'tests', 'logExplorerComponents.test.ts'),
       ]
 

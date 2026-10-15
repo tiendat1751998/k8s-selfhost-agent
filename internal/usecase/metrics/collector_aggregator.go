@@ -135,6 +135,34 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 	}
 	c.agentMu.RUnlock()
 
+	// 3b. If no agent nodes reported and host probe is enabled, probe local host telemetry
+	if len(nodeMetricsList) == 0 && c.hostProbeEnabled {
+		hTel := getHostTelemetry(ctx)
+		nodeMetricsList = append(nodeMetricsList, NodeMetrics{
+			NodeID:            "host-" + hTel.Hostname,
+			NodeName:          hTel.Hostname,
+			Role:              "standalone",
+			Status:            "ready",
+			OS:                hTel.OS,
+			Arch:              hTel.Arch,
+			OSDistro:          hTel.OSDistro,
+			KernelVersion:     hTel.KernelVersion,
+			CPUPercent:        hTel.CPUPercent,
+			MemoryUsed:        hTel.MemoryUsed,
+			MemoryTotal:       hTel.MemoryTotal,
+			MemoryPercent:     hTel.MemoryPercent,
+			ContainerCount:    len(containerMetricsList),
+			RunningCount:      runningContainersCount,
+			Processes:         hTel.Processes,
+			UptimeSeconds:     hTel.UptimeSeconds,
+			Source:            "host",
+			TopProcesses:      make([]ProcessMetric, 0),
+			NetworkInterfaces: make([]NetworkInterface, 0),
+			DiskDevices:       make([]DiskIOStats, 0),
+			UpdatedAt:         now,
+		})
+	}
+
 	sort.SliceStable(nodeMetricsList, func(i, j int) bool {
 		isReadyI := nodeMetricsList[i].Status == "ready"
 		isReadyJ := nodeMetricsList[j].Status == "ready"

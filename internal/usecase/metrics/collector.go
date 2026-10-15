@@ -189,12 +189,20 @@ type Collector struct {
 	lastReqTime        time.Time
 	prevContainerStats map[string]containerNetRaw
 	prevContainerTime  time.Time
+	hostProbeEnabled   bool
 	mu                 sync.RWMutex
 	stopCh             chan struct{}
 }
 
 // Option configures Collector behavior.
 type Option func(*Collector)
+
+// WithHostProbe enables probing host OS and runtime CPU & memory when no agents are registered.
+func WithHostProbe(enabled bool) Option {
+	return func(c *Collector) {
+		c.hostProbeEnabled = enabled
+	}
+}
 
 // WithInterval sets the polling interval.
 func WithInterval(d time.Duration) Option {
@@ -319,8 +327,22 @@ func (c *Collector) Stop() {
 // GetLastSnapshot returns the latest cached SystemOverview metrics snapshot.
 func (c *Collector) GetLastSnapshot() *SystemOverview {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.lastSnapshot
+	snap := c.lastSnapshot
+	c.mu.RUnlock()
+	if snap != nil {
+		return snap
+	}
+	if c.hostProbeEnabled {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if fresh, err := c.CollectOnce(ctx); err == nil && fresh != nil {
+			c.mu.Lock()
+			c.lastSnapshot = fresh
+			c.mu.Unlock()
+			return fresh
+		}
+	}
+	return nil
 }
 
 // SetLastSnapshot sets the cached SystemOverview metrics snapshot (useful for testing or initial hydration).

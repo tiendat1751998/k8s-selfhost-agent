@@ -137,6 +137,9 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 	}
 	if platform.Overview != nil {
 		r.With(mutRoles).Route("/overview", platform.Overview.RegisterRoutes)
+		r.With(mutRoles).Route("/metrics", func(mr chi.Router) {
+			mr.Get("/tps", platform.Overview.GetTPS)
+		})
 	}
 	if platform.AI != nil {
 		r.With(mutRoles).Route("/ai", platform.AI.RegisterRoutes)

@@ -131,6 +131,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		dockerClient, computeHostRepo, bridge, log,
 		usecaseMetrics.WithRequestCountFn(mw.GetRequestCount),
 		usecaseMetrics.WithIncidentRepo(incRepo),
+		usecaseMetrics.WithHostProbe(true),
 	)
 	go metricsCollector.Start(ctx)
 

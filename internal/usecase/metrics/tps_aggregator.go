@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"math"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -280,6 +281,24 @@ func (c *TPSCollector) collectNetworkAndContainerTPS(now time.Time) (NetworkTPS,
 					return services[i].CPUPercent > services[j].CPUPercent
 				}
 				return services[i].MemoryUsedMB > services[j].MemoryUsedMB
+			})
+		} else if len(snapshot.Nodes) > 0 {
+			var procMem runtime.MemStats
+			runtime.ReadMemStats(&procMem)
+			memMB := math.Round((float64(procMem.Alloc)/(1024*1024))*100) / 100
+
+			nodeID := snapshot.Nodes[0].NodeID
+			nodeName := snapshot.Nodes[0].NodeName
+
+			services = append(services, ServiceTPS{
+				ServiceName:    "api-server",
+				NodeID:         nodeID,
+				NodeName:       nodeName,
+				ContainerCount: 0,
+				CPUPercent:     snapshot.Nodes[0].CPUPercent,
+				MemoryUsedMB:   memMB,
+				MemoryPercent:  snapshot.Nodes[0].MemoryPercent,
+				Status:         "healthy",
 			})
 		}
 	}

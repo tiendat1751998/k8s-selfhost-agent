@@ -56,20 +56,8 @@ describe('Mobile UI Defect Remediation & Workload Stream', () => {
     assert.match(bannerCss, /title-short/, 'pwa-install-banner.css must define .title-short display rules')
   })
 
-  it('Mock Preview Server: provides realistic workloads for deployments view', () => {
-    assert.ok(fs.existsSync(mockServerJsPath), 'mock-preview-server.js must exist')
-    const mockContent = fs.readFileSync(mockServerJsPath, 'utf-8')
-
-    assert.match(mockContent, /\/api\/v1\/deployments|\/deployments/, 'Must handle deployments endpoint')
-    assert.match(mockContent, /\/api\/v1\/docker\/services|\/docker\/services/, 'Must handle docker services endpoint')
-    assert.match(mockContent, /\/api\/v1\/docker\/containers|\/docker\/containers/, 'Must handle docker containers endpoint')
-
-    // Must include key workloads required by acceptance criteria
-    assert.match(mockContent, /ingress-traefik/, 'Must return ingress-traefik workload')
-    assert.match(mockContent, /api-gateway/, 'Must return api-gateway workload')
-    assert.match(mockContent, /auth-service/, 'Must return auth-service workload')
-    assert.match(mockContent, /redis-master/, 'Must return redis-master workload')
-    assert.match(mockContent, /postgres-operator/, 'Must return postgres-operator workload')
+  it('Mock Preview Server: is completely eradicated to prevent rogue mock servers occupying port 8080', () => {
+    assert.ok(!fs.existsSync(mockServerJsPath), 'mock-preview-server.js must not exist in repository')
   })
 
   it('useDeployments & Mobile Cards: handles empty states cleanly without hardcoded fallback collusion', () => {
@@ -98,17 +86,18 @@ describe('Mobile UI Defect Remediation & Workload Stream', () => {
       appShellCssPath,
       pwaBannerVuePath,
       pwaBannerCssPath,
-      mockServerJsPath,
       useDeploymentsTsPath,
     ]
 
     for (const f of files) {
-      const content = fs.readFileSync(f, 'utf-8')
-      const lineCount = content.split('\n').length
-      assert.ok(
-        lineCount < 500,
-        `File ${path.basename(f)} must be under 500 lines (current: ${lineCount})`
-      )
+      if (fs.existsSync(f)) {
+        const content = fs.readFileSync(f, 'utf-8')
+        const lineCount = content.split('\n').length
+        assert.ok(
+          lineCount < 500,
+          `File ${path.basename(f)} must be under 500 lines (current: ${lineCount})`
+        )
+      }
     }
   })
 })
