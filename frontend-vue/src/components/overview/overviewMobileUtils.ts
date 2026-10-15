@@ -36,7 +36,12 @@ export function getNodeRole(node: NodeMetrics): string {
 
 export function getNodeIdentifier(node: NodeMetrics): string {
   const n = node as unknown as Record<string, unknown>
-  return (n.ip as string) || (n.ip_address as string) || (n.internal_ip as string) || (typeof n.endpoint === 'string' ? n.endpoint.replace(/^https?:\/\//, '').split(':')[0] : '') || node.node_id || '--'
+  const ip = (n.ip as string) || (n.ip_address as string) || (n.internal_ip as string) || (typeof n.endpoint === 'string' ? n.endpoint.replace(/^https?:\/\//, '').split(':')[0] : '')
+  if (ip) return ip
+  if (node.node_id) {
+    return node.node_id.length > 8 ? node.node_id.slice(0, 8) : node.node_id
+  }
+  return '--'
 }
 
 export function getCpuColorClass(cpu?: number): string {

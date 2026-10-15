@@ -215,6 +215,7 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
 }
 
@@ -249,6 +250,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 120px;
 }
 
 .node-chip-role-badge {
@@ -275,7 +278,11 @@
 .node-chip-ip {
   font-size: 10.5px;
   color: var(--text-muted, #64748b);
-  flex-shrink: 0;
+  flex-shrink: 1;
+  max-width: 90px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
 }
 
