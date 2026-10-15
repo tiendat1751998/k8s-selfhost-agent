@@ -14,15 +14,17 @@
 ### 2. TOY CODE & FAKE PROGRESS
 - **Violation**: 
   - Discarding errors via `_ := func()`, `_ = err`, or empty `catch (e) {}`.
-  - Injecting synthetic mocks, `Math.random()`, fake latency, or hardcoded dummy JSON in production pathways.
+  - Injecting synthetic mocks, `Math.random()`, fake latency, hardcoded dummy JSON, synthetic frontend `computed()` time-series loops (e.g., generating 16 fake timestamps from a single scalar), or hardcoded marketing chrome (`Air-Gapped Mesh v2.4`, `SYNCHRONIZED SCRUBBING`) in production pathways.
   - Writing empty unit tests that assert nothing or only test trivialities (`assert.True(true)`).
-- **Enforcement**: Production-grade implementation only. Proper context propagation, typed domain errors, structured slog/zap logging, and deterministic rollback handlers.
+- **Enforcement**: Production-grade implementation only. Proper context propagation, typed domain errors, structured slog/zap logging, and deterministic rollback handlers. If backend time-series history is not available, render honest empty/real-point states rather than fabricating a 16-point array.
 
-### 3. FABRICATED TEST AUDITS
-- **Violation**: Text-only claims of "tests pass" without raw command output, or QA claiming UI is functional without running browser tools.
+### 3. FABRICATED TEST AUDITS & ROGUE QA MOCK SERVERS
+- **Violation**:
+  - Text-only claims of "tests pass" without raw command output, or QA claiming UI is functional without running browser tools.
+  - **Rogue QA Mock Server**: `qa-test-engineer` spinning up a scratch Node/Python HTTP server (e.g. `mock-api-server.cjs` on port `8080`) with fake hosts (`k8s-control-plane-01`, `k8s-worker-gpu-02`) instead of testing against the real Go backend, or leaving stale mock `localStorage` keys (`k8s_active_cluster = "c-prod-east"`).
 - **Enforcement**:
   - Backend: Verbatim terminal execution required (command line + exit code 0 + stdout/stderr).
-  - QA / Frontend: MUST call `call_mcp_tool` with `chrome-devtools-mcp` (`navigate_page`, `list_network_requests`, `take_screenshot`). Actual on-disk screenshot path and full HTTP request status table required.
+  - QA / Frontend: MUST verify against the real Go backend binary (`cmd/server` or `cmd/standalone`), clear stale mock `localStorage` state before auditing, and call `call_mcp_tool` with `chrome-devtools-mcp` (`navigate_page`, `list_network_requests`, `take_screenshot`). Creating a scratch mock server is an immediate CRITICAL FAILURE.
 
 ### 4. LONE-WOLF EXECUTION
 - **Violation**: Main agent bypassing the Graph layer to dump unrefined user prompts directly to coders.
@@ -52,6 +54,16 @@
   - **Mandatory Mobile Data Parity**: Any chart or visualization on desktop MUST have an adapted mobile-first equivalent (e.g. compact SVG sparkline, 120-140px mobile trend card). Completely hiding a chart is an AUTOMATIC REJECTION.
   - **Max 2 Inline Table Actions**: Every table row must have at most 2 primary actions inline; all secondary operations must be inside a `[ ⋯ ]` menu.
   - **Reviewer & QA Failure Gate**: Reviewer and QA MUST explicitly reject any PR that suppresses charts or spams buttons.
+
+### 8. AI SLOP & CYBERPUNK NEON OVERLOAD (DESIGN TOKEN VIOLATION)
+- **Violation**:
+  - Overriding the Linear/Carbon neutral dark surface ladder in `frontend-vue/src/assets/css/tokens.css` (`#08090a` canvas -> `#0f1012` surface -> `#141516` card -> `#1a1b1e` elevated, `1px solid rgba(255,255,255,0.08)` hairlines) with hardcoded neon cyberpunk hex colors (`#38bdf8` neon cyan URLs/titles/buttons, `#06b6d4` glowing gradients, `#34d399` neon green text, `#fb7185` neon pink borders, `#f59e0b` amber boxes, or `rgba(15, 23, 42, 0.75)` slate-blue backgrounds).
+  - Mixing 4-5 competing font sizes, uppercase badges, and monospace/sans-serif clutter inside a single mobile card or table row.
+  - Rendering duplicate summary bars on the same screen (e.g., `3 hosts · 2 online · 1 offline` header chip immediately above a `3 Total Hosts · 2 Online · 1 Degraded` HUD strip).
+- **Enforcement (`ui-ux-pro-max` + `ui-finish-gate` + `frontend-ui-engineering`)**:
+  - Zero raw neon hex codes in view/component CSS; use `tokens.css` variables exclusively (`var(--bg-card)`, `var(--border-subtle)`, `var(--text-primary)`, `var(--text-secondary)`, `var(--text-muted)`).
+  - Semantic status colors (`--status-online`, `--status-warning`, `--status-critical`) are restricted to **6px status dots** and subtle status pills—never colored URL text, glowing outlines, or rainbow action buttons.
+  - Primary interactive buttons use neutral high-contrast (`#f3f4f6` surface with `#08090a` text) or restrained hairline ghost buttons (`var(--bg-elevated)` + `var(--border-default)`).
 
 ---
 

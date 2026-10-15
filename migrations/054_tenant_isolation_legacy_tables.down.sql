@@ -1,4 +1,4 @@
-﻿-- Migration: 054_tenant_isolation_legacy_tables.down.sql
+-- Migration: 054_tenant_isolation_legacy_tables.down.sql
 -- Description: Drops tenant_id columns and indexes from legacy tables.
 
 DROP INDEX IF EXISTS idx_automation_executions_tenant;

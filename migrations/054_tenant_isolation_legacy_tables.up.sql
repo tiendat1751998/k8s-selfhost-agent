@@ -1,4 +1,4 @@
-﻿-- Migration: 054_tenant_isolation_legacy_tables.up.sql
+-- Migration: 054_tenant_isolation_legacy_tables.up.sql
 -- Description: Adds tenant_id column and index to remaining legacy tables for Zero-Trust tenant scoping.
 
 ALTER TABLE agent_tasks 

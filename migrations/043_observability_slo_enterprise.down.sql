@@ -1,4 +1,4 @@
-﻿-- Migration: 043_observability_slo_enterprise.down.sql
+-- Migration: 043_observability_slo_enterprise.down.sql
 DELETE FROM slo_snapshots WHERE id IN (
     'b0000001-0000-0000-0000-000000000001',
     'b0000001-0000-0000-0000-000000000002',

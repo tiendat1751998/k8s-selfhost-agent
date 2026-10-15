@@ -165,7 +165,7 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 		r.With(mutRoles).Route("/alerts", platform.Alert.RegisterRoutes)
 		r.With(mutRoles).Route("/alertmanager", platform.Alert.RegisterAlertmanagerRoutes)
 	}
-	if platform.Cloud != nil {
+	if platform.Cloud != nil && platform.SRE == nil {
 		r.With(adminOnly).Route("/cloud", platform.Cloud.RegisterRoutes)
 	}
 	if platform.Settings != nil {
@@ -218,6 +218,9 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 		}
 		if platform.MessagingSRE != nil && platform.SRE.Messaging == nil {
 			platform.SRE.Messaging = platform.MessagingSRE
+		}
+		if platform.Cloud != nil && platform.SRE.Cloud == nil {
+			platform.SRE.Cloud = platform.Cloud
 		}
 		RegisterSRERoutes(r, platform.SRE)
 	}
