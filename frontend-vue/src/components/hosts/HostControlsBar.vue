@@ -84,19 +84,23 @@ const hosts = computed(() => props.hosts || { length: props.totalHosts ?? 0 })
         type="button"
         class="status-pill status-pill-connected"
         :class="{ active: statusFilter === 'connected' }"
+        title="Filter Online Hosts"
+        aria-label="Filter Online Hosts"
         @click="statusFilter = 'connected'"
       >
         <span class="pill-dot emerald"></span>
-        Connected <span class="pill-count">{{ connectedHosts ?? 0 }}</span>
+        Online <span class="pill-count">{{ connectedHosts ?? 0 }}</span>
       </button>
       <button
         type="button"
         class="status-pill status-pill-disconnected"
         :class="{ active: statusFilter === 'disconnected' }"
+        title="Filter Offline Hosts"
+        aria-label="Filter Offline Hosts"
         @click="statusFilter = 'disconnected'"
       >
         <span class="pill-dot rose"></span>
-        Disconnected <span class="pill-count">{{ disconnectedHosts ?? 0 }}</span>
+        Offline <span class="pill-count">{{ disconnectedHosts ?? 0 }}</span>
       </button>
       <button
         v-if="(errorHosts ?? 0) > 0"
