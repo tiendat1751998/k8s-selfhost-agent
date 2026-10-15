@@ -165,10 +165,14 @@
 }
 
 /* Mobile Hosts Stream (<= 640px) */
+.mobile-hosts-container {
+  padding-bottom: 110px;
+}
+
 .mobile-hosts-stream {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
@@ -178,11 +182,12 @@
 .mobile-host-card {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  min-height: 80px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  justify-content: center;
+  gap: 5px;
+  min-height: 68px;
+  height: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
   background: var(--surface-card, rgba(15, 23, 42, 0.7));
   border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
   cursor: pointer;
@@ -208,7 +213,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   min-width: 0;
 }
@@ -216,7 +221,7 @@
 .m-card-header-left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
@@ -226,8 +231,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.05);
   color: #94a3b8;
@@ -235,7 +240,7 @@
 }
 
 .m-host-name {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
   color: #fff;
   white-space: nowrap;
@@ -247,9 +252,9 @@
 .m-type-chip {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px;
+  padding: 1px 5px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   background: rgba(51, 65, 85, 0.4);
   border: 1px solid rgba(148, 163, 184, 0.2);
@@ -263,6 +268,7 @@
 .m-card-header-right {
   display: flex;
   align-items: center;
+  gap: 5px;
   flex-shrink: 0;
 }
 
@@ -272,7 +278,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   font-size: 11px;
   min-width: 0;
@@ -281,7 +287,7 @@
 .m-meta-endpoint-group {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
@@ -299,9 +305,16 @@
 .m-meta-telemetry-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-shrink: 0;
   font-size: 10.5px;
+}
+
+.m-card-actions-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 2px;
 }
 
 .m-latency {
@@ -313,41 +326,45 @@
 }
 
 .m-last-check {
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--text-muted, #94a3b8);
   white-space: nowrap;
 }
 
-/* Card Footer Action Bar */
-.m-card-footer-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin-top: 2px;
-  box-sizing: border-box;
-}
-
+/* Compact Touch Buttons */
 .btn-m-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  min-height: 32px;
-  height: 32px;
-  padding: 0 8px;
-  border-radius: 6px;
-  font-size: 11.5px;
+  gap: 3px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-size: 10.5px;
   font-weight: 600;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #f1f5f9;
   cursor: pointer;
   transition: all 0.15s ease;
-  flex: 1 1 0;
-  min-width: 0;
   white-space: nowrap;
   box-sizing: border-box;
+}
+
+.btn-m-compact {
+  height: 22px;
+  min-height: 22px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+.btn-m-icon-only {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
 }
 
 .btn-m-action:hover {
@@ -356,7 +373,7 @@
 }
 
 .btn-m-action:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 
 .btn-m-action:disabled {
@@ -366,17 +383,23 @@
 
 .btn-m-test {
   color: #38bdf8;
-  border-color: rgba(56, 189, 248, 0.25);
-  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.3);
+  background: rgba(56, 189, 248, 0.1);
 }
 
 .btn-m-test:hover {
-  background: rgba(56, 189, 248, 0.18);
+  background: rgba(56, 189, 248, 0.2);
   color: #fff;
 }
 
 .btn-m-edit {
   color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-m-edit:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 
 .btn-m-delete {
@@ -395,12 +418,15 @@
   border-color: rgba(245, 158, 11, 0.4);
   background: rgba(245, 158, 11, 0.12);
   font-weight: 700;
+  height: 22px;
+  min-height: 22px;
 }
 
 .btn-m-fence:hover {
   background: #d97706;
   color: #0f172a;
 }
+
 
 
 /* === HostCard.vue === */

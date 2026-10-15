@@ -52,7 +52,7 @@ const availabilityThresholds = [
 
 <template>
   <Transition name="fade">
-    <div v-if="showTelemetry" class="section-card glass-panel fleet-telemetry-panel animate-fade-in desktop-only">
+    <div v-if="showTelemetry" class="section-card glass-panel fleet-telemetry-panel animate-fade-in">
       <div class="hosts-telemetry-hud-strip">
         <HostMetricsHud
           :total-hosts="totalHosts"

@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { ComputeHost } from '../../api/compute'
+import { formatHostLastSeen } from '../../types/hosts'
+
 
 const props = defineProps<{
   host: ComputeHost
@@ -89,8 +91,9 @@ function formatUptime(seconds?: number): string {
     <div class="card-meta-grid font-mono">
       <div class="meta-item">
         <span class="meta-lbl">LAST SEEN:</span>
-        <span class="meta-val text-primary">{{ formatDate(host.last_health_check || host.created_at) }}</span>
+        <span class="meta-val text-primary">{{ formatHostLastSeen(host, formatDate) }}</span>
       </div>
+
 
       <div class="meta-item">
         <span class="meta-lbl">SECURITY:</span>

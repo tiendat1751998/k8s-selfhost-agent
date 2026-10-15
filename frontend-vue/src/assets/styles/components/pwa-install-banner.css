@@ -102,6 +102,10 @@
 }
 
 .btn-install {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
   color: #fff;
   border: none;
@@ -114,6 +118,7 @@
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   white-space: nowrap;
 }
+
 
 .btn-install:hover {
   transform: translateY(-1px);
@@ -225,7 +230,7 @@
     display: inline;
   }
   .pwa-install-banner {
-    bottom: calc(52px + var(--sab, env(safe-area-inset-bottom, 0px)) + 8px);
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
     right: 8px;
     left: 8px;
     width: calc(100% - 16px);
@@ -233,9 +238,10 @@
     border-radius: 12px;
   }
   .banner-content {
-    padding: 10px 12px;
-    gap: 10px;
+    padding: 8px 10px;
+    gap: 8px;
   }
+
   .banner-icon-box {
     width: 34px;
     height: 34px;
