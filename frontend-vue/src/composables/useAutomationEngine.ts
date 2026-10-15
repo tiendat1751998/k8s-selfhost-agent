@@ -89,9 +89,7 @@ export function useAutomationEngine() {
   })
 
   const savedEngineeringHours = computed(() => {
-    const successes = executions.value.filter(e => e.result === 'success').length
-    if (successes === 0) return '0.0'
-    return (successes * 0.25).toFixed(1)
+    return '0.0'
   })
 
   // Data Fetching
@@ -274,7 +272,7 @@ export function useAutomationEngine() {
 
   function getExecutionDuration(exec: AutomationExecution): string {
     if (!exec.created_at) return '--'
-    return exec.result === 'success' ? '< 1s' : '--'
+    return (exec as unknown as Record<string, unknown>).duration ? String((exec as unknown as Record<string, unknown>).duration) : '--'
   }
 
   onMounted(() => {

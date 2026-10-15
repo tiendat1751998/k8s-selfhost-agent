@@ -2,6 +2,7 @@ package finopsguard
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -67,7 +68,7 @@ func (m *FinOpsManager) GetTracker() *finopsguard.FinOpsTelemetryTracker {
 // and returns ErrFinOpsCrossAZWasteDetected.
 func (m *FinOpsManager) AuditTopologyHints(ctx context.Context) (int, error) {
 	if m.k8sPort == nil {
-		return 0, nil
+		return 0, errors.New("finops k8s port is uninitialized")
 	}
 	services, err := m.k8sPort.ListServices(ctx)
 	if err != nil {
@@ -93,7 +94,7 @@ func (m *FinOpsManager) AuditTopologyHints(ctx context.Context) (int, error) {
 // If traffic skew exceeds 80% on a single pod in an AZ, it falls back to global round-robin.
 func (m *FinOpsManager) InjectTopologyAwareHints(ctx context.Context, namespace, serviceName string) error {
 	if m.k8sPort == nil {
-		return nil
+		return errors.New("finops k8s port is uninitialized")
 	}
 	svc, err := m.k8sPort.GetService(ctx, namespace, serviceName)
 	if err != nil {
@@ -134,7 +135,7 @@ func (m *FinOpsManager) InjectTopologyAwareHints(ctx context.Context, namespace,
 // ScanOrphanCloudResources scans cloud inventory for idle resources >= 48 hours.
 func (m *FinOpsManager) ScanOrphanCloudResources(ctx context.Context) ([]finopsguard.OrphanCloudResource, error) {
 	if m.scannerPort == nil {
-		return nil, nil
+		return nil, errors.New("finops scanner port is uninitialized")
 	}
 	rawResources, err := m.scannerPort.ListCloudResources(ctx)
 	if err != nil {

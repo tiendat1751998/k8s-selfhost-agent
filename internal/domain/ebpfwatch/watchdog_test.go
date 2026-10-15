@@ -4,22 +4,19 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/datdt/k8sselfhost/internal/domain/ebpfwatch"
 )
 
-func TestPaddedRingBufferCounter_CacheLineAlignment(t *testing.T) {
+func TestPaddedRingBufferCounter_Initialization(t *testing.T) {
 	var counter ebpfwatch.PaddedRingBufferCounter
-	size := unsafe.Sizeof(counter)
-	if size != 64 {
-		t.Fatalf("expected PaddedRingBufferCounter to be exactly 64 bytes (1 cache line), got %d bytes", size)
+	if counter.TotalEvents.Load() != 0 {
+		t.Fatalf("expected 0, got %d", counter.TotalEvents.Load())
 	}
 
 	var controller ebpfwatch.PaddedSamplingController
-	cSize := unsafe.Sizeof(controller)
-	if cSize != 64 {
-		t.Fatalf("expected PaddedSamplingController to be exactly 64 bytes (1 cache line), got %d bytes", cSize)
+	if controller.SamplingRatePct.Load() != 0 {
+		t.Fatalf("expected 0, got %d", controller.SamplingRatePct.Load())
 	}
 }
 

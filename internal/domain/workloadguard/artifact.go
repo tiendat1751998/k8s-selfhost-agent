@@ -110,11 +110,9 @@ type EphemeralStorageCheck struct {
 	RejectReason          string `json:"reject_reason,omitempty"`
 }
 
-// PaddedDigestResolutionCounter features 64-byte cache-line padding (8 bytes uint64 + 56 bytes padding)
-// to prevent false sharing across CPU cores under high-frequency admission filtering (MESI/MOESI protocol).
+// PaddedDigestResolutionCounter is an atomic counter for digest resolutions.
 type PaddedDigestResolutionCounter struct {
 	val uint64
-	_   [7]uint64
 }
 
 // Inc atomically increments the counter by 1.
@@ -137,10 +135,9 @@ func (c *PaddedDigestResolutionCounter) Reset() {
 	atomic.StoreUint64(&c.val, 0)
 }
 
-// PaddedStorageCheckCounter features 64-byte cache-line padding to isolate storage audit telemetry across CPU cores.
+// PaddedStorageCheckCounter tracks storage checks atomically.
 type PaddedStorageCheckCounter struct {
 	val uint64
-	_   [7]uint64
 }
 
 // Inc atomically increments the counter by 1.
@@ -163,10 +160,9 @@ func (c *PaddedStorageCheckCounter) Reset() {
 	atomic.StoreUint64(&c.val, 0)
 }
 
-// PaddedPIDAdmissionCounter features 64-byte cache-line padding to isolate PID limiter metrics across CPU cores.
+// PaddedPIDAdmissionCounter isolates PID limiter metrics.
 type PaddedPIDAdmissionCounter struct {
 	val uint64
-	_   [7]uint64
 }
 
 // Inc atomically increments the counter by 1.

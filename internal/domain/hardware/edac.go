@@ -93,43 +93,35 @@ const (
 	RAPLPowerCapRatio             = 0.70
 )
 
-// CacheLinePaddedCounter provides a 64-byte aligned counter to prevent false sharing
-// across CPU cores under high-scale telemetry polling under the MESI/MOESI protocol.
+// CacheLinePaddedCounter provides an atomic counter.
 type CacheLinePaddedCounter struct {
 	Value uint64
-	_     [56]byte // 64 bytes total cache-line size (8 bytes value + 56 bytes padding)
 }
 
 // ECCDIMMStatus represents low-level memory error counters and health state for a DIMM slot.
-// 64-byte cache line padding protects high-frequency polling telemetry from cross-core false sharing.
 type ECCDIMMStatus struct {
 	SlotID           string    `json:"slot_id"`
 	CorrectableCount uint64    `json:"correctable_count"`
 	ErrorRatePerMin  float64   `json:"error_rate_per_min"`
 	IsDegraded       bool      `json:"is_degraded"`
 	LastEventTime    time.Time `json:"last_event_time"`
-	_                [56]byte  `json:"-"`
 }
 
 // CPUThermalStatus represents package temperature and clock frequency telemetry.
-// 64-byte cache line padding protects concurrent reads/writes from core cache line invalidations.
 type CPUThermalStatus struct {
-	PackageTempC        float64  `json:"package_temp_c"`
-	IsThrottled         bool     `json:"is_throttled"`
-	BaseFrequencyMHz    float64  `json:"base_frequency_mhz"`
-	CurrentFrequencyMHz float64  `json:"current_frequency_mhz"`
-	_                   [32]byte `json:"-"`
+	PackageTempC        float64 `json:"package_temp_c"`
+	IsThrottled         bool    `json:"is_throttled"`
+	BaseFrequencyMHz    float64 `json:"base_frequency_mhz"`
+	CurrentFrequencyMHz float64 `json:"current_frequency_mhz"`
 }
 
 // PowerSupplyStatus represents hardware telemetry and redundancy state for an individual server PSU.
-// 64-byte cache line padding isolates telemetry data across multiple polling threads.
 type PowerSupplyStatus struct {
-	PSUID          string   `json:"psu_id"`
-	IsPresent      bool     `json:"is_present"`
-	InputVoltage   float64  `json:"input_voltage"`
-	OutputPowerW   float64  `json:"output_power_w"`
-	RedundancyLost bool     `json:"redundancy_lost"`
-	_              [40]byte `json:"-"`
+	PSUID          string  `json:"psu_id"`
+	IsPresent      bool    `json:"is_present"`
+	InputVoltage   float64 `json:"input_voltage"`
+	OutputPowerW   float64 `json:"output_power_w"`
+	RedundancyLost bool    `json:"redundancy_lost"`
 }
 
 // HardwareWatchdogEngine defines the orchestration interface for bare-metal hardware health.

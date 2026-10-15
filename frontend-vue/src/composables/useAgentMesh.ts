@@ -360,10 +360,14 @@ export function useAgentMesh() {
   }
 
   // Task Control Actions
-  function pauseTask(taskId: string) {
+  async function pauseTask(taskId: string) {
     const task = tasks.value.find(t => t.id === taskId)
-    if (task) {
-      task.status = task.status === 'blocked' ? 'inprogress' : 'blocked'
+    if (!task) return
+    const prevStatus = task.status
+    const targetStatus = task.status === 'blocked' ? 'inprogress' : 'blocked'
+    try {
+      await agentsApi.pauseTask(taskId)
+      task.status = targetStatus
       terminalLogs.value.push({
         id: `log-pause-${Date.now()}`,
         timestamp: new Date().toISOString(),
@@ -374,13 +378,18 @@ export function useAgentMesh() {
         reasoning: 'User initiated task pause/resume signal.',
         rawJsonl: JSON.stringify({ event: 'TASK_PAUSED', taskId, status: task.status })
       })
+    } catch (err: unknown) {
+      task.status = prevStatus
+      error.value = err instanceof Error ? err.message : 'Failed to pause task'
     }
   }
 
-  function terminateTask(taskId: string) {
+  async function terminateTask(taskId: string) {
     const idx = tasks.value.findIndex(t => t.id === taskId)
-    if (idx !== -1) {
-      const terminated = tasks.value[idx]
+    if (idx === -1) return
+    const terminated = tasks.value[idx]
+    try {
+      await agentsApi.terminateTask(taskId)
       terminated.status = 'failed'
       terminalLogs.value.push({
         id: `log-term-${Date.now()}`,
@@ -392,6 +401,8 @@ export function useAgentMesh() {
         reasoning: 'Operator terminated task execution via kill signal.',
         rawJsonl: JSON.stringify({ event: 'TASK_TERMINATED', taskId })
       })
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to terminate task'
     }
   }
 

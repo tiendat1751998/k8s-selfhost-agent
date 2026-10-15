@@ -361,3 +361,11 @@ func TestRollbackGuardrail_CheckpointActivePreventsHCAIsolation(t *testing.T) {
 	assert.True(t, isolated)
 	assert.Contains(t, reason, "safely")
 }
+
+func TestFabricManager_NilProber_ReturnsError(t *testing.T) {
+	mgr := NewFabricManager(nil, nil, nil, nil)
+	links, err := mgr.AuditGPUFabricBandwidth(context.Background())
+	assert.Error(t, err)
+	assert.Nil(t, links)
+	assert.Contains(t, err.Error(), "uninitialized")
+}

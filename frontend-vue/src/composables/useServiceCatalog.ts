@@ -38,89 +38,6 @@ export interface ServiceDependency {
   latencyMs?: number
 }
 
-const BUILTIN_SERVICES: ServiceEntry[] = [
-  {
-    id: 'srv-auth-01',
-    name: 'auth-service',
-    description: 'Centralized OAuth2 / OIDC authentication service with JWT token issuance and MFA verification',
-    type: 'api',
-    lifecycle: 'production',
-    owner_team: 'security-team',
-    owner_email: 'security@k8scontrol.io',
-    repo_url: 'https://github.com/k8scontrol/auth-service',
-    docs_url: 'https://docs.k8scontrol.io/api/auth',
-    tags: ['auth', 'jwt', 'security'],
-    annotations: { 'k8s.io/namespace': 'identity', 'k8s.io/deployment': 'auth-service' },
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-01T10:00:00Z',
-    updated_at: '2026-08-25T14:30:00Z',
-  },
-  {
-    id: 'srv-pay-02',
-    name: 'payment-gateway',
-    description: 'PCI-DSS transaction engine with automated multi-provider card routing and idempotency guards',
-    type: 'service',
-    lifecycle: 'production',
-    owner_team: 'billing-team',
-    owner_email: 'billing@k8scontrol.io',
-    repo_url: 'https://github.com/k8scontrol/payment-gateway',
-    docs_url: 'https://docs.k8scontrol.io/api/payments',
-    tags: ['payments', 'finance', 'critical'],
-    annotations: { 'k8s.io/namespace': 'finance', 'k8s.io/deployment': 'payment-gateway' },
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-05T09:15:00Z',
-    updated_at: '2026-08-26T11:00:00Z',
-  },
-  {
-    id: 'srv-notif-03',
-    name: 'notification-worker',
-    description: 'Asynchronous event consumer routing real-time alerts to Telegram, Slack, and webhook targets',
-    type: 'worker',
-    lifecycle: 'staging',
-    owner_team: 'sre-platform',
-    owner_email: 'sre@k8scontrol.io',
-    repo_url: 'https://github.com/k8scontrol/notification-worker',
-    docs_url: '',
-    tags: ['nats', 'worker', 'alerts'],
-    annotations: { 'k8s.io/namespace': 'monitoring', 'k8s.io/deployment': 'notification-worker' },
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-10T12:00:00Z',
-    updated_at: '2026-08-27T08:45:00Z',
-  },
-  {
-    id: 'srv-web-04',
-    name: 'portal-dashboard',
-    description: 'Single-page developer portal with responsive 4-tier design and multi-cluster telemetry graphs',
-    type: 'frontend',
-    lifecycle: 'production',
-    owner_team: 'ui-guild',
-    owner_email: 'frontend@k8scontrol.io',
-    repo_url: 'https://github.com/k8scontrol/frontend-portal',
-    docs_url: 'https://docs.k8scontrol.io/portal',
-    tags: ['vue3', 'vite', 'pwa'],
-    annotations: { 'k8s.io/namespace': 'web', 'k8s.io/deployment': 'portal-dashboard' },
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-12T16:20:00Z',
-    updated_at: '2026-08-27T09:00:00Z',
-  },
-  {
-    id: 'srv-db-05',
-    name: 'cluster-storage-db',
-    description: 'Highly available PostgreSQL 16 cluster with automated point-in-time recovery and streaming replication',
-    type: 'database',
-    lifecycle: 'development',
-    owner_team: 'data-platform',
-    owner_email: 'dba@k8scontrol.io',
-    repo_url: 'https://github.com/k8scontrol/db-operator',
-    docs_url: '',
-    tags: ['postgres', 'database', 'ha'],
-    annotations: { 'k8s.io/namespace': 'storage', 'k8s.io/deployment': 'cluster-storage-db' },
-    tenant_id: 'default-tenant',
-    created_at: '2026-08-15T08:00:00Z',
-    updated_at: '2026-08-27T10:30:00Z',
-  },
-]
-
 export function useServiceCatalog() {
   const loading = ref(false)
   const saving = ref(false)
@@ -184,31 +101,11 @@ export function useServiceCatalog() {
       if (filter.search?.trim()) activeFilter.search = filter.search.trim()
 
       const [list, catalogStats] = await Promise.all([
-        catalogApi.list(activeFilter).catch(() => null),
+        catalogApi.list(activeFilter),
         catalogApi.stats().catch(() => null),
       ])
 
-      let resolvedList: ServiceEntry[] = []
-      if (Array.isArray(list) && list.length > 0) {
-        resolvedList = list
-      } else {
-        // Built-in starter services for resilience & instant Screen-1 visibility
-        resolvedList = BUILTIN_SERVICES.filter(s => {
-          if (activeFilter.type && s.type !== activeFilter.type) return false
-          if (activeFilter.lifecycle && s.lifecycle !== activeFilter.lifecycle) return false
-          if (activeFilter.owner_team && !s.owner_team.toLowerCase().includes(activeFilter.owner_team.toLowerCase())) return false
-          if (activeFilter.search) {
-            const q = activeFilter.search.toLowerCase()
-            const matchName = s.name.toLowerCase().includes(q)
-            const matchDesc = s.description.toLowerCase().includes(q)
-            const matchTags = s.tags && s.tags.some(t => t.toLowerCase().includes(q))
-            if (!matchName && !matchDesc && !matchTags) return false
-          }
-          return true
-        })
-      }
-
-      services.value = resolvedList
+      services.value = Array.isArray(list) ? list : []
       const byType: Record<string, number> = {}, byLifecycle: Record<string, number> = {}
       for (const s of services.value) {
         byType[s.type] = (byType[s.type] || 0) + 1
@@ -220,7 +117,7 @@ export function useServiceCatalog() {
         by_lifecycle: catalogStats?.by_lifecycle && Object.keys(catalogStats.by_lifecycle).length > 0 ? catalogStats.by_lifecycle : byLifecycle,
       }
     } catch (err: unknown) {
-      services.value = BUILTIN_SERVICES
+      services.value = []
       showToast(err instanceof Error ? err.message : 'Failed to retrieve service catalog', 'error')
     } finally {
       loading.value = false

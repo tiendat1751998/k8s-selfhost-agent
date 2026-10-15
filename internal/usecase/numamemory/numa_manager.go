@@ -276,8 +276,15 @@ func (m *NUMAMemoryManager) CheckHugePageAvailability(ctx context.Context, sizeK
 			zap.Int("page_size_kb", sizeKB),
 			zap.Float64("fragmentation_idx", pool.FragmentationIdx))
 
-		// Memory compaction coalesces free blocks: reduces fragmentation index to 0.15
-		pool.FragmentationIdx = 0.15
+		// Memory compaction coalesces free blocks: recalculate fragmentation index dynamically
+		if pool.TotalPages > 0 {
+			pool.FragmentationIdx = 1.0 - (float64(pool.FreePages) / float64(pool.TotalPages))
+			if pool.FragmentationIdx < 0 {
+				pool.FragmentationIdx = 0
+			}
+		} else {
+			pool.FragmentationIdx = 0
+		}
 		m.compactionCount++
 		m.hugepagePools[sizeKB] = pool
 	}
@@ -312,7 +319,14 @@ func (m *NUMAMemoryManager) TriggerCompactionIfFragmented(ctx context.Context, t
 	compacted := false
 	for sizeKB, pool := range m.hugepagePools {
 		if pool.FragmentationIdx > threshold {
-			pool.FragmentationIdx = 0.15
+			if pool.TotalPages > 0 {
+				pool.FragmentationIdx = 1.0 - (float64(pool.FreePages) / float64(pool.TotalPages))
+				if pool.FragmentationIdx < 0 {
+					pool.FragmentationIdx = 0
+				}
+			} else {
+				pool.FragmentationIdx = 0
+			}
 			m.hugepagePools[sizeKB] = pool
 			compacted = true
 		}

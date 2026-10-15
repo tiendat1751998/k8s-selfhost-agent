@@ -23,11 +23,10 @@
 //     Even with modern collectors (ZGC or G1GC), extreme heap allocation rates trigger concurrent
 //     mark failures and stop-the-world (STW) full GC pauses, frequently tripping OpenSearch's
 //     parent/fielddata circuit breakers (`circuit_breaking_exception`).
-//   - CPU Cache Misses & MOESI Invalidation:
+//   - CPU Cache Contention:
 //     High-throughput ingestion pipelines parsing JSON strings into runtime structs cause extensive
-//     L1/L2/L3 CPU cache misses. Furthermore, concurrent worker goroutines updating shared counters
-//     (without 64-byte cache-line isolation) provoke continuous MESI/MOESI cache invalidations across
-//     processor cores ("false sharing"), halving per-core ingestion throughput.
+//     L1/L2/L3 CPU cache misses. Concurrent worker goroutines updating shared counters
+//     benefit from atomic operations to ensure consistent telemetry updates across processor cores.
 //
 // 2. REAL-WORLD FAILURE MODES & MITIGATIONS:
 //   - ClickHouse `DB::Exception: Too many parts in all data parts in table` Crash:
@@ -170,11 +169,9 @@ func (h ClickHouseTableHealth) IsSaturated() bool {
 	return h.ActiveParts >= PartsSaturationThreshold
 }
 
-// PaddedCounter is an atomic uint64 padded to a 64-byte boundary to eliminate
-// false sharing across CPU cores under the MESI/MOESI cache coherence protocols.
+// PaddedCounter is an atomic uint64 counter.
 type PaddedCounter struct {
 	value uint64
-	_     [56]byte // 64 bytes total: 8 bytes value + 56 bytes padding
 }
 
 // Load atomically retrieves the current counter value.

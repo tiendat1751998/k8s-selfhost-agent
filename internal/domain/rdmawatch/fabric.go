@@ -132,14 +132,11 @@ type GPUAIResilienceEngine interface {
 	CoordinateStaggeredCheckpoint(ctx context.Context, rankID, totalRanks int, policy CheckpointWritePolicy) (delay time.Duration, err error)
 }
 
-// PaddedPFCAccumulator features 64-byte cache-line padding to prevent false sharing
-// across multi-core CPUs under high-rate RoCEv2 PFC pause frame tracking (MESI/MOESI protocol).
-// Memory layout: 3x uint64 (24 bytes) + 40 bytes pad = 64 bytes (1 L1 cache line).
+// PaddedPFCAccumulator tracks RoCEv2 PFC pause frame metrics atomically.
 type PaddedPFCAccumulator struct {
 	rxPauses         atomic.Uint64
 	txPauses         atomic.Uint64
 	sampleDurationMs atomic.Uint64
-	_                [40]byte // 64-byte cache line alignment padding
 }
 
 // Record atomically updates PFC pause frame accumulators.
@@ -168,14 +165,11 @@ func (a *PaddedPFCAccumulator) GetRxRateSec() float64 {
 	return float64(a.rxPauses.Load()) / (float64(durMs) / 1000.0)
 }
 
-// PaddedFabricBandwidthMonitor features 64-byte cache-line padding to eliminate false sharing
-// across CPU cores under high-frequency NVLink and RDMA fabric bandwidth auditing.
-// Memory layout: 3x uint64 (24 bytes) + 40 bytes pad = 64 bytes (1 L1 cache line).
+// PaddedFabricBandwidthMonitor tracks NVLink and RDMA fabric bandwidth auditing metrics.
 type PaddedFabricBandwidthMonitor struct {
 	bandwidthMilli atomic.Uint64 // Milli-GBps: 900000 = 900.000 GB/s
 	sampleCount    atomic.Uint64
 	errorCount     atomic.Uint64
-	_              [40]byte // 64-byte cache line alignment padding
 }
 
 // Record atomically updates recorded bandwidth in milli-GBps and error counts.
@@ -200,15 +194,13 @@ func (m *PaddedFabricBandwidthMonitor) GetErrorCount() uint64 {
 	return m.errorCount.Load()
 }
 
-// PaddedRDMACounters aggregates high-frequency RDMA telemetry counters with 64-byte cache-line padding.
-// Memory layout: 5x uint64 (40 bytes) + 24 bytes pad = 64 bytes (1 L1 cache line).
+// PaddedRDMACounters aggregates high-frequency RDMA telemetry counters.
 type PaddedRDMACounters struct {
 	pfcPausesRx    atomic.Uint64
 	pfcPausesTx    atomic.Uint64
 	bandwidthMilli atomic.Uint64
 	rxDrops        atomic.Uint64
 	deadlockAlerts atomic.Uint64
-	_              [24]byte // 64-byte cache line alignment padding
 }
 
 // RecordTelemetry atomically updates telemetry counters.

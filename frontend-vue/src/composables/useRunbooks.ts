@@ -310,17 +310,32 @@ export function useRunbooks() {
     const stepIdx = idx !== undefined ? idx : (step.stepNum - 1)
     step.status = 'running'
     executionLogs.value.push(
-      `[${new Date().toLocaleTimeString()}] [DRY-RUN] Inspecting Step ${stepIdx + 1}: ${step.title}`,
+      `[${new Date().toLocaleTimeString()}] [EXEC] Executing Step ${stepIdx + 1}: ${step.title}`,
     )
     if (step.command) {
-      executionLogs.value.push(`[${new Date().toLocaleTimeString()}] [CMD-PREVIEW] $ ${step.command}`)
+      executionLogs.value.push(`[${new Date().toLocaleTimeString()}] [CMD] $ ${step.command}`)
     }
-
-    step.status = 'completed'
-    completedSteps.value.add(stepIdx)
-    executionLogs.value.push(
-      `[${new Date().toLocaleTimeString()}] [VERIFIED] Step ${stepIdx + 1} syntax and target resources verified (dry-run mode).`,
-    )
+    try {
+      const rbId = selectedRunbook.value?.id || executingRunbook.value?.id || 'default'
+      const res = await runbookApi.executeStep(rbId, stepIdx)
+      step.status = res.success !== false ? 'completed' : 'failed'
+      if (step.status === 'completed') {
+        completedSteps.value.add(stepIdx)
+        executionLogs.value.push(
+          `[${new Date().toLocaleTimeString()}] [VERIFIED] Step ${stepIdx + 1} completed: ${res.output || 'OK'}`,
+        )
+      } else {
+        executionLogs.value.push(
+          `[${new Date().toLocaleTimeString()}] [FAILED] Step ${stepIdx + 1} execution failed: ${res.output || 'Unknown error'}`,
+        )
+      }
+    } catch (err: unknown) {
+      step.status = 'failed'
+      const msg = err instanceof Error ? err.message : 'Execution error'
+      executionLogs.value.push(
+        `[${new Date().toLocaleTimeString()}] [ERROR] Step ${stepIdx + 1} failed: ${msg}`,
+      )
+    }
   }
 
   async function handleCreateRunbook() {

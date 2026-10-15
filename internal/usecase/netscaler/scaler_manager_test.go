@@ -327,3 +327,18 @@ func TestConcurrentSafety(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestScalerManager_NilProvider_Guard(t *testing.T) {
+	mgr := &usecase.ScalerManager{}
+	_, err := mgr.CollectMetrics(context.Background())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "uninitialized")
+}
+
+func TestScalerManager_DefaultProvider_Collection(t *testing.T) {
+	mgr := usecase.NewScalerManager()
+	metrics, err := mgr.CollectMetrics(context.Background())
+	assert.NoError(t, err)
+	assert.NotNil(t, metrics)
+	assert.GreaterOrEqual(t, metrics.TotalEphemeralPorts, int64(1000))
+}

@@ -26,11 +26,9 @@
 //    - Enforcing K8s 1.28+ Native Sidecars (initContainers with restartPolicy: Always) guarantees K8s will
 //      block subsequent containers until the sidecar's startupProbe / readiness probe passes.
 //
-// 4. Multi-Core Cache Contention (False Sharing & MESI/MOESI Protocol):
-//    - On modern multi-socket NUMA / multi-core architectures, high-frequency security inspection counters
-//      updated concurrently by multiple goroutines across CPU cores invalidate each other's L1/L2 cache lines.
-//    - To avoid bus locking and false sharing latency spikes, high-frequency metric counters are padded
-//      to 64 bytes (the standard L1/L2 cache line width).
+// 4. Multi-Core Concurrent Telemetry:
+//    - High-frequency security inspection counters are updated concurrently by multiple goroutines across CPU cores.
+//    - Atomic operations ensure thread-safe updates without lock contention.
 //
 // 5. Real-World Attack Vectors & Failure Modes:
 //    - Dependency Confusion: Build pipelines configured with public registries alongside private artifactory
@@ -63,12 +61,9 @@ var (
 	ErrIMDSv2EnforcementFailed = errors.New("failed to enforce IMDSv2 token configuration")
 )
 
-// PaddedCounter is a 64-byte aligned atomic counter designed to prevent false sharing
-// across CPU cores under the MESI/MOESI cache coherence protocols.
-// Standard x86_64 / arm64 cache line width is 64 bytes.
+// PaddedCounter is an atomic counter.
 type PaddedCounter struct {
 	value uint64
-	_     [56]byte // 8 bytes uint64 + 56 bytes padding = 64 bytes
 }
 
 // Inc atomically increments the counter by 1.

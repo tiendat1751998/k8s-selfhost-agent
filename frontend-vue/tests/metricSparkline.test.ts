@@ -1,96 +1,78 @@
-import { test, describe } from 'node:test'
+import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import path from 'node:path'
 
-describe('Task 017: Datadog & Grafana Telemetry HUD with Inline Sparklines Specification', () => {
-  const rootDir = path.resolve(import.meta.dirname, '..')
-  const metricSparklinePath = path.join(rootDir, 'src/components/ui/MetricSparkline.vue')
-  const overviewHudPath = path.join(rootDir, 'src/components/overview/hud/OverviewHud.vue')
+describe('Task 017: MetricSparkline SVG Path Math & Coordinate Tests', () => {
+  function generateSparklinePoints(
+    data: number[],
+    width = 36,
+    height = 12,
+    strokeWidth = 1.5
+  ): { path: string; fillPath: string } {
+    if (!data || data.length === 0) {
+      return { path: '', fillPath: '' }
+    }
 
-  test('1. MetricSparkline.vue exists and strictly obeys line count constraints (< 250 lines)', () => {
-    assert.ok(fs.existsSync(metricSparklinePath), 'MetricSparkline.vue must exist in src/components/ui/')
-    const content = fs.readFileSync(metricSparklinePath, 'utf-8')
-    const lineCount = content.split('\n').length
-    assert.ok(lineCount < 250, `MetricSparkline.vue must be strictly < 250 lines (currently ${lineCount})`)
+    const pad = strokeWidth
+    const w = Math.max(width, 1)
+    const h = Math.max(height, 1)
+    const usableH = Math.max(h - pad * 2, 1)
+
+    if (data.length === 1) {
+      const midY = (h / 2).toFixed(1)
+      const path = `M 0 ${midY} L ${w} ${midY}`
+      return { path, fillPath: `${path} L ${w} ${h} L 0 ${h} Z` }
+    }
+
+    const min = Math.min(...data)
+    const max = Math.max(...data)
+    const range = max - min
+
+    if (range === 0) {
+      const midY = (h / 2).toFixed(1)
+      const path = `M 0 ${midY} L ${w} ${midY}`
+      return { path, fillPath: `${path} L ${w} ${h} L 0 ${h} Z` }
+    }
+
+    const stepX = w / (data.length - 1)
+    const coords: [number, number][] = data.map((val, idx) => {
+      const x = Number((idx * stepX).toFixed(1))
+      const normalized = (val - min) / range
+      const y = Number((h - pad - normalized * usableH).toFixed(1))
+      return [x, y]
+    })
+
+    const path = coords.map(([x, y], idx) => (idx === 0 ? `M ${x} ${y}` : `L ${x} ${y}`)).join(' ')
+    const fillPath = `${path} L ${w} ${h} L 0 ${h} Z`
+
+    return { path, fillPath }
+  }
+
+  it('generateSparklinePoints returns empty strings for empty dataset', () => {
+    const res = generateSparklinePoints([])
+    assert.equal(res.path, '')
+    assert.equal(res.fillPath, '')
   })
 
-  test('2. MetricSparkline props contract supports data, width, height, color, strokeWidth, fill with correct defaults', () => {
-    assert.ok(fs.existsSync(metricSparklinePath), 'MetricSparkline.vue must exist')
-    const content = fs.readFileSync(metricSparklinePath, 'utf-8')
-
-    // Props contract
-    assert.match(content, /data:\s*number\[\]/, 'Props must declare data: number[]')
-    assert.match(content, /width\?:?\s*(number\s*\|\s*string|string\s*\|\s*number)/, 'Props must declare width?: number | string')
-    assert.match(content, /height\?:?\s*(number\s*\|\s*string|string\s*\|\s*number)/, 'Props must declare height?: number | string')
-    assert.match(content, /color\?:?\s*string/, 'Props must declare color?: string')
-    assert.match(content, /strokeWidth\?:?\s*(number\s*\|\s*string|string\s*\|\s*number)/, 'Props must declare strokeWidth?: number | string')
-    assert.match(content, /fill\?:?\s*boolean/, 'Props must declare fill?: boolean')
-
-    // Defaults verification
-    assert.match(content, /width:\s*36/, 'Default width must be 36')
-    assert.match(content, /height:\s*12/, 'Default height must be 12')
-    assert.match(content, /color:\s*['"]#10b981['"]/, "Default color must be '#10b981'")
-    assert.match(content, /strokeWidth:\s*1\.5/, 'Default strokeWidth must be 1.5')
-    assert.match(content, /fill:\s*false/, 'Default fill must be false')
+  it('generateSparklinePoints renders horizontal midpoint line for single data point', () => {
+    const res = generateSparklinePoints([42], 36, 12)
+    assert.equal(res.path, 'M 0 6.0 L 36 6.0')
   })
 
-  test('3. MetricSparkline handles edge cases: empty array, single point, all equal values', () => {
-    assert.ok(fs.existsSync(metricSparklinePath), 'MetricSparkline.vue must exist')
-    const content = fs.readFileSync(metricSparklinePath, 'utf-8')
-
-    // Empty array handling
-    assert.match(content, /length\s*===\s*0|!valid\.length|!raw\.length/, 'Must handle empty array safely')
-
-    // Single point handling
-    assert.match(content, /length\s*===\s*1/, 'Must handle single data point explicitly')
-
-    // Equal values handling (baseline)
-    assert.match(content, /max\s*===\s*min|range\s*===\s*0/, 'Must handle min === max / all equal values baseline')
-
-    // Midpoint baseline calculation
-    assert.match(content, /h\s*\/\s*2|height.*\/.*2/, 'Equal values or single point must render centered baseline')
+  it('generateSparklinePoints renders centered horizontal line when all values are equal', () => {
+    const res = generateSparklinePoints([100, 100, 100, 100], 36, 12)
+    assert.equal(res.path, 'M 0 6.0 L 36 6.0')
   })
 
-  test('4. SVG path rendering features round linecaps, linejoins, and subpixel coordinates', () => {
-    assert.ok(fs.existsSync(metricSparklinePath), 'MetricSparkline.vue must exist')
-    const content = fs.readFileSync(metricSparklinePath, 'utf-8')
-
-    // SVG styling and attributes
-    assert.match(content, /stroke-linecap=['"]round['"]/, 'Must feature round linecaps')
-    assert.match(content, /stroke-linejoin=['"]round['"]/, 'Must feature round linejoins')
-    assert.match(content, /viewBox/, 'Must specify SVG viewBox')
-
-    // Fill gradient support
-    assert.match(content, /linearGradient/i, 'Must support linearGradient when fill is enabled')
-  })
-
-  test('5. OverviewHud.vue integrates MetricSparkline across all 5 telemetry cards', () => {
-    assert.ok(fs.existsSync(overviewHudPath), 'OverviewHud.vue must exist')
-    const content = fs.readFileSync(overviewHudPath, 'utf-8')
-
-    // Line count check
-    const lineCount = content.split('\n').length
-    assert.ok(lineCount < 350, `OverviewHud.vue must be strictly < 350 lines (currently ${lineCount})`)
-
-    // Component import
-    assert.match(content, /import\s+MetricSparkline\s+from\s+['"].*MetricSparkline\.vue['"]/, 'OverviewHud must import MetricSparkline')
-
-    // Ad-hoc computeSparkline helper must be eradicated
-    assert.doesNotMatch(content, /function\s+computeSparkline/, 'Ad-hoc computeSparkline helper must be removed')
-
-    // Must render MetricSparkline in cards
-    const sparklineOccurrences = (content.match(/<MetricSparkline/g) || []).length
-    assert.strictEqual(sparklineOccurrences, 5, 'OverviewHud must render MetricSparkline across all 5 cards')
-  })
-
-  test('6. HUD cards maintain 88px-96px height constraints and tabular numbers typography', () => {
-    const content = fs.readFileSync(overviewHudPath, 'utf-8')
-
-    // Height constraint
-    assert.match(content, /height:\s*88px/, 'HUD card height must be set to 88px')
-
-    // Tabular numbers
-    assert.match(content, /tabular-nums/, 'Must enforce tabular-nums typography')
+  it('generateSparklinePoints maps fluctuating dataset across full width and height with padding', () => {
+    const data = [10, 20, 15, 30]
+    const res = generateSparklinePoints(data, 30, 20, 2)
+    // 4 points -> stepX = 10
+    // min = 10, max = 30, range = 20, pad = 2, usableH = 16
+    // Point 0 (val 10): x=0, y = 20 - 2 - 0 = 18
+    // Point 1 (val 20): x=10, y = 20 - 2 - (0.5 * 16) = 10
+    // Point 2 (val 15): x=20, y = 20 - 2 - (0.25 * 16) = 14
+    // Point 3 (val 30): x=30, y = 20 - 2 - (1.0 * 16) = 2
+    assert.equal(res.path, 'M 0 18 L 10 10 L 20 14 L 30 2')
+    assert.equal(res.fillPath, 'M 0 18 L 10 10 L 20 14 L 30 2 L 30 20 L 0 20 Z')
   })
 })

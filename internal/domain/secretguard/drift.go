@@ -110,20 +110,13 @@ func (p *ExternalSecretPolicy) Validate() error {
 	return nil
 }
 
-// ReconcilerCounters tracks high-frequency telemetry counters during reconciliation.
-// To prevent CPU false sharing on x86/ARM64 64-byte cache lines under concurrent multi-tenant loads,
-// each 8-byte uint64 counter is followed by 56 bytes of explicit cache-line padding.
+// ReconcilerCounters tracks telemetry counters during reconciliation.
 type ReconcilerCounters struct {
 	AuditRuns      uint64
-	_              [56]byte // 64-byte cache-line alignment padding
 	MutationsDone  uint64
-	_              [56]byte // 64-byte cache-line alignment padding
 	RolloutsDone   uint64
-	_              [56]byte // 64-byte cache-line alignment padding
 	RolloutsFailed uint64
-	_              [56]byte // 64-byte cache-line alignment padding
 	DriftDetected  uint64
-	_              [56]byte // 64-byte cache-line alignment padding
 }
 
 // DriftDetector defines the domain ports for external secret inspection, mutation,

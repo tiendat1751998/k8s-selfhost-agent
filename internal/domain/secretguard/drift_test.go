@@ -3,7 +3,6 @@ package secretguard_test
 import (
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/datdt/k8sselfhost/internal/domain/secretguard"
 )
@@ -110,28 +109,11 @@ func TestExternalSecretPolicy_ValidationErrors(t *testing.T) {
 	}
 }
 
-func TestReconcilerCounters_CacheLinePadding(t *testing.T) {
+func TestReconcilerCounters_Initialization(t *testing.T) {
 	t.Parallel()
 
-	// Verify that each counter block is spaced by at least 64 bytes to eliminate false sharing.
 	counters := secretguard.ReconcilerCounters{}
-
-	addrAudit := uintptr(unsafe.Pointer(&counters.AuditRuns))
-	addrMutations := uintptr(unsafe.Pointer(&counters.MutationsDone))
-	addrRollouts := uintptr(unsafe.Pointer(&counters.RolloutsDone))
-	addrFailed := uintptr(unsafe.Pointer(&counters.RolloutsFailed))
-	addrDrift := uintptr(unsafe.Pointer(&counters.DriftDetected))
-
-	if addrMutations-addrAudit < 64 {
-		t.Fatalf("AuditRuns and MutationsDone offset difference is %d < 64 bytes", addrMutations-addrAudit)
-	}
-	if addrRollouts-addrMutations < 64 {
-		t.Fatalf("MutationsDone and RolloutsDone offset difference is %d < 64 bytes", addrRollouts-addrMutations)
-	}
-	if addrFailed-addrRollouts < 64 {
-		t.Fatalf("RolloutsDone and RolloutsFailed offset difference is %d < 64 bytes", addrFailed-addrRollouts)
-	}
-	if addrDrift-addrFailed < 64 {
-		t.Fatalf("RolloutsFailed and DriftDetected offset difference is %d < 64 bytes", addrDrift-addrFailed)
+	if counters.AuditRuns != 0 {
+		t.Fatalf("expected 0, got %d", counters.AuditRuns)
 	}
 }

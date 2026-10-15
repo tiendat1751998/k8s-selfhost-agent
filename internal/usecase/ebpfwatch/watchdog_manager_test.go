@@ -3,6 +3,8 @@ package ebpfwatch_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -203,5 +205,71 @@ func TestWatchdogManager_HighConcurrency(t *testing.T) {
 	}
 	if len(telemetryList) != 1 {
 		t.Errorf("expected 1 telemetry entry, got %d", len(telemetryList))
+	}
+}
+
+func TestVerifyBTFIntegrity(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1. Valid ELF file (\x7fELF)
+	elfPath := filepath.Join(tmpDir, "vmlinux_elf")
+	if err := os.WriteFile(elfPath, []byte{0x7f, 'E', 'L', 'F', 0x02, 0x01}, 0644); err != nil {
+		t.Fatalf("failed to write elf file: %v", err)
+	}
+	valid, err := usecase.VerifyBTFIntegrity(elfPath)
+	if err != nil || !valid {
+		t.Errorf("expected ELF file to be valid, got valid=%v, err=%v", valid, err)
+	}
+
+	// 2. Valid BTF raw magic (0xeb9f in little-endian: 0x9f, 0xeb)
+	btfPath := filepath.Join(tmpDir, "vmlinux_btf")
+	if err := os.WriteFile(btfPath, []byte{0x9f, 0xeb, 0x01, 0x00}, 0644); err != nil {
+		t.Fatalf("failed to write btf file: %v", err)
+	}
+	valid, err = usecase.VerifyBTFIntegrity(btfPath)
+	if err != nil || !valid {
+		t.Errorf("expected raw BTF file to be valid, got valid=%v, err=%v", valid, err)
+	}
+
+	// 3. Corrupt/invalid file
+	corruptPath := filepath.Join(tmpDir, "corrupt")
+	if err := os.WriteFile(corruptPath, []byte{0x00, 0x11, 0x22, 0x33}, 0644); err != nil {
+		t.Fatalf("failed to write corrupt file: %v", err)
+	}
+	valid, err = usecase.VerifyBTFIntegrity(corruptPath)
+	if valid || err == nil {
+		t.Errorf("expected corrupt file to be invalid, got valid=%v, err=%v", valid, err)
+	}
+
+	// 4. Non-existent file
+	valid, err = usecase.VerifyBTFIntegrity(filepath.Join(tmpDir, "nonexistent"))
+	if valid || err == nil {
+		t.Errorf("expected nonexistent file to fail, got valid=%v, err=%v", valid, err)
+	}
+}
+
+func TestAutoExpandRingBuffer_PowerOfTwoValidation(t *testing.T) {
+	ctx := context.Background()
+	mgr := usecase.NewWatchdogManager()
+	probeName := "p2_probe"
+	mgr.RegisterProbe(probeName, 256)
+
+	// Valid power-of-two page counts (512, 1024)
+	err := mgr.AutoExpandRingBuffer(ctx, probeName, 512)
+	if err != nil {
+		t.Errorf("expected 512 pages to succeed, got: %v", err)
+	}
+	pages, _ := mgr.GetProbePages(probeName)
+	if pages != 512 {
+		t.Errorf("expected 512 pages, got %d", pages)
+	}
+
+	// Invalid non-power-of-two page counts (300, 500, 700)
+	badPages := []int{300, 500, 700, 1000}
+	for _, bad := range badPages {
+		err := mgr.AutoExpandRingBuffer(ctx, probeName, bad)
+		if err == nil {
+			t.Errorf("expected AutoExpandRingBuffer to reject non-power-of-two %d, got nil", bad)
+		}
 	}
 }

@@ -62,12 +62,9 @@ var (
 	ErrTokenStaleExpired = errors.New("projected service account token is stale or expired (HTTP 401)")
 )
 
-// PaddedCounter is a 64-byte aligned atomic counter designed to prevent false sharing
-// across CPU cores under the MESI/MOESI cache coherence protocols.
-// Standard x86_64 / arm64 cache line width is 64 bytes.
+// PaddedCounter is an atomic counter.
 type PaddedCounter struct {
 	value uint64
-	_     [56]byte // 8 bytes uint64 + 56 bytes padding = 64 bytes
 }
 
 // Inc atomically increments the counter by 1.

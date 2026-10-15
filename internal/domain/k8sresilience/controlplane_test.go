@@ -5,21 +5,19 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/datdt/k8sselfhost/internal/domain/k8sresilience"
 )
 
-func TestPaddedMetrics_CacheLineAlignment(t *testing.T) {
+func TestPaddedMetrics_Initialization(t *testing.T) {
 	var wm k8sresilience.PaddedWebhookMetrics
 	var pm k8sresilience.PaddedPLEGMetrics
 
-	if sz := unsafe.Sizeof(wm); sz%64 != 0 {
-		t.Fatalf("PaddedWebhookMetrics size %d is not a multiple of 64 bytes (cache line)", sz)
+	if wm.ConsecutiveFailures != 0 {
+		t.Fatalf("expected 0, got %d", wm.ConsecutiveFailures)
 	}
-
-	if sz := unsafe.Sizeof(pm); sz%64 != 0 {
-		t.Fatalf("PaddedPLEGMetrics size %d is not a multiple of 64 bytes (cache line)", sz)
+	if pm.TimeoutCount != 0 {
+		t.Fatalf("expected 0, got %d", pm.TimeoutCount)
 	}
 }
 

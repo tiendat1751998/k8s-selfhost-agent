@@ -132,6 +132,10 @@ export const securityApi = {
     return api.post<{ key_id: string; version: number; rotated_at: string }>('/security/kms/rotate', {})
   },
 
+  async rotateKMSKey(): Promise<{ key_id: string; version: number; rotated_at: string }> {
+    return this.rotateKmsKey()
+  },
+
   async verifyKmsIntegrity(): Promise<{ verified: boolean; checksum: string }> {
     return api.post<{ verified: boolean; checksum: string }>('/security/kms/verify', {})
   },

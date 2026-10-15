@@ -107,37 +107,30 @@ type NLBZoneDistribution struct {
 }
 
 // FastRoutingLatencyTracker tracks high-frequency probe latency metrics lock-free.
-// 64-byte cache-line padding prevents false sharing across CPU cores under high-rate polling (MESI/MOESI).
-// 5 uint64 fields (40 bytes) + 24 bytes padding = exactly 64 bytes.
 type FastRoutingLatencyTracker struct {
 	ProbeCount          uint64
 	TotalLatencyUs      uint64
 	MinLatencyUs        uint64
 	MaxLatencyUs        uint64
 	AsymmetricDropCount uint64
-	_                   [24]byte // Cache line padding (64 bytes total)
 }
 
 // FastPacketLossCounter tracks packet counts and loss rates across multi-core workers.
-// 5 uint64 fields (40 bytes) + 24 bytes padding = exactly 64 bytes.
 type FastPacketLossCounter struct {
 	TxPackets        uint64
 	RxPackets        uint64
 	LostPackets      uint64
 	CorruptedPackets uint64
 	OutboundDrops    uint64
-	_                [24]byte // Cache line padding (64 bytes total)
 }
 
 // FastNLBDistributionMonitor tracks NLB request distribution across AZs lock-free.
-// 5 uint64 fields (40 bytes) + 24 bytes padding = exactly 64 bytes.
 type FastNLBDistributionMonitor struct {
 	TotalRequests        uint64
 	ZoneARequests        uint64
 	ZoneBRequests        uint64
 	ZoneCRequests        uint64
 	ImbalancedDetections uint64
-	_                    [24]byte // Cache line padding (64 bytes total)
 }
 
 // HybridCloudNetworkManager defines the domain port for hybrid routing audit,

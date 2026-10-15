@@ -403,4 +403,16 @@ export const reportsApi = {
   async deleteReport(id: string): Promise<{ status: string }> {
     return api.delete<{ status: string }>(`/reports-center/${id}`)
   },
+
+  async saveSchedule(data: any): Promise<any> {
+    return api.post('/reports-center/schedules', data)
+  },
+
+  async deleteSchedule(id: string): Promise<any> {
+    return api.delete(`/reports-center/schedules/${id}`)
+  },
+
+  async toggleSchedule(id: string, enabled: boolean): Promise<any> {
+    return api.patch(`/reports-center/schedules/${id}`, { enabled })
+  },
 }

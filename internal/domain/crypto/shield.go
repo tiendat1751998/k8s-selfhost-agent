@@ -83,12 +83,9 @@ var (
 	ErrKMSDEKGraceExpired = errors.New("kms dek grace period expired")
 )
 
-// PaddedCounter is a 64-byte cache-line aligned atomic counter.
-// The 56-byte trailing array ensures that adjacent fields in memory
-// reside on separate CPU cache lines, eliminating false sharing under MESI/MOESI cache coherence.
+// PaddedCounter is an atomic counter.
 type PaddedCounter struct {
 	value uint64
-	_     [7]uint64 // 56 bytes padding (total: 64 bytes)
 }
 
 // Inc atomically increments the counter and returns the new value.

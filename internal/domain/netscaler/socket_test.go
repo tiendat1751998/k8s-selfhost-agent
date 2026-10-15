@@ -3,7 +3,6 @@ package netscaler_test
 import (
 	"sync"
 	"testing"
-	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11,10 +10,9 @@ import (
 	"github.com/datdt/k8sselfhost/internal/domain/netscaler"
 )
 
-func TestCacheLinePaddingAlignment(t *testing.T) {
+func TestPaddedCounter_Initialization(t *testing.T) {
 	counter := netscaler.PaddedCounter{}
-	// The struct size must be exactly 64 bytes (1 cache line)
-	assert.Equal(t, uintptr(64), unsafe.Sizeof(counter), "PaddedCounter must occupy exactly 64 bytes for cache line isolation")
+	assert.Equal(t, int64(0), counter.Load())
 }
 
 func TestPaddedCounter_ConcurrentOperations(t *testing.T) {
@@ -118,15 +116,20 @@ func TestKernelNetConfig_Validate(t *testing.T) {
 	assert.Error(t, zeroCtMax.Validate())
 }
 
-func TestCoreSocketTelemetry_PaddingAndIsolation(t *testing.T) {
+func TestCoreSocketTelemetry_Operations(t *testing.T) {
 	telemetry := netscaler.CoreSocketTelemetry{}
-	// Verify that each counter address differs by at least 64 bytes to guarantee cache line separation
-	p1 := uintptr(unsafe.Pointer(&telemetry.TimeWaitCounter))
-	p2 := uintptr(unsafe.Pointer(&telemetry.AllocatedPortCounter))
-	p3 := uintptr(unsafe.Pointer(&telemetry.ListenDropCounter))
-	p4 := uintptr(unsafe.Pointer(&telemetry.ConntrackEntryCounter))
+	assert.Equal(t, int64(0), telemetry.TimeWaitCounter.Load())
+	assert.Equal(t, int64(0), telemetry.AllocatedPortCounter.Load())
+	assert.Equal(t, int64(0), telemetry.ListenDropCounter.Load())
+	assert.Equal(t, int64(0), telemetry.ConntrackEntryCounter.Load())
 
-	assert.GreaterOrEqual(t, p2-p1, uintptr(64))
-	assert.GreaterOrEqual(t, p3-p2, uintptr(64))
-	assert.GreaterOrEqual(t, p4-p3, uintptr(64))
+	telemetry.TimeWaitCounter.Add(10)
+	telemetry.AllocatedPortCounter.Add(20)
+	telemetry.ListenDropCounter.Add(5)
+	telemetry.ConntrackEntryCounter.Add(100)
+
+	assert.Equal(t, int64(10), telemetry.TimeWaitCounter.Load())
+	assert.Equal(t, int64(20), telemetry.AllocatedPortCounter.Load())
+	assert.Equal(t, int64(5), telemetry.ListenDropCounter.Load())
+	assert.Equal(t, int64(100), telemetry.ConntrackEntryCounter.Load())
 }

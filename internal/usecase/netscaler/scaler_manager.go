@@ -3,7 +3,10 @@
 package netscaler
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -110,6 +113,10 @@ func (s *ScalerManager) CollectMetrics(ctx context.Context) (*domain.SocketMetri
 	s.mu.RLock()
 	provider := s.metricProvider
 	s.mu.RUnlock()
+
+	if provider == nil {
+		return nil, errors.New("socket metric provider is uninitialized")
+	}
 
 	metrics, err := provider.CollectMetrics(ctx)
 	if err != nil {
@@ -372,16 +379,51 @@ func (p *procSysctlExecutor) WriteSysctl(_ context.Context, key string, value st
 	return os.WriteFile(procPath, []byte(value), 0644)
 }
 
-// defaultProcMetricProvider reads live telemetry from procfs or provides fallback defaults.
-type defaultProcMetricProvider struct {
+// osSocketMetricProvider reads live telemetry from /proc/net/sockstat on Linux or provides fallback defaults.
+type osSocketMetricProvider struct {
 	telemetry *domain.CoreSocketTelemetry
 }
 
-func (p *defaultProcMetricProvider) CollectMetrics(_ context.Context) (*domain.SocketMetrics, error) {
-	tw := p.telemetry.TimeWaitCounter.Load()
-	alloc := p.telemetry.AllocatedPortCounter.Load()
-	drops := p.telemetry.ListenDropCounter.Load()
-	ct := p.telemetry.ConntrackEntryCounter.Load()
+// defaultProcMetricProvider is maintained for backwards compatibility.
+type defaultProcMetricProvider = osSocketMetricProvider
+
+func (p *osSocketMetricProvider) CollectMetrics(_ context.Context) (*domain.SocketMetrics, error) {
+	tw, alloc, drops, ct := int64(0), int64(0), int64(0), int64(0)
+	if p.telemetry != nil {
+		tw = p.telemetry.TimeWaitCounter.Load()
+		alloc = p.telemetry.AllocatedPortCounter.Load()
+		drops = p.telemetry.ListenDropCounter.Load()
+		ct = p.telemetry.ConntrackEntryCounter.Load()
+	}
+
+	// Attempt to parse live telemetry from /proc/net/sockstat on Linux
+	if data, err := os.ReadFile("/proc/net/sockstat"); err == nil {
+		scanner := bufio.NewScanner(bytes.NewReader(data))
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.HasPrefix(line, "TCP:") {
+				fields := strings.Fields(line)
+				for i := 0; i < len(fields)-1; i++ {
+					if fields[i] == "tw" {
+						if v, err := strconv.ParseInt(fields[i+1], 10, 64); err == nil {
+							tw = v
+						}
+					} else if fields[i] == "alloc" {
+						if v, err := strconv.ParseInt(fields[i+1], 10, 64); err == nil {
+							alloc = v
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Read conntrack count from /proc/sys/net/netfilter/nf_conntrack_count if available
+	if data, err := os.ReadFile("/proc/sys/net/netfilter/nf_conntrack_count"); err == nil {
+		if v, err := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64); err == nil {
+			ct = v
+		}
+	}
 
 	totalPorts := domain.DefaultTotalEphemeralPorts
 	ctMax := domain.ConntrackDefaultInitialMax

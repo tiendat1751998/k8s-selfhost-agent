@@ -125,6 +125,7 @@ export const complianceApi = {
       total: res.total ?? (res.data ? res.data.length : 0),
     }
   },
+  remediateViolation: (id: string) => api.post<{ success: boolean; message?: string }>(`/compliance/violations/${id}/remediate`, {}),
 }
 
 // 3. GITOPS DRIFT DETECTION & RECONCILIATION
@@ -382,6 +383,7 @@ export const runbookApi = {
   async executeRunbook(id: string): Promise<{ status: string; runbook_id: string; title: string; executed_at: string; message: string }> {
     return api.post<{ status: string; runbook_id: string; title: string; executed_at: string; message: string }>(`/runbooks/${id}/execute`)
   },
+  executeStep: (runbookId: string, stepIndex: number): Promise<{ success?: boolean; status?: string; output?: string }> => api.post<{ success?: boolean; status?: string; output?: string }>(`/runbooks/${runbookId}/steps/${stepIndex}/execute`, {}),
 }
 
 // 7. FINOPS & COST OPTIMIZATION
@@ -436,6 +438,8 @@ export const costApi = {
     const res = await api.get<ApiResponse<ResourceWaste[]>>('/cost/waste')
     return res.data || []
   },
+  dismissWaste: (id: string) => api.post(`/cost/waste/${id}/dismiss`, {}),
+  setBudgetLimit: (namespace: string, limit: number) => api.post(`/cost/namespaces/${namespace}/budget`, { limit }),
 }
 
 // 8. CAPACITY PLANNING & WORKLOAD FORECASTING
@@ -482,4 +486,8 @@ export const capacityApi = {
   async recordForecast(forecast: Partial<CapacityForecast>): Promise<CapacityForecast> {
     return api.post<CapacityForecast>('/capacity', forecast)
   },
+  rebalanceNode: (nodeId: string) => api.post(`/capacity/nodes/${nodeId}/rebalance`, {}),
+  createPolicy: (policy: any) => api.post('/capacity/policies', policy),
+  togglePolicy: (id: string, enabled: boolean) => api.patch(`/capacity/policies/${id}`, { enabled }),
+  deletePolicy: (id: string) => api.delete(`/capacity/policies/${id}`),
 }

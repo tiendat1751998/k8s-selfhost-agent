@@ -17,7 +17,7 @@ class ApiClient {
   private refreshPromise: Promise<string | null> | null = null
 
   constructor() {
-    this.baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+    this.baseUrl = import.meta.env?.VITE_API_BASE_URL || '/api/v1'
     this.token = typeof window !== 'undefined' ? localStorage.getItem('k8s_token') : null
   }
 
@@ -166,6 +166,13 @@ class ApiClient {
   put<T>(endpoint: string, body?: unknown): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'PUT',
+      body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
+    })
+  }
+
+  patch<T>(endpoint: string, body?: unknown): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
       body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
     })
   }

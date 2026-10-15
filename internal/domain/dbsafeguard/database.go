@@ -252,31 +252,16 @@ type DatabaseResilienceEngine interface {
 //    `datfrozenxid` past 2 billion transactions, PostgreSQL halts all write operations and forces an emergency
 //    read-only shutdown to prevent data corruption.
 //
-// =================================================================================================
-// CACHE-LINE PADDING ARCHITECTURE (MESI / MOESI COHERENCY PROTOCOL)
-// =================================================================================================
-// Under multi-threaded, high-frequency database activity, multiple goroutines concurrently write to atomic
-// counters. If adjacent atomic variables occupy the same 64-byte L1/L2/L3 CPU cache line, updating one variable
-// forces cache-line invalidation across all CPU sockets (false sharing). To ensure zero cache invalidation
-// overhead, each atomic counter is padded with 64 bytes (`_ [8]uint64`, where 8 * 8 bytes = 64 bytes).
+// DBSafeguardTelemetryTracker provides atomic telemetry tracking for database safeguards.
 type DBSafeguardTelemetryTracker struct {
-	_                     [8]uint64 // 64-byte cache line padding
 	maxXIDAgeObserved     atomic.Int64
-	_                     [8]uint64 // 64-byte cache line padding
 	idleTxTerminated      atomic.Uint64
-	_                     [8]uint64 // 64-byte cache line padding
 	activeTxPreserved     atomic.Uint64
-	_                     [8]uint64 // 64-byte cache line padding
 	autovacuumCostLimit   atomic.Int64
-	_                     [8]uint64 // 64-byte cache line padding
 	redisBufferOverflows  atomic.Uint64
-	_                     [8]uint64 // 64-byte cache line padding
 	redisBacklogBytes     atomic.Int64
-	_                     [8]uint64 // 64-byte cache line padding
 	kafkaPoisonPillsDLQ   atomic.Uint64
-	_                     [8]uint64 // 64-byte cache line padding
 	kafkaOffsetsCommitted atomic.Uint64
-	_                     [8]uint64 // 64-byte cache line padding
 }
 
 // NewDBSafeguardTelemetryTracker initializes atomic telemetry counters with default cost limit.

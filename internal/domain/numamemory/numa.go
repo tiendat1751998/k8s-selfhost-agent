@@ -92,26 +92,19 @@ type HugePagePoolStatus struct {
 	FragmentationIdx float64 `json:"fragmentation_idx"`
 }
 
-// Cache-Line Padded Performance Counters (64-byte alignment).
-// These structs ensure that high-frequency metric tracking on multi-core SMP and NUMA architectures
-// does not trigger false sharing (MESI/MOESI cache line bouncing) across L1/L2 caches.
-
-// NUMASpinlockCounter tracks NUMA node lock contention events with 64-byte cache line padding.
+// NUMASpinlockCounter tracks NUMA node lock contention events.
 type NUMASpinlockCounter struct {
 	SpinlockCount uint64
-	_             [56]byte // 64 - 8 = 56 bytes padding to complete 64-byte L1 cache line
 }
 
-// DirtyPageTracker tracks dirty page bytes and flush saturation with 64-byte cache line padding.
+// DirtyPageTracker tracks dirty page bytes and flush saturation.
 type DirtyPageTracker struct {
 	DirtyBytes uint64
-	_          [56]byte // 64 - 8 = 56 bytes padding to complete 64-byte L1 cache line
 }
 
-// HugePageAllocationMetric tracks allocated HugePages and allocation requests with 64-byte cache line padding.
+// HugePageAllocationMetric tracks allocated HugePages and allocation requests.
 type HugePageAllocationMetric struct {
 	AllocatedPages uint64
-	_              [56]byte // 64 - 8 = 56 bytes padding to complete 64-byte L1 cache line
 }
 
 // LinuxMemorySubsystemManager defines low-level kernel memory interaction and tuning contracts.

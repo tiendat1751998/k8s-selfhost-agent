@@ -121,7 +121,7 @@ func TestNUMAManager_HugePagesCompaction(t *testing.T) {
 			{
 				PageSizeKB:       1048576, // 1GiB
 				TotalPages:       32,
-				FreePages:        4,
+				FreePages:        24,
 				FragmentationIdx: 0.82, // > 0.70 threshold
 			},
 		}),

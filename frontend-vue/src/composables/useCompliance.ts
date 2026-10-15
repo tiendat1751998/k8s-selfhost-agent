@@ -1,4 +1,4 @@
-﻿import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
   complianceApi,
   auditApi,
@@ -23,168 +23,6 @@ export const COMPLIANCE_STANDARDS: ComplianceStandard[] = [
   'SOC 2',
   'ISO 27001',
   'HIPAA',
-]
-
-export const FALLBACK_FRAMEWORKS: ComplianceFramework[] = [
-  {
-    id: 'cis-k8s-v1.8',
-    name: 'CIS Kubernetes Benchmark v1.8',
-    icon: 'shield',
-    total_checks: 68,
-    passed_checks: 61,
-    failed_checks: 7,
-    score: 89.7,
-    last_scan_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-  },
-  {
-    id: 'nist-sp-800-53',
-    name: 'NIST SP 800-53 Rev. 5',
-    icon: 'building',
-    total_checks: 112,
-    passed_checks: 104,
-    failed_checks: 8,
-    score: 92.8,
-    last_scan_at: new Date(Date.now() - 3600000 * 4).toISOString(),
-  },
-  {
-    id: 'pci-dss-v4.0',
-    name: 'PCI-DSS v4.0 (Cardholder Data)',
-    icon: 'dollar-sign',
-    total_checks: 54,
-    passed_checks: 50,
-    failed_checks: 4,
-    score: 92.6,
-    last_scan_at: new Date(Date.now() - 3600000 * 6).toISOString(),
-  },
-  {
-    id: 'soc-2-type-2',
-    name: 'SOC 2 Type II (Trust Services)',
-    icon: 'lock',
-    total_checks: 42,
-    passed_checks: 39,
-    failed_checks: 3,
-    score: 92.8,
-    last_scan_at: new Date(Date.now() - 3600000 * 8).toISOString(),
-  },
-  {
-    id: 'iso-27001-2022',
-    name: 'ISO 27001:2022 ISMS Controls',
-    icon: 'globe',
-    total_checks: 76,
-    passed_checks: 70,
-    failed_checks: 6,
-    score: 92.1,
-    last_scan_at: new Date(Date.now() - 3600000 * 12).toISOString(),
-  },
-  {
-    id: 'hipaa-security',
-    name: 'HIPAA Security & Privacy Rule',
-    icon: 'activity',
-    total_checks: 38,
-    passed_checks: 36,
-    failed_checks: 2,
-    score: 94.7,
-    last_scan_at: new Date(Date.now() - 3600000 * 24).toISOString(),
-  },
-]
-
-export const FALLBACK_VIOLATIONS: ComplianceViolation[] = [
-  {
-    id: 'viol-cis-001',
-    framework_id: 'cis-k8s-v1.8',
-    severity: 'critical',
-    policy: 'Privileged Pod Execution Detected',
-    resource: 'payment-gateway-deployment',
-    namespace: 'prod-fintech',
-    cluster: 'prod-us-east-1',
-    message: 'Container runs with securityContext.privileged: true, violating CIS 5.2.1.',
-    resolved: false,
-    detected_at: new Date(Date.now() - 3600000 * 1).toISOString(),
-  },
-  {
-    id: 'viol-pci-002',
-    framework_id: 'pci-dss-v4.0',
-    severity: 'critical',
-    policy: 'Missing Ingress NetworkPolicy',
-    resource: 'cardholder-db-service',
-    namespace: 'pci-data',
-    cluster: 'prod-us-east-1',
-    message: 'No NetworkPolicy isolates ingress traffic into cardholder environment, violating PCI-DSS Req 1.3.',
-    resolved: false,
-    detected_at: new Date(Date.now() - 3600000 * 3).toISOString(),
-  },
-  {
-    id: 'viol-nist-003',
-    framework_id: 'nist-sp-800-53',
-    severity: 'high',
-    policy: 'Root Container Execution',
-    resource: 'ingress-nginx-controller',
-    namespace: 'ingress-system',
-    cluster: 'prod-us-east-1',
-    message: 'securityContext.runAsNonRoot is not explicitly enforced, violating AC-6 least privilege.',
-    resolved: false,
-    detected_at: new Date(Date.now() - 3600000 * 5).toISOString(),
-  },
-  {
-    id: 'viol-soc-004',
-    framework_id: 'soc-2-type-2',
-    severity: 'high',
-    policy: 'Plaintext Secrets in ConfigMap',
-    resource: 'auth-service-config',
-    namespace: 'identity',
-    cluster: 'prod-eu-west-1',
-    message: 'API tokens or sensitive credentials stored unencrypted in ConfigMap data.',
-    resolved: false,
-    detected_at: new Date(Date.now() - 3600000 * 7).toISOString(),
-  },
-  {
-    id: 'viol-cis-005',
-    framework_id: 'cis-k8s-v1.8',
-    severity: 'medium',
-    policy: 'Default ServiceAccount Token Auto-Mount',
-    resource: 'analytics-worker-sa',
-    namespace: 'analytics',
-    cluster: 'prod-us-east-1',
-    message: 'automountServiceAccountToken: true grants default SA credentials to workload pods.',
-    resolved: false,
-    detected_at: new Date(Date.now() - 3600000 * 10).toISOString(),
-  },
-  {
-    id: 'viol-iso-006',
-    framework_id: 'iso-27001-2022',
-    severity: 'medium',
-    policy: 'Unrestricted Egress to External IPs',
-    resource: 'customer-portal-backend',
-    namespace: 'frontend-prod',
-    cluster: 'prod-us-east-1',
-    message: 'Pod allows unrestricted outbound communication without egress domain filtering.',
-    resolved: false,
-    detected_at: new Date(Date.now() - 3600000 * 14).toISOString(),
-  },
-  {
-    id: 'viol-nist-007',
-    framework_id: 'nist-sp-800-53',
-    severity: 'low',
-    policy: 'Missing Resource Memory/CPU Limits',
-    resource: 'notification-daemon',
-    namespace: 'notifications',
-    cluster: 'staging-us-west-2',
-    message: 'Resource limits not specified, risking noisy neighbor memory starvation.',
-    resolved: false,
-    detected_at: new Date(Date.now() - 3600000 * 18).toISOString(),
-  },
-  {
-    id: 'viol-hipaa-008',
-    framework_id: 'hipaa-security',
-    severity: 'low',
-    policy: 'Liveness/Readiness Probes Unconfigured',
-    resource: 'patient-telemetry-ingest',
-    namespace: 'telehealth',
-    cluster: 'prod-us-east-1',
-    message: 'Probes unconfigured for automated health reconciliation and crash mitigation.',
-    resolved: false,
-    detected_at: new Date(Date.now() - 3600000 * 22).toISOString(),
-  },
 ]
 
 export function useCompliance() {
@@ -214,35 +52,23 @@ export function useCompliance() {
     error.value = null
     try {
       const [fwData, viData, runData] = await Promise.all([
-        complianceApi.getFrameworks().catch(() => null),
-        complianceApi.getViolations(activeSeverity.value === 'ALL' ? undefined : activeSeverity.value.toLowerCase()).catch(() => null),
+        complianceApi.getFrameworks(),
+        complianceApi.getViolations(activeSeverity.value === 'ALL' ? undefined : activeSeverity.value.toLowerCase()),
         auditApi.getLatestRun().catch(() => null),
       ])
 
-      if (fwData && fwData.length > 0) {
-        frameworks.value = fwData
-      } else {
-        frameworks.value = FALLBACK_FRAMEWORKS
-      }
-
-      if (viData && viData.data && viData.data.length > 0) {
-        violations.value = viData.data
-        totalViolations.value = viData.total ?? viData.data.length
-      } else {
-        const fallbacks = activeSeverity.value === 'ALL'
-          ? FALLBACK_VIOLATIONS
-          : FALLBACK_VIOLATIONS.filter(v => v.severity.toUpperCase() === activeSeverity.value)
-        violations.value = fallbacks
-        totalViolations.value = FALLBACK_VIOLATIONS.length
-      }
-
+      frameworks.value = fwData || []
+      violations.value = viData?.data || []
+      totalViolations.value = viData?.total ?? (viData?.data?.length || 0)
       latestRun.value = runData
       auditStatus.value = runData ? runData.status : 'completed'
-    } catch {
-      frameworks.value = FALLBACK_FRAMEWORKS
-      violations.value = FALLBACK_VIOLATIONS
-      totalViolations.value = FALLBACK_VIOLATIONS.length
-      auditStatus.value = 'completed'
+    } catch (err: unknown) {
+      error.value = err instanceof Error ? err.message : 'Failed to fetch compliance data'
+      frameworks.value = []
+      violations.value = []
+      totalViolations.value = 0
+      latestRun.value = null
+      auditStatus.value = 'failed'
     } finally {
       loading.value = false
     }

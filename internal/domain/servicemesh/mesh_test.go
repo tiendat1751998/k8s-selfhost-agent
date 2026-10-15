@@ -4,23 +4,20 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
 	domain "github.com/datdt/k8sselfhost/internal/domain/servicemesh"
 )
 
-func TestCacheLinePadding_StructSizes(t *testing.T) {
-	// MESI/MOESI cache line protocol verification:
-	// Verify that trackers have exact 64-byte alignment and footprint to prevent false sharing.
-	if sz := unsafe.Sizeof(domain.PaddedSDSLatencyTracker{}); sz != 64 {
-		t.Fatalf("expected PaddedSDSLatencyTracker size 64 bytes, got %d", sz)
+func TestMeshStructures_Initialization(t *testing.T) {
+	tracker := domain.PaddedSDSLatencyTracker{}
+	if probes, _, _ := tracker.Stats(); probes != 0 {
+		t.Fatalf("expected 0 probes, got %d", probes)
 	}
-	if sz := unsafe.Sizeof(domain.PaddedEnvoyMemoryMonitor{}); sz != 64 {
-		t.Fatalf("expected PaddedEnvoyMemoryMonitor size 64 bytes, got %d", sz)
-	}
-	if sz := unsafe.Sizeof(domain.PaddedTunnelMTUMetrics{}); sz != 64 {
-		t.Fatalf("expected PaddedTunnelMTUMetrics size 64 bytes, got %d", sz)
+
+	monitor := domain.PaddedEnvoyMemoryMonitor{}
+	if alloc, _, _ := monitor.Stats(); alloc != 0 {
+		t.Fatalf("expected 0 allocated, got %d", alloc)
 	}
 }
 

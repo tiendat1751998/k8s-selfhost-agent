@@ -274,13 +274,14 @@ export function useCapacityForecast() {
         if (metrics && metrics.length > 0) {
           nodesHeadroom.value = metrics.map((m: NodeMetrics) => {
             const cpuUsagePercent = Number(m.cpu_percent.toFixed(1))
-            const cpuTotalCores = 16
-            const cpuAllocatedCores = Number(((cpuTotalCores * cpuUsagePercent) / 100).toFixed(1))
-            const memTotalGiB = m.memory_total > 0 ? Number((m.memory_total / (1024 * 1024 * 1024)).toFixed(1)) : 32
+            const rawM = m as unknown as Record<string, unknown>
+            const cpuTotalCores = typeof rawM.cpu_cores === 'number' ? rawM.cpu_cores : 0
+            const cpuAllocatedCores = cpuTotalCores > 0 ? Number(((cpuTotalCores * cpuUsagePercent) / 100).toFixed(1)) : 0
+            const memTotalGiB = m.memory_total > 0 ? Number((m.memory_total / (1024 * 1024 * 1024)).toFixed(1)) : 0
             const memAllocatedGiB = Number((m.memory_used / (1024 * 1024 * 1024)).toFixed(1))
             const memUsagePercent = Number(m.memory_percent.toFixed(1))
-            const podCount = 0
-            const podCapacity = 110
+            const podCount = typeof rawM.pod_count === 'number' ? rawM.pod_count : 0
+            const podCapacity = typeof rawM.pod_capacity === 'number' ? rawM.pod_capacity : 0
             const binPackingScore = Number(((cpuUsagePercent + memUsagePercent) / 2).toFixed(1))
             const headroomPercent = Math.max(0, Number((100 - Math.max(cpuUsagePercent, memUsagePercent)).toFixed(1)))
             const status = m.status === 'ready'
@@ -334,26 +335,49 @@ export function useCapacityForecast() {
     }
   }
 
-  function addPolicy(policy: Omit<CapacityPolicy, 'id' | 'createdAt'>) {
+  async function addPolicy(policy: Omit<CapacityPolicy, 'id' | 'createdAt'>) {
     const newPolicy: CapacityPolicy = { ...policy, id: `pol-${Date.now()}`, createdAt: new Date().toISOString() }
-    policies.value.unshift(newPolicy)
-    statusMessage.value = { type: 'success', text: `Capacity policy "${newPolicy.name}" created for cluster ${newPolicy.cluster}.` }
+    try {
+      await capacityApi.createPolicy(newPolicy)
+      policies.value.unshift(newPolicy)
+      statusMessage.value = { type: 'success', text: `Capacity policy "${newPolicy.name}" created for cluster ${newPolicy.cluster}.` }
+    } catch (err: unknown) {
+      statusMessage.value = { type: 'error', text: err instanceof Error ? err.message : 'Failed to create capacity policy' }
+    }
   }
 
-  function togglePolicy(id: string) {
+  async function togglePolicy(id: string) {
     const p = policies.value.find(item => item.id === id)
-    if (p) p.enabled = !p.enabled
+    if (!p) return
+    const nextState = !p.enabled
+    try {
+      await capacityApi.togglePolicy(id, nextState)
+      p.enabled = nextState
+    } catch (err: unknown) {
+      statusMessage.value = { type: 'error', text: err instanceof Error ? err.message : 'Failed to toggle policy' }
+    }
   }
 
-  function removePolicy(id: string) {
-    policies.value = policies.value.filter(item => item.id !== id)
+  async function removePolicy(id: string) {
+    try {
+      await capacityApi.deletePolicy(id)
+      policies.value = policies.value.filter(item => item.id !== id)
+      statusMessage.value = { type: 'success', text: 'Capacity policy removed successfully.' }
+    } catch (err: unknown) {
+      statusMessage.value = { type: 'error', text: err instanceof Error ? err.message : 'Failed to delete policy' }
+    }
   }
 
   async function rebalanceNode(nodeId: string) {
     const target = nodesHeadroom.value.find(n => n.id === nodeId)
     if (!target) return
-    statusMessage.value = { type: 'success', text: `Pod rebalance scheduled for node ${target.name}. Dynamic pod rescheduling initiated.` }
-    await fetchCapacityData()
+    try {
+      await capacityApi.rebalanceNode(nodeId)
+      statusMessage.value = { type: 'success', text: `Pod rebalance scheduled for node ${target.name}. Dynamic pod rescheduling initiated.` }
+      await fetchCapacityData()
+    } catch (err: unknown) {
+      statusMessage.value = { type: 'error', text: err instanceof Error ? err.message : 'Failed to rebalance node' }
+    }
   }
 
   function inspectNode(nodeId: string): NodeHeadroom | undefined {

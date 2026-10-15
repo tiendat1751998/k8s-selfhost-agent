@@ -1,11 +1,12 @@
-﻿import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useSecurityStore } from '../stores/securityStore'
-import type { SecurityViolation } from '../api/security'
+import { securityApi } from '../api/security'
+import { complianceApi } from '../api/governance'
 
 export interface CveFinding {
   id: string
   cve_id: string
-  scanner: 'Trivy' | 'Clair' | 'Checkov'
+  scanner: string
   package_name: string
   installed_version: string
   fixed_version: string
@@ -82,32 +83,31 @@ export function useDevSecOps() {
 
   onMounted(() => { securityStore.fetchAll() })
 
-  function inferCvssScore(v: SecurityViolation): number {
-    const sev = (v.severity || 'LOW').toUpperCase()
-    return sev === 'CRITICAL' ? 9.8 : sev === 'HIGH' ? 8.2 : sev === 'MEDIUM' ? 5.8 : 3.2
-  }
-
-  function inferPackageDetails(v: SecurityViolation): { pkg: string; installed: string; fixed: string } {
-    const d = (v.description || '').toLowerCase()
-    const r = (v.rule_id || '').toLowerCase()
-    if (d.includes('runc') || r.includes('21626')) return { pkg: 'runc', installed: '1.1.11', fixed: '1.1.12' }
-    if (d.includes('openssl') || d.includes('ssl')) return { pkg: 'openssl', installed: '3.0.2-0ubuntu1.12', fixed: '3.0.2-0ubuntu1.14' }
-    if (d.includes('glibc') || r.includes('2023-4911')) return { pkg: 'glibc', installed: '2.35-0ubuntu3.4', fixed: '2.35-0ubuntu3.6' }
-    if (d.includes('curl')) return { pkg: 'libcurl4', installed: '7.81.0-1ubuntu1.14', fixed: '7.81.0-1ubuntu1.15' }
-    if (d.includes('golang') || d.includes('go')) return { pkg: 'golang-runtime', installed: '1.21.5', fixed: '1.21.8' }
-    return { pkg: v.resource_name || 'container-base', installed: '1.4.0', fixed: '1.4.2-patch1' }
-  }
-
   const cveFindings = computed<CveFinding[]>(() => {
     return securityStore.violations.map((v) => {
-      const isContainer = (v.resource_type || '').toLowerCase().includes('image') || (v.resource_type || '').toLowerCase().includes('container')
-      const scanner: 'Trivy' | 'Clair' | 'Checkov' = isContainer ? (v.id.charCodeAt(0) % 2 === 0 ? 'Trivy' : 'Clair') : 'Checkov'
-      const { pkg, installed, fixed } = inferPackageDetails(v)
+      const raw = v as unknown as Record<string, unknown>
+      const scanner = String(raw.scanner || raw.framework || v.framework_id || '--')
+      const fixed = String(raw.fixed_version || v.remediation || '--')
+      const installed = String(raw.installed_version || '--')
+      const pkg = String(raw.package_name || v.resource_name || '--')
+      const cvss = typeof raw.cvss_score === 'number' ? raw.cvss_score : (typeof raw.score === 'number' ? raw.score : 0)
+
       return {
-        id: v.id, cve_id: v.rule_id, scanner, package_name: pkg, installed_version: installed, fixed_version: fixed,
-        cvss_score: inferCvssScore(v), severity: v.severity, resource_name: v.resource_name, resource_type: v.resource_type,
-        namespace: v.namespace, description: v.description, remediation: v.remediation,
-        detected_at: v.detected_at || 'Continuous Static Scan', patch_available: true,
+        id: v.id,
+        cve_id: v.rule_id,
+        scanner,
+        package_name: pkg,
+        installed_version: installed,
+        fixed_version: fixed,
+        cvss_score: cvss,
+        severity: v.severity,
+        resource_name: v.resource_name,
+        resource_type: v.resource_type,
+        namespace: v.namespace,
+        description: v.description,
+        remediation: v.remediation,
+        detected_at: v.detected_at || '--',
+        patch_available: Boolean(fixed && fixed !== '--'),
       }
     })
   })
@@ -211,28 +211,42 @@ export function useDevSecOps() {
   async function patchVulnerability(finding: CveFinding) {
     isPatching.value = true
     try {
+      await complianceApi.remediateViolation(finding.id)
       statusMessage.value = {
         type: 'success',
         text: `Remediation initiated: Automated PR opened to update package ${finding.package_name} to ${finding.fixed_version} on ${finding.resource_name}.`,
+      }
+    } catch (err: unknown) {
+      statusMessage.value = {
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to remediate vulnerability',
       }
     } finally {
       isPatching.value = false
     }
   }
 
-  function rotateSecret(secret: SecretAuditItem) {
-    const idx = secretsAuditList.value.findIndex((s) => s.id === secret.id)
-    if (idx !== -1) {
-      secretsAuditList.value[idx] = {
-        ...secretsAuditList.value[idx],
-        status: 'COMPLIANT',
-        exposure_detail: 'Secret rotated via HashiCorp Vault dynamic engine. New token injected via ESO.',
-        days_until_expiry: 90,
+  async function rotateSecret(secret: SecretAuditItem) {
+    try {
+      await securityApi.rotateKMSKey()
+      const idx = secretsAuditList.value.findIndex((s) => s.id === secret.id)
+      if (idx !== -1) {
+        secretsAuditList.value[idx] = {
+          ...secretsAuditList.value[idx],
+          status: 'COMPLIANT',
+          exposure_detail: 'Secret rotated via HashiCorp Vault dynamic engine. New token injected via ESO.',
+          days_until_expiry: 90,
+        }
       }
-    }
-    statusMessage.value = {
-      type: 'success',
-      text: `Successfully rotated secret ${secret.name} in namespace ${secret.namespace} via HashiCorp Vault.`,
+      statusMessage.value = {
+        type: 'success',
+        text: `Successfully rotated secret ${secret.name} in namespace ${secret.namespace} via HashiCorp Vault.`,
+      }
+    } catch (err: unknown) {
+      statusMessage.value = {
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to rotate secret',
+      }
     }
   }
 

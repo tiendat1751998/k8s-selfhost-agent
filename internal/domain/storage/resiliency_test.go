@@ -5,7 +5,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 )
 
 func TestCephOSDStatus_HealthAndRepair(t *testing.T) {
@@ -91,14 +90,8 @@ func TestMinIOScannerTuning_Validation(t *testing.T) {
 	}
 }
 
-func TestIOTracker_CacheLinePaddingAndConcurrency(t *testing.T) {
+func TestIOTracker_OperationsAndConcurrency(t *testing.T) {
 	tracker := NewIOTracker()
-
-	// Verify struct size and padding
-	size := unsafe.Sizeof(*tracker)
-	if size < 64 {
-		t.Fatalf("expected IOTracker size >= 64 bytes for cache line isolation, got %d", size)
-	}
 
 	tracker.RecordClientIOPS(2500)
 	if got := tracker.GetClientIOPS(); got != 2500 {

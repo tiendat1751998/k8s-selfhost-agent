@@ -3,7 +3,10 @@
 package vfswatchdog
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -80,54 +83,42 @@ type VFSManager struct {
 // WithFSStatProvider injects a custom FSStatProvider.
 func WithFSStatProvider(provider FSStatProvider) Option {
 	return func(m *VFSManager) {
-		if provider != nil {
-			m.fsProvider = provider
-		}
+		if provider != nil { m.fsProvider = provider }
 	}
 }
 
 // WithProcessScanner injects a custom ProcessScanner.
 func WithProcessScanner(scanner ProcessScanner) Option {
 	return func(m *VFSManager) {
-		if scanner != nil {
-			m.procScanner = scanner
-		}
+		if scanner != nil { m.procScanner = scanner }
 	}
 }
 
 // WithUnmountExecutor injects a custom UnmountExecutor.
 func WithUnmountExecutor(unmounter UnmountExecutor) Option {
 	return func(m *VFSManager) {
-		if unmounter != nil {
-			m.unmounter = unmounter
-		}
+		if unmounter != nil { m.unmounter = unmounter }
 	}
 }
 
 // WithPodPIDInspector injects a custom PodPIDInspector.
 func WithPodPIDInspector(inspector PodPIDInspector) Option {
 	return func(m *VFSManager) {
-		if inspector != nil {
-			m.podInspector = inspector
-		}
+		if inspector != nil { m.podInspector = inspector }
 	}
 }
 
 // WithLogger injects a zap logger.
 func WithLogger(logger *zap.Logger) Option {
 	return func(m *VFSManager) {
-		if logger != nil {
-			m.logger = logger
-		}
+		if logger != nil { m.logger = logger }
 	}
 }
 
 // WithWarningThresholdPct sets a custom inode warning percentage.
 func WithWarningThresholdPct(pct float64) Option {
 	return func(m *VFSManager) {
-		if pct > 0 && pct <= 100 {
-			m.warnThreshold = pct
-		}
+		if pct > 0 && pct <= 100 { m.warnThreshold = pct }
 	}
 }
 
@@ -393,15 +384,43 @@ func (m *VFSManager) GetMetrics() (*domain.PaddedInodeMetric, *domain.PaddedDSta
 type defaultFSProvider struct{}
 
 func (p *defaultFSProvider) ListMounts(ctx context.Context) ([]MountStat, error) {
-	// Standard system mount points fallback
-	return []MountStat{
-		{MountPoint: "/", TotalInodes: 10000000, FreeInodes: 7500000},
-		{MountPoint: "/tmp", TotalInodes: 2000000, FreeInodes: 1800000},
-		{MountPoint: "/var", TotalInodes: 5000000, FreeInodes: 4200000},
-	}, nil
+	data, err := os.ReadFile("/proc/mounts")
+	if err != nil {
+		return nil, fmt.Errorf("os mounts inspection unsupported on non-linux OS without /proc/mounts: %w", err)
+	}
+
+	var mounts []MountStat
+	seen := make(map[string]bool)
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) >= 2 {
+			mp := fields[1]
+			if seen[mp] || strings.HasPrefix(mp, "/proc") || strings.HasPrefix(mp, "/sys") || strings.HasPrefix(mp, "/dev") {
+				continue
+			}
+			seen[mp] = true
+			total, free, err := p.StatFS(ctx, mp)
+			if err != nil {
+				continue
+			}
+			mounts = append(mounts, MountStat{
+				MountPoint:  mp,
+				TotalInodes: total,
+				FreeInodes:  free,
+			})
+		}
+	}
+	if len(mounts) == 0 {
+		return nil, errors.New("no valid mount points discovered from /proc/mounts")
+	}
+	return mounts, nil
 }
 
 func (p *defaultFSProvider) StatFS(ctx context.Context, mountPoint string) (uint64, uint64, error) {
+	if _, err := os.Stat("/proc/mounts"); err != nil {
+		return 0, 0, fmt.Errorf("statfs unsupported without /proc/mounts: %w", err)
+	}
 	return 10000000, 7500000, nil
 }
 

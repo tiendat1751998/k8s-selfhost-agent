@@ -16,11 +16,7 @@ HARDWARE BOTTLENECK & FAILURE MODE SRE ENGINEERING NOTE:
    IRQs are handled synchronously. Adaptive interrupt moderation (ethtool -C adaptive-rx on)
    and PCIe ring buffer coalescing prevent kernel softirq storms. Socket buffer misconfigurations
    (SO_SNDBUF, SO_RCVBUF) starve the NIC DMA engine, causing packet drops in kernel ring buffers.
-2. CPU Cache-Line Bouncing & MESI/MOESI Invalidation:
-   When multiple CPU cores concurrently update shared atomic metrics, placing adjacent
-   atomic variables on the same 64-byte cache line triggers false sharing. Cache lines bounce
-   across L1/L2 caches via interconnects (UPI/Infinity Fabric), costing 40-100 cycles per atomic write.
-   Structs here enforce 64-byte cache-line padding (_ [56]byte) between independent atomic counters.
+
 3. Go GC P99 Latency Tails:
    High-frequency lag polling and consumer metadata allocations trigger Go concurrent mark-and-sweep
    GC pauses and write barrier overhead, elevating P99 latency past 50ms. Zero-allocation ring
@@ -221,23 +217,15 @@ func DefaultKafkaKernelProfile() KernelSysctlProfile {
 	}
 }
 
-// PaddedThroughputMetric provides lock-free, cache-line padded operational metrics.
-// 64-byte padding prevents MESI/MOESI cache line bouncing across concurrent CPU cores.
+// PaddedThroughputMetric provides operational metrics.
 type PaddedThroughputMetric struct {
-	activeOperations atomic.Int64
-	_                [56]byte
-
-	totalInspections atomic.Uint64
-	_                [56]byte
-
-	rebalanceStormsMitigated atomic.Uint64
-	_                        [56]byte
-
+	activeOperations          atomic.Int64
+	totalInspections          atomic.Uint64
+	rebalanceStormsMitigated  atomic.Uint64
 	watermarkRescuesTriggered atomic.Uint64
-	_                         [56]byte
 }
 
-// NewPaddedThroughputMetric allocates a new cache-line padded metric structure.
+// NewPaddedThroughputMetric allocates a new throughput metric structure.
 func NewPaddedThroughputMetric() *PaddedThroughputMetric {
 	return &PaddedThroughputMetric{}
 }
@@ -265,12 +253,10 @@ type SREAuditRecord struct {
 	Target    string `json:"target"`
 }
 
-// PaddedSREQueue is a bounded lock-free/low-contention ring buffer for SRE telemetry.
+// PaddedSREQueue is a bounded ring buffer for SRE telemetry.
 type PaddedSREQueue struct {
 	head     atomic.Uint64
-	_        [56]byte
 	tail     atomic.Uint64
-	_        [56]byte
 	capacity uint64
 	buffer   []SREAuditRecord
 }

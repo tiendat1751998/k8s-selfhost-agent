@@ -152,7 +152,7 @@ function handleSave() {
         <div class="setting-meta">
           <label class="setting-title" for="toggle-auto-ingress">Auto-Provision Dedicated Ingress Subdomain</label>
           <p class="setting-desc">
-            Allocate an isolated Traefik/Ingress endpoint per newly registered tenant (e.g. tenant-name.cluster.local).
+            Allocate an isolated Traefik/Ingress endpoint per newly registered tenant (e.g. tenant-name.ingress).
           </p>
         </div>
         <div class="setting-control-col">

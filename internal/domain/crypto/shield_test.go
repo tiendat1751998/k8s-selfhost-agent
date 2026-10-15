@@ -4,17 +4,12 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/datdt/k8sselfhost/internal/domain/crypto"
 )
 
-func TestPaddedCounter_64ByteCacheLineAlignment(t *testing.T) {
+func TestPaddedCounter_Operations(t *testing.T) {
 	var c crypto.PaddedCounter
-	size := unsafe.Sizeof(c)
-	if size != 64 {
-		t.Fatalf("expected PaddedCounter size to be 64 bytes for CPU cache-line alignment, got %d", size)
-	}
 
 	c.Store(10)
 	if val := c.Load(); val != 10 {
@@ -30,7 +25,7 @@ func TestPaddedCounter_64ByteCacheLineAlignment(t *testing.T) {
 	}
 }
 
-func TestPaddedCounter_HighConcurrencyMESISafety(t *testing.T) {
+func TestPaddedCounter_HighConcurrencySafety(t *testing.T) {
 	var c crypto.PaddedCounter
 	const workers = 32
 	const iterations = 1000

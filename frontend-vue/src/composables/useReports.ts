@@ -160,7 +160,14 @@ export function useReports() {
   })
   const storageFootprint = computed(() => {
     if (reports.value.length === 0) return null
-    return `${(reports.value.length * 1.45).toFixed(2)} MB`
+    const totalBytes = reports.value.reduce((acc, r) => {
+      const bytes = typeof (r as any).size_bytes === 'number' ? (r as any).size_bytes : 0
+      return acc + bytes
+    }, 0)
+    if (totalBytes > 0) {
+      return `${(totalBytes / (1024 * 1024)).toFixed(2)} MB`
+    }
+    return '--'
   })
 
   function openPreview(report: PlatformReport) {
@@ -248,24 +255,14 @@ export function useReports() {
 
   async function generateExecutiveReport(title = 'Executive Infrastructure Security & Compliance Digest', clusterScope = 'all-clusters') {
     isSubmitting.value = true
-    const rep: PlatformReport = {
-      id: `exec-${Date.now().toString().slice(-4)}`,
-      title,
-      type: 'compliance',
-      format: 'pdf',
-      status: 'completed',
-      file_url: '/downloads/reports/executive-summary.pdf',
-      created_by: 'executive-ciso@enterprise.io',
-      created_at: new Date().toISOString(),
-      expires_at: new Date(Date.now() + 90 * 86400000).toISOString()
-    }
     try {
-      const created = await reportsApi.generateReport({ title: rep.title, type: rep.type, format: rep.format })
-      reports.value.unshift((created as PlatformReport) || rep)
+      const created = await reportsApi.generateReport({ title, type: 'compliance', format: 'pdf' })
+      reports.value.unshift(created as PlatformReport)
       showFeedback(`Executive Digest compiled for scope "${clusterScope}".`)
-    } catch {
-      reports.value.unshift(rep)
-      showFeedback('Executive Digest compiled and signed.')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate executive report'
+      showFeedback(msg)
+      throw err
     } finally {
       isSubmitting.value = false
     }
@@ -274,46 +271,53 @@ export function useReports() {
   // SLA monthly uptime certificates engine
   async function generateSlaCertificate(clusterId = 'prod-cluster-mesh', month = 'Current Month') {
     isSubmitting.value = true
-    const certReport: PlatformReport = {
-      id: `sla-${Date.now().toString(36)}`,
-      title: `SLA 99.99% Availability Certificate - ${clusterId} (${month})`,
-      type: 'operational',
-      format: 'pdf',
-      status: 'completed',
-      file_url: `/downloads/certificates/sla-${clusterId}.pdf`,
-      created_by: 'sla-auditor@enterprise.io',
-      created_at: new Date().toISOString(),
-      expires_at: new Date(Date.now() + 365 * 86400000).toISOString()
-    }
+    const certTitle = `SLA 99.99% Availability Certificate - ${clusterId} (${month})`
     try {
-      const created = await reportsApi.generateReport({ title: certReport.title, type: certReport.type, format: certReport.format })
-      reports.value.unshift((created as PlatformReport) || certReport)
+      const created = await reportsApi.generateReport({ title: certTitle, type: 'operational', format: 'pdf' })
+      reports.value.unshift(created as PlatformReport)
       showFeedback('SLA Monthly Uptime Certificate issued (99.99% Verified).')
-    } catch {
-      reports.value.unshift(certReport)
-      showFeedback('SLA Monthly Uptime Certificate issued (99.99% Verified).')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate SLA certificate'
+      showFeedback(msg)
+      throw err
     } finally {
       isSubmitting.value = false
     }
   }
 
-  function saveSchedule(newSched: Omit<ReportSchedule, 'id' | 'createdAt'>) {
+  async function saveSchedule(newSched: Omit<ReportSchedule, 'id' | 'createdAt'>) {
     const createdSched: ReportSchedule = { ...newSched, id: `sched-${Date.now().toString(36)}`, createdAt: new Date().toISOString() }
-    schedules.value.unshift(createdSched)
-    showScheduleModal.value = false
-    showFeedback(`Automated schedule "${createdSched.title}" saved.`)
+    try {
+      await reportsApi.saveSchedule(createdSched)
+      schedules.value.unshift(createdSched)
+      showScheduleModal.value = false
+      showFeedback(`Automated schedule "${createdSched.title}" saved.`)
+    } catch (err: unknown) {
+      showFeedback(err instanceof Error ? err.message : 'Failed to save automated schedule')
+    }
   }
 
-  function deleteSchedule(id: string) {
-    schedules.value = schedules.value.filter(s => s.id !== id)
-    showFeedback('Automated schedule removed.')
+  async function deleteSchedule(id: string) {
+    try {
+      await reportsApi.deleteSchedule(id)
+      schedules.value = schedules.value.filter(s => s.id !== id)
+      showFeedback('Automated schedule removed.')
+    } catch (err: unknown) {
+      showFeedback(err instanceof Error ? err.message : 'Failed to remove schedule')
+    }
   }
 
-  function toggleSchedule(id: string) {
+  async function toggleSchedule(id: string) {
     const s = schedules.value.find(item => item.id === id)
     if (s) {
-      s.enabled = !s.enabled
-      showFeedback(`Schedule "${s.title}" ${s.enabled ? 'enabled' : 'paused'}.`)
+      const nextState = !s.enabled
+      try {
+        await reportsApi.toggleSchedule(id, nextState)
+        s.enabled = nextState
+        showFeedback(`Schedule "${s.title}" ${s.enabled ? 'enabled' : 'paused'}.`)
+      } catch (err: unknown) {
+        showFeedback(err instanceof Error ? err.message : 'Failed to toggle schedule')
+      }
     }
   }
 

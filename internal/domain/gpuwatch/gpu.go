@@ -110,15 +110,12 @@ type GPUCardTelemetry struct {
 	LastPolledAt    time.Time      `json:"last_polled_at"`
 }
 
-// PaddedGPUCounters features explicit 64-byte cache-line padding to eliminate
-// false sharing across multi-core CPU threads under high-frequency NVML polling (MESI/MOESI protocol).
-// Total struct size = 32 bytes (4x uint64) + 32 bytes pad = 64 bytes (1 L1 cache line).
+// PaddedGPUCounters tracks GPU telemetry counters atomically.
 type PaddedGPUCounters struct {
 	vramUsedBytes     atomic.Uint64
 	kvCacheUsageMilli atomic.Uint64 // Permille: 85000 = 85.000%
 	pollCount         atomic.Uint64
 	faultCount        atomic.Uint64
-	_                 [32]byte // 64-byte cache line alignment padding
 }
 
 // RecordPoll atomically updates current telemetry counters.

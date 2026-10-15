@@ -317,7 +317,7 @@ export async function getFencingPreflight(clusterId: string, nodeName: string): 
 
     const conf = typeof rawRca.confidence === 'number' && !isNaN(rawRca.confidence)
       ? rawRca.confidence
-      : (typeof raw.confidence === 'number' ? raw.confidence : (raw.rca?.confidence ?? 0.94))
+      : (typeof raw.confidence === 'number' ? raw.confidence : (raw.rca?.confidence ?? 0))
 
     dynamic_rca = {
       node_name: rawRca.node_name || raw.node_name || nodeName,

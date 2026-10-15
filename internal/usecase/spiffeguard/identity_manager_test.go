@@ -276,3 +276,34 @@ func TestConcurrentManagerLoad(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestFetchCurrentSVID_CryptoRandomSerial(t *testing.T) {
+	pipeDialer := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		c1, _ := net.Pipe()
+		return c1, nil
+	}
+
+	mgr := NewIdentityManager(IdentityManagerConfig{}, WithUDSDialer(pipeDialer))
+	ctx := context.Background()
+
+	svid, err := mgr.InspectSVID(ctx, "/tmp/test.sock")
+	if err != nil {
+		t.Fatalf("failed to fetch SVID: %v", err)
+	}
+	if svid == nil {
+		t.Fatal("expected non-nil SVID")
+	}
+
+	if len(svid.CertSerial) != 32 {
+		t.Errorf("expected 32-character hex serial number (128-bit), got %q (len=%d)", svid.CertSerial, len(svid.CertSerial))
+	}
+
+	mgr2 := NewIdentityManager(IdentityManagerConfig{}, WithUDSDialer(pipeDialer))
+	svid2, err := mgr2.InspectSVID(ctx, "/tmp/test.sock")
+	if err != nil {
+		t.Fatalf("failed to fetch second SVID: %v", err)
+	}
+	if svid.CertSerial == svid2.CertSerial {
+		t.Errorf("expected distinct crypto random serials, got identical %s", svid.CertSerial)
+	}
+}

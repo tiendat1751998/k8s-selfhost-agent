@@ -52,9 +52,9 @@ export interface ConnectFormData extends CreateToolRequest {
 }
 
 export const PRESET_CONNECTORS: ConnectorPreset[] = [
-  { id: 'argocd', name: 'ArgoCD', category: 'gitops', icon: 'layers', defaultEndpoint: 'https://argocd.corp.internal', description: 'GitOps CD for Kubernetes', authType: 'token' },
+  { id: 'argocd', name: 'ArgoCD', category: 'gitops', icon: 'layers', defaultEndpoint: '', description: 'GitOps CD for Kubernetes', authType: 'token' },
   { id: 'prometheus', name: 'Prometheus', category: 'monitoring', icon: 'activity', defaultEndpoint: 'http://prometheus-k8s.monitoring.svc:9090', description: 'Monitoring & alerting toolkit', authType: 'basic' },
-  { id: 'vault', name: 'HashiCorp Vault', category: 'secrets', icon: 'lock', defaultEndpoint: 'https://vault.corp.internal:8200', description: 'Secrets & encryption manager', authType: 'token' },
+  { id: 'vault', name: 'HashiCorp Vault', category: 'secrets', icon: 'lock', defaultEndpoint: '', description: 'Secrets & encryption manager', authType: 'token' },
   { id: 'crossplane', name: 'Crossplane', category: 'compute', icon: 'zap', defaultEndpoint: 'https://crossplane.system.svc', description: 'Universal control plane', authType: 'token' },
   { id: 'cilium', name: 'Cilium', category: 'mesh', icon: 'shield', defaultEndpoint: 'http://cilium-agent.kube-system.svc:9879', description: 'eBPF networking & security', authType: 'mtls' },
   { id: 'istio', name: 'Istio Service Mesh', category: 'mesh', icon: 'globe', defaultEndpoint: 'http://istiod.istio-system.svc:15014', description: 'Service mesh traffic control', authType: 'mtls' }
@@ -269,13 +269,13 @@ export function useEcosystem() {
   async function handleSyncWebhook(tool: DetectedTool) {
     syncing.value = tool.id
     try {
-      await new Promise(resolve => setTimeout(resolve, 600))
+      await ecosystemApi.syncWebhook(tool.id)
       showToast(`Webhook sync dispatched for ${tool.name}`)
       if (selectedToolForHealth.value?.id === tool.id) {
         webhookHistory.value.unshift({
           id: `wh-${Date.now()}`, toolId: tool.id, event: 'manual_sync_trigger', status: 'success',
           timestamp: new Date().toISOString(), durationMs: 0,
-          payloadSize: '1.4 KB', details: 'Dispatched real-time status probe to ingress endpoint.'
+          payloadSize: '--', details: 'Dispatched real-time status probe to ingress endpoint.'
         })
       }
     } catch (err: unknown) {

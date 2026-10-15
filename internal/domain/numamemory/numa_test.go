@@ -6,25 +6,23 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"unsafe"
 
 	"github.com/datdt/k8sselfhost/internal/domain/numamemory"
 )
 
-func TestNUMADomain_CacheLinePadding(t *testing.T) {
-	// Verify 64-byte alignment and sizing to prevent false sharing across CPU cores under MESI/MOESI protocol.
+func TestNUMADomain_CounterInitialization(t *testing.T) {
 	spinlockCounter := numamemory.NUMASpinlockCounter{}
 	dirtyTracker := numamemory.DirtyPageTracker{}
 	hpMetric := numamemory.HugePageAllocationMetric{}
 
-	if size := unsafe.Sizeof(spinlockCounter); size != 64 {
-		t.Fatalf("expected NUMASpinlockCounter size to be 64 bytes (1 cache line), got %d", size)
+	if spinlockCounter.SpinlockCount != 0 {
+		t.Fatalf("expected 0, got %d", spinlockCounter.SpinlockCount)
 	}
-	if size := unsafe.Sizeof(dirtyTracker); size != 64 {
-		t.Fatalf("expected DirtyPageTracker size to be 64 bytes (1 cache line), got %d", size)
+	if dirtyTracker.DirtyBytes != 0 {
+		t.Fatalf("expected 0, got %d", dirtyTracker.DirtyBytes)
 	}
-	if size := unsafe.Sizeof(hpMetric); size != 64 {
-		t.Fatalf("expected HugePageAllocationMetric size to be 64 bytes (1 cache line), got %d", size)
+	if hpMetric.AllocatedPages != 0 {
+		t.Fatalf("expected 0, got %d", hpMetric.AllocatedPages)
 	}
 }
 

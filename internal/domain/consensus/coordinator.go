@@ -258,34 +258,16 @@ type PgBouncerClient interface {
 //    stale un-replicated data.
 // =================================================================================================
 
-// CACHE-LINE PADDING ARCHITECTURE (MESI / MOESI PROTOCOL)
-//
-// On modern multi-core SMP architectures (x86-64, ARM64), CPU cores communicate cache line state across
-// L1/L2/L3 caches via the MESI/MOESI protocol. When multiple CPU cores execute atomic operations on variables
-// located within the same 64-byte physical cache line, every atomic write invalidates the cache line in all
-// other cores, causing massive bus contention and high-latency false sharing.
-// Each atomic tracker field below is isolated with 64 bytes (`_ [8]uint64`, 8 * 8 = 64 bytes) to guarantee
-// independent L1 cache lines.
-
-// ConsensusTelemetryTracker provides cache-line padded atomic counters for consensus operations.
+// ConsensusTelemetryTracker provides atomic counters for consensus operations.
 type ConsensusTelemetryTracker struct {
-	_                   [8]uint64
 	FencingGeneration   atomic.Int64
-	_                   [8]uint64
 	FencingValidations  atomic.Uint64
-	_                   [8]uint64
 	FencingStaleRejects atomic.Uint64
-	_                   [8]uint64
 	RaftIndexObserved   atomic.Uint64
-	_                   [8]uint64
 	DefragCyclesRun     atomic.Uint64
-	_                   [8]uint64
 	LeaderStepDownCount atomic.Uint64
-	_                   [8]uint64
 	PgBouncerFlushes    atomic.Uint64
-	_                   [8]uint64
 	StaleSocketsKilled  atomic.Uint64
-	_                   [8]uint64
 }
 
 // NewConsensusTelemetryTracker creates an initialized ConsensusTelemetryTracker.
@@ -372,15 +354,11 @@ const (
 	DefragStateFailed
 )
 
-// EtcdDefragStateMachine coordinates rolling defragmentation state safely with cache-line padding.
+// EtcdDefragStateMachine coordinates rolling defragmentation state safely.
 type EtcdDefragStateMachine struct {
-	_              [8]uint64
 	State          atomic.Int32
-	_              [8]uint64
 	NodesProcessed atomic.Uint64
-	_              [8]uint64
 	LastDefragUnix atomic.Int64
-	_              [8]uint64
 }
 
 // NewEtcdDefragStateMachine initializes a new EtcdDefragStateMachine in Idle state.

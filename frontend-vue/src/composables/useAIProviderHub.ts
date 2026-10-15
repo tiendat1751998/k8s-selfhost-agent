@@ -1,4 +1,5 @@
 import { ref, computed, onMounted } from 'vue'
+import { api } from '../api/client'
 import {
   aiApi,
   type AIProvider,
@@ -136,6 +137,12 @@ export function useAIProviderHub() {
   const showRoutingModal = ref(false)
   const selectedRoutingProvider = ref<AIProvider | null>(null)
 
+  const toastMessage = ref<{ text: string; type: 'success' | 'error' } | null>(null)
+  const toast = {
+    success: (text: string) => { toastMessage.value = { text, type: 'success' } },
+    error: (text: string) => { toastMessage.value = { text, type: 'error' } },
+  }
+
   function initProviderState(p: AIProvider) {
     if (!quotas.value[p.name]) {
       quotas.value[p.name] = {
@@ -154,8 +161,8 @@ export function useAIProviderHub() {
       const baseMs = parseInt(p.latency || '0') || 0
       telemetries.value[p.name] = {
         currentMs: baseMs,
-        p95Ms: baseMs > 0 ? Math.round(baseMs * 1.4) : 0,
-        p99Ms: baseMs > 0 ? Math.round(baseMs * 2.1) : 0,
+        p95Ms: (p as any).p95_latency || (p as any).p95Ms || 0,
+        p99Ms: (p as any).p99_latency || (p as any).p99Ms || 0,
         errorRate: 0,
         history: [],
       }
@@ -332,13 +339,14 @@ export function useAIProviderHub() {
   async function deleteProvider(name: string) {
     try {
       await aiApi.deleteProvider(name)
-    } catch {
-      // best-effort cleanup
+      providers.value = providers.value.filter(p => p.name !== name)
+      delete quotas.value[name]
+      delete telemetries.value[name]
+      delete fallbackRoutes.value[name]
+      toast.success(`Provider "${name}" deleted successfully`)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete provider')
     }
-    providers.value = providers.value.filter(p => p.name !== name)
-    delete quotas.value[name]
-    delete telemetries.value[name]
-    delete fallbackRoutes.value[name]
   }
 
   function openMetricsDrawer(provider: AIProvider) {
@@ -361,7 +369,7 @@ export function useAIProviderHub() {
     selectedRoutingProvider.value = null
   }
 
-  function updateFallbackRoute(providerName: string, partial: Partial<FallbackRoute>) {
+  async function updateFallbackRoute(providerName: string, partial: Partial<FallbackRoute>) {
     if (!fallbackRoutes.value[providerName]) {
       fallbackRoutes.value[providerName] = {
         providerName,
@@ -372,7 +380,14 @@ export function useAIProviderHub() {
         mode: 'auto',
       }
     }
-    Object.assign(fallbackRoutes.value[providerName], partial)
+    const updated = { ...fallbackRoutes.value[providerName], ...partial }
+    try {
+      await api.put(`/ai/providers/${encodeURIComponent(providerName)}/routing`, updated)
+      Object.assign(fallbackRoutes.value[providerName], partial)
+      toast.success(`Routing updated for ${providerName}`)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update fallback route')
+    }
   }
 
   function applyPreset(presetId: string) {
@@ -438,5 +453,7 @@ export function useAIProviderHub() {
     openRoutingModal,
     closeRoutingModal,
     updateFallbackRoute,
+    toast,
+    toastMessage,
   }
 }

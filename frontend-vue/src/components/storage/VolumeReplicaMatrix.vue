@@ -17,7 +17,7 @@ const replicaSlots = computed<VolumeReplica[]>(() => {
   const list = [...(props.volume.replicas || [])]
   while (list.length < 3) {
     const slotIdx = list.length + 1
-    list.push({ node: `node-0${slotIdx}.cluster.local`, status: 'faulted', mode: 'Offline' })
+    list.push({ node: `node-0${slotIdx}`, status: 'faulted', mode: 'Offline' })
   }
   return list.slice(0, 3)
 })

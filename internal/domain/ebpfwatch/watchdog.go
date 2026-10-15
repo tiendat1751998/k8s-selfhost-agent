@@ -140,15 +140,11 @@ func CheckSymbolSafety(hookType ProbeHookType, symbol string) error {
 	return nil
 }
 
-// PaddedRingBufferCounter provides a 64-byte cache-line aligned atomic counter set.
-// On modern multi-core SMP x86_64 and ARM64 CPUs, cache lines are exactly 64 bytes.
-// Grouping high-frequency atomic updates with explicit padding isolates write traffic
-// and eliminates MESI/MOESI false sharing cache-invalidation penalties between cores.
+// PaddedRingBufferCounter provides an atomic counter set for eBPF ring buffer telemetry.
 type PaddedRingBufferCounter struct {
-	TotalEvents atomic.Uint64 // 8 bytes (offset 0)
-	LostEvents  atomic.Uint64 // 8 bytes (offset 8)
-	ProcTimeNs  atomic.Int64  // 8 bytes (offset 16)
-	_           [40]byte      // 40 bytes padding (offset 24..63) -> exactly 64 bytes
+	TotalEvents atomic.Uint64
+	LostEvents  atomic.Uint64
+	ProcTimeNs  atomic.Int64
 }
 
 // IncTotalEvents atomically increments the total event counter.
@@ -175,12 +171,11 @@ func (c *PaddedRingBufferCounter) GetAvgProcTimeNs() int64 {
 	return c.ProcTimeNs.Load() / int64(total)
 }
 
-// PaddedSamplingController provides a 64-byte cache-line aligned controller
+// PaddedSamplingController provides an atomic controller
 // for adaptive rate limiting and lightweight fallback mode.
 type PaddedSamplingController struct {
-	SamplingRatePct atomic.Uint32 // 4 bytes (offset 0)
-	LightweightMode atomic.Bool   // 4 bytes (offset 4, sync/atomic.Bool wraps uint32)
-	_               [56]byte      // 56 bytes padding (offset 8..63) -> exactly 64 bytes
+	SamplingRatePct atomic.Uint32
+	LightweightMode atomic.Bool
 }
 
 // SetSamplingRate sets the adaptive event sampling rate percentage (1..100).

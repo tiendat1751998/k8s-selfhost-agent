@@ -5,32 +5,25 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"unsafe"
 
 	domain "github.com/datdt/k8sselfhost/internal/domain/vfswatchdog"
 	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
-func TestPaddedMetrics_CacheLineAlignment(t *testing.T) {
-	// Modern multi-core x86_64 and ARM64 CPU cache line size is 64 bytes.
-	const expectedCacheLineSize = 64
-
-	inodeMetricSize := unsafe.Sizeof(domain.PaddedInodeMetric{})
-	if inodeMetricSize != expectedCacheLineSize {
-		t.Fatalf("PaddedInodeMetric size = %d bytes; want %d bytes (64-byte cache-line padded)",
-			inodeMetricSize, expectedCacheLineSize)
+func TestPaddedMetrics_Initialization(t *testing.T) {
+	inodeMetric := domain.PaddedInodeMetric{}
+	if inodeMetric.ScannedFiles.Load() != 0 {
+		t.Fatalf("expected 0, got %d", inodeMetric.ScannedFiles.Load())
 	}
 
-	dstateMetricSize := unsafe.Sizeof(domain.PaddedDStateMetric{})
-	if dstateMetricSize != expectedCacheLineSize {
-		t.Fatalf("PaddedDStateMetric size = %d bytes; want %d bytes (64-byte cache-line padded)",
-			dstateMetricSize, expectedCacheLineSize)
+	dstateMetric := domain.PaddedDStateMetric{}
+	if dstateMetric.DStateProcessesDetected.Load() != 0 {
+		t.Fatalf("expected 0, got %d", dstateMetric.DStateProcessesDetected.Load())
 	}
 
-	pidMetricSize := unsafe.Sizeof(domain.PaddedPIDMetric{})
-	if pidMetricSize != expectedCacheLineSize {
-		t.Fatalf("PaddedPIDMetric size = %d bytes; want %d bytes (64-byte cache-line padded)",
-			pidMetricSize, expectedCacheLineSize)
+	pidMetric := domain.PaddedPIDMetric{}
+	if pidMetric.TotalPIDs.Load() != 0 {
+		t.Fatalf("expected 0, got %d", pidMetric.TotalPIDs.Load())
 	}
 }
 
