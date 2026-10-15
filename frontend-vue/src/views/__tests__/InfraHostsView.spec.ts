@@ -94,4 +94,28 @@ describe('Zero-Neon Redesign & Hosts Architecture Verification', () => {
       expect(lines).toBeLessThan(500)
     }
   })
+
+  it('verifies toolbar controls and responsive styling for 1440px desktop viewport without clipping', () => {
+    const controlsBar = readFileSync(
+      resolve(__dirname, '../../components/hosts/HostControlsBar.vue'),
+      'utf-8'
+    )
+    expect(controlsBar).toContain('title="Filter Online Hosts"')
+    expect(controlsBar).toContain('aria-label="Filter Online Hosts"')
+    expect(controlsBar).toContain('title="Filter Offline Hosts"')
+    expect(controlsBar).toContain('aria-label="Filter Offline Hosts"')
+    expect(controlsBar).toContain('Online <span class="pill-count">')
+    expect(controlsBar).toContain('Offline <span class="pill-count">')
+
+    const cssContent = readFileSync(
+      resolve(__dirname, '../../assets/styles/views/infra-hosts-controls.css'),
+      'utf-8'
+    )
+    // Check desktop media query constraints
+    expect(cssContent).toContain('flex: 1 1 130px;')
+    expect(cssContent).toContain('min-width: 100px;')
+    expect(cssContent).toContain('max-width: 180px;')
+    // Base and desktop toolbar-select min-width 84px
+    expect(cssContent).toContain('min-width: 84px;')
+  })
 })
