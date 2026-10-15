@@ -24,70 +24,18 @@ const emit = defineEmits<{
 
 const viewMode = ref<'grid' | 'table'>('grid')
 
-function formatBytes(bytes?: number): string {
-  if (!bytes || bytes <= 0 || isNaN(bytes)) return '0 B'
-  const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
-}
+import {
+  formatBytes,
+  formatRps,
+  isNodeDown,
+  isControlPlane,
+  getNodeStatusDotClass,
+  getNodeRole,
+  getNodeIdentifier,
+  getCpuColorClass,
+} from './overviewMobileUtils'
+import { buildSmoothSpline } from './hud/trendMath'
 
-function formatRps(val: number): string {
-  if (!val || isNaN(val)) return '0'
-  return val >= 1000 ? `${(val / 1000).toFixed(1)}k` : Math.round(val).toString()
-}
-
-function isNodeDown(node: NodeMetrics): boolean {
-  return node.status === 'down' || node.status === 'offline' || node.status === 'disconnected' || node.memory_total === 0
-}
-
-function getNodeStatusDotClass(node: NodeMetrics): string {
-  if (isNodeDown(node)) return 'dot-red'
-  if (node.cpu_percent >= 80 || node.memory_percent >= 80 || node.status === 'degraded' || node.status === 'warning') return 'dot-amber'
-  return 'dot-green'
-}
-
-function isControlPlane(node: NodeMetrics): boolean {
-  return /master|control|manager/i.test(node.role || '')
-}
-
-function getNodeRole(node: NodeMetrics): string {
-  return isControlPlane(node) ? 'control-plane' : 'worker'
-}
-
-function getNodeIdentifier(node: NodeMetrics): string {
-  const n = node as any
-  return n.ip || n.ip_address || n.internal_ip || (n.endpoint ? n.endpoint.replace(/^https?:\/\//, '').split(':')[0] : '') || node.node_id || '--'
-}
-
-function getCpuColorClass(cpu?: number): string {
-  const val = cpu || 0
-  if (val >= 80) return 'text-rose'
-  if (val >= 50) return 'text-amber'
-  return 'text-emerald'
-}
-
-function buildSmoothSpline(points: Array<{ x: number; y: number }>, smoothing = 0.18, minY = 8, maxY = 82): string {
-  if (!points || points.length === 0) return ''
-  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
-  if (points.length === 2) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)} L ${points[1].x.toFixed(1)} ${points[1].y.toFixed(1)}`
-
-  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[Math.max(0, i - 1)]
-    const p1 = points[i]
-    const p2 = points[i + 1]
-    const p3 = points[Math.min(points.length - 1, i + 2)]
-
-    const minLocalX = Math.min(p1.x, p2.x), maxLocalX = Math.max(p1.x, p2.x)
-    const cp1x = Math.max(minLocalX, Math.min(maxLocalX, p1.x + ((p2.x - p0.x) / 6) * (1 - smoothing)))
-    const cp2x = Math.max(minLocalX, Math.min(maxLocalX, p2.x - ((p3.x - p1.x) / 6) * (1 - smoothing)))
-    const cp1y = Math.max(minY, Math.min(maxY, p1.y + ((p2.y - p0.y) / 6) * (1 - smoothing)))
-    const cp2y = Math.max(minY, Math.min(maxY, p2.y - ((p3.y - p1.y) / 6) * (1 - smoothing)))
-
-    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`
-  }
-  return d
-}
 
 const latestCpu = computed(() => {
   if (props.trendHistory?.length) return props.trendHistory[props.trendHistory.length - 1].cpu || 0

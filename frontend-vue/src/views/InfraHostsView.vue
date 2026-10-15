@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useInfraHosts } from '../composables/useInfraHosts'
 import HostControlsBar from '../components/hosts/HostControlsBar.vue'
-import HostCard from '../components/hosts/HostCard.vue'
+import HostsGrid from '../components/hosts/HostsGrid.vue'
 import HostsTable from '../components/hosts/HostsTable.vue'
 import HostsMobileCards from '../components/hosts/HostsMobileCards.vue'
 import HostAddEditModal from '../components/hosts/HostAddEditModal.vue'
@@ -150,13 +150,14 @@ const {
       </div>
 
       <!-- Desktop Grid View -->
-      <div v-if="viewMode === 'grid'" class="hosts-grid desktop-only animate-fade-in">
-        <HostCard
-          v-for="host in filteredHosts"
-          :key="host.id"
-          :host="host"
-          :test-result="hostTestResults[host.id]"
-          :is-testing="testingHostId === host.id"
+      <div v-if="viewMode === 'grid'" class="desktop-only animate-fade-in">
+        <HostsGrid
+          :hosts="filteredHosts"
+          :host-test-results="hostTestResults"
+          :testing-host-id="testingHostId"
+          :get-host-type-meta="getHostTypeMeta"
+          :format-date="formatDate"
+          :format-uptime="formatUptime"
           @select="openHostDrawer"
           @test="handleTestHost"
           @edit="openEditHostModal"

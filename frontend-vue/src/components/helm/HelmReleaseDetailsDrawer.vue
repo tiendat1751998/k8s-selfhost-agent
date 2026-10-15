@@ -29,38 +29,10 @@ const emit = defineEmits<{
   (e: 'downloadManifest', filename: string, content: string): void
 }>()
 
-function getStatusType(status: string): string {
-  const s = (status || '').toLowerCase()
-  if (s.includes('deploy') || s === 'active' || s === 'success') return 'deployed'
-  if (s.includes('fail') || s.includes('error')) return 'failed'
-  if (s.includes('pend') || s.includes('upgrad') || s.includes('install')) return 'pending'
-  if (s.includes('super') || s.includes('uninst')) return 'superseded'
-  return 'unknown'
-}
+import { getStatusType, formatReleaseDate, getValuesString } from './helmDrawerUtils'
 
-function formatReleaseDate(dateStr?: string): string {
-  if (!dateStr) return '—'
-  try {
-    const d = new Date(dateStr)
-    if (isNaN(d.getTime())) return dateStr
-    const diff = Date.now() - d.getTime()
-    const mins = Math.floor(diff / 60000)
-    if (mins < 1) return 'Just now'
-    if (mins < 60) return `${mins}m ago`
-    const hours = Math.floor(mins / 60)
-    if (hours < 24) return `${hours}h ago`
-    const days = Math.floor(Math.abs(Date.now() - d.getTime()) / (1000 * 60 * 60 * 24))
-    return days < 30 ? `${days}d ago` : d.toLocaleDateString()
-  } catch {
-    return dateStr
-  }
-}
-
-function getValuesString(): string {
-  if (!props.release?.values) return ''
-  return typeof props.release.values === 'string'
-    ? props.release.values
-    : JSON.stringify(props.release.values, null, 2)
+function getValues(): string {
+  return getValuesString(props.release?.values)
 }
 </script>
 
@@ -200,20 +172,20 @@ function getValuesString(): string {
               <button
                 type="button"
                 class="btn-cyber btn-outline-cyan btn-xs"
-                @click="emit('copyValues', getValuesString())"
+                @click="emit('copyValues', getValues())"
               >
                 <BaseIcon :name="valuesCopied ? 'check' : 'copy'" size="xs" /> <span>{{ valuesCopied ? 'Copied!' : 'Copy YAML' }}</span>
               </button>
               <button
                 type="button"
                 class="btn-cyber btn-secondary btn-xs"
-                @click="emit('downloadValues', `${release.name}-values.yaml`, getValuesString())"
+                @click="emit('downloadValues', `${release.name}-values.yaml`, getValues())"
               >
                 <BaseIcon name="download" size="xs" /> <span>Download</span>
               </button>
             </div>
           </div>
-          <pre class="cyber-code-block yaml-display">{{ getValuesString() || '# No values configured' }}</pre>
+          <pre class="cyber-code-block yaml-display">{{ getValues() || '# No values configured' }}</pre>
         </div>
       </div>
 

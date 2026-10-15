@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref, computed, watch } from 'vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { ComputeHost } from '../../api/compute'
@@ -13,6 +14,28 @@ const props = defineProps<{
   getLatencyBadgeClass: (latency?: number) => string
   formatDate?: (d?: string) => string
 }>()
+
+const pageSize = 48
+const currentPage = ref(1)
+const totalPages = computed(() => Math.max(1, Math.ceil(props.hosts.length / pageSize)))
+
+watch(() => props.hosts.length, () => {
+  if (currentPage.value > totalPages.value) currentPage.value = 1
+})
+
+const startIndex = computed(() => (currentPage.value - 1) * pageSize)
+const endIndex = computed(() => Math.min(startIndex.value + pageSize, props.hosts.length))
+const paginatedHosts = computed(() => {
+  if (props.hosts.length <= pageSize) return props.hosts
+  return props.hosts.slice(startIndex.value, endIndex.value)
+})
+
+function prevPage() {
+  if (currentPage.value > 1) currentPage.value--
+}
+function nextPage() {
+  if (currentPage.value < totalPages.value) currentPage.value++
+}
 
 const emit = defineEmits<{
   (e: 'test', host: ComputeHost): void
@@ -29,9 +52,19 @@ function formatHostDate(d?: string): string {
 </script>
 
 <template>
-  <div class="mobile-hosts-stream animate-fade-in">
-    <div
-      v-for="host in hosts"
+  <div class="mobile-hosts-container">
+    <div v-if="hosts.length > pageSize" class="mobile-pagination-bar font-mono" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin-bottom: 8px; font-size: 11px;">
+      <span class="text-muted">Showing {{ startIndex + 1 }}–{{ endIndex }} of {{ hosts.length }}</span>
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <button type="button" class="btn btn-secondary btn-xs" :disabled="currentPage <= 1" @click="prevPage">Prev</button>
+        <span>{{ currentPage }} / {{ totalPages }}</span>
+        <button type="button" class="btn btn-secondary btn-xs" :disabled="currentPage >= totalPages" @click="nextPage">Next</button>
+      </div>
+    </div>
+
+    <div class="mobile-hosts-stream animate-fade-in">
+      <div
+        v-for="host in paginatedHosts"
       :key="host.id"
       class="mobile-host-card glass-panel"
       @click="emit('select', host)"
@@ -132,6 +165,7 @@ function formatHostDate(d?: string): string {
       </div>
     </div>
   </div>
+</div>
 </template>
 
 <style scoped>

@@ -8,12 +8,13 @@ import DeployWorkloadStrategyStep from './DeployWorkloadStrategyStep.vue'
 import DeployWorkloadNetworkStep from './DeployWorkloadNetworkStep.vue'
 import DeployWorkloadResourcesStep from './DeployWorkloadResourcesStep.vue'
 
-export interface NewAppForm extends DeploymentApp {
-  servicePort: number
-  cpuLimit?: string
-  memLimit?: string
-  envList: { key: string; value: string }[]
-}
+import {
+  createInitialForm,
+  parseAiPrompt,
+  type NewAppForm,
+} from './deployWorkloadAi'
+
+export type { NewAppForm }
 
 interface Props {
   show: boolean
@@ -32,18 +33,6 @@ const emit = defineEmits<{
 const wizardActiveTab = ref<'general' | 'strategy' | 'network' | 'resources'>('general')
 const aiPrompt = ref('')
 const aiGenerating = ref(false)
-
-function createInitialForm(): NewAppForm {
-  return {
-    name: '', team: 'platform-engineering', env: 'production', image: '', target: 'prod-us-east-1',
-    namespace: 'default', type: 'kubernetes', replicas: 3, status: 'healthy', cpu: '250m', memory: '512Mi',
-    port: 80, servicePort: 80, netType: 'ClusterIP', strategy: 'RollingUpdate', canaryWeight: 10,
-    canaryVersion: '', blueGreenActive: 'blue', blueVersion: '', greenVersion: '', ingressHost: '',
-    tlsEnabled: false, storageClass: 'standard', storageSize: '10Gi', mountPath: '/data',
-    livenessProbe: '/healthz', readinessProbe: '/ready',
-    envList: [{ key: 'NODE_ENV', value: 'production' }, { key: 'LOG_LEVEL', value: 'info' }]
-  }
-}
 
 const newApp = ref<NewAppForm>(createInitialForm())
 
@@ -87,64 +76,8 @@ async function generateWithAI() {
 
   aiGenerating.value = true
   try {
-    const p = aiPrompt.value.toLowerCase()
-
-    let parsedName = 'microservice-api'
-    let parsedImage = 'nginx:alpine'
-    let parsedReplicas = 3
-    let parsedPort = 80
-    let parsedStrategy = 'RollingUpdate'
-    let parsedCanaryWeight = 20
-
-    const imgMatch = aiPrompt.value.match(/(?:image|deploy|service)\s+([a-zA-Z0-9_\-\.\/]+)(?::([a-zA-Z0-9_\-\.]+))?/i)
-    if (imgMatch) {
-      parsedImage = imgMatch[1] + (imgMatch[2] ? `:${imgMatch[2]}` : ':latest')
-      parsedName = imgMatch[1].split('/').pop()?.split(':')[0] || 'app'
-    } else if (p.includes('redis')) {
-      parsedName = 'redis-store'
-      parsedImage = 'redis:7.2-alpine'
-      parsedPort = 6379
-    } else if (p.includes('postgres') || p.includes('database')) {
-      parsedName = 'postgres-db'
-      parsedImage = 'postgres:16-alpine'
-      parsedPort = 5432
-    } else if (p.includes('node') || p.includes('express')) {
-      parsedName = 'node-api'
-      parsedImage = 'node:20-alpine'
-      parsedPort = 3000
-    } else if (p.includes('python') || p.includes('fastapi')) {
-      parsedName = 'fastapi-gateway'
-      parsedImage = 'python:3.11-slim'
-      parsedPort = 8000
-    }
-
-    const repMatch = p.match(/(\d+)\s*(?:replicas|pods|instances)/)
-    if (repMatch) parsedReplicas = parseInt(repMatch[1], 10)
-
-    const portMatch = p.match(/port\s*(\d+)/)
-    if (portMatch) parsedPort = parseInt(portMatch[1], 10)
-
-    if (p.includes('canary')) {
-      parsedStrategy = 'Canary'
-      const weightMatch = p.match(/(\d+)\s*%/)
-      if (weightMatch) parsedCanaryWeight = parseInt(weightMatch[1], 10)
-    } else if (p.includes('blue') || p.includes('green') || p.includes('bluegreen')) {
-      parsedStrategy = 'BlueGreen'
-    }
-
-    newApp.value.name = parsedName
-    newApp.value.image = parsedImage
-    newApp.value.replicas = parsedReplicas
-    newApp.value.port = parsedPort
-    newApp.value.servicePort = parsedPort
-    newApp.value.strategy = parsedStrategy
-    newApp.value.canaryWeight = parsedCanaryWeight
-
-    if (p.includes('ingress')) {
-      newApp.value.netType = 'Ingress'
-      newApp.value.ingressHost = `${parsedName}.corp.internal`
-    }
-
+    const parsed = parseAiPrompt(aiPrompt.value)
+    Object.assign(newApp.value, parsed)
     emit('toast', 'AI synthesized deployment configuration populated!', 'success')
   } catch {
     emit('toast', 'AI generation fallback applied', 'info')

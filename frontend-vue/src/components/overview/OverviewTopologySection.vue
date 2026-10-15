@@ -1,16 +1,20 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import NodeCard from './nodes/NodeCard.vue'
 import NodeTableView from './nodes/NodeTableView.vue'
 import VirtualNodeGrid from './virtual/VirtualNodeGrid.vue'
+import ClusterDensityMatrix, { type MatrixNode } from './matrix/ClusterDensityMatrix.vue'
 import type { SystemOverview, NodeMetrics } from '../../api/overview'
 
-defineProps<{
+export type NodeDeltaRecord = MatrixNode
+
+const props = defineProps<{
   overview: SystemOverview | null
   filteredTopologyNodes: NodeMetrics[]
   topologyFilterCounts: { all: number; control: number; worker: number; hot: number; overloaded: number }
   selectedTopologyFilter: string
-  nodeViewMode: 'grid' | 'table'
+  nodeViewMode: 'grid' | 'table' | 'matrix'
   busiestNodeId: string | null
   customNodeOrder: string[]
   draggedNodeId: string | null
@@ -19,9 +23,10 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:selectedTopologyFilter', filter: string): void
-  (e: 'update:nodeViewMode', mode: 'grid' | 'table'): void
+  (e: 'update:nodeViewMode', mode: 'grid' | 'table' | 'matrix'): void
   (e: 'resetNodeOrder'): void
   (e: 'cardClick', node: NodeMetrics): void
+  (e: 'selectNode', node: NodeMetrics): void
   (e: 'inspect', node: NodeMetrics): void
   (e: 'manage', node: NodeMetrics): void
   (e: 'logs', node: NodeMetrics): void
@@ -32,6 +37,25 @@ const emit = defineEmits<{
   (e: 'drop', node: NodeMetrics): void
   (e: 'dragend'): void
 }>()
+
+const matrixNodes = computed<NodeDeltaRecord[]>(() => {
+  return props.filteredTopologyNodes.map((n) => ({
+    id: n.node_id,
+    name: n.node_name,
+    status: n.status,
+    cpuPct: n.cpu_percent,
+    memPct: n.memory_percent,
+    region: (n as any).region || (n as any).cluster || '',
+  }))
+})
+
+function onMatrixSelect(matrixNode: MatrixNode) {
+  const matched = props.filteredTopologyNodes.find((n) => n.node_id === matrixNode.id)
+  if (matched) {
+    emit('selectNode', matched)
+    emit('cardClick', matched)
+  }
+}
 </script>
 
 <template>
@@ -120,6 +144,15 @@ const emit = defineEmits<{
           >
             <BaseIcon name="grid" size="xs" /> Grid
           </button>
+          <button
+            type="button"
+            class="hosts-seg-btn toggle-btn"
+            :class="{ active: nodeViewMode === 'matrix' }"
+            @click="emit('update:nodeViewMode', 'matrix')"
+            title="Matrix 10k Canvas View"
+          >
+            <BaseIcon name="cpu" size="xs" /> Matrix (10k)
+          </button>
         </div>
 
         <button
@@ -147,6 +180,14 @@ const emit = defineEmits<{
         @yaml="emit('manage', $event)"
         @delete="emit('manage', $event)"
       />
+    </template>
+    <template v-else-if="nodeViewMode === 'matrix'">
+      <div class="matrix-view-container glass-panel p-4" style="padding: 16px; border-radius: 8px;">
+        <ClusterDensityMatrix
+          :nodes="matrixNodes"
+          @select-node="onMatrixSelect"
+        />
+      </div>
     </template>
     <template v-else>
       <VirtualNodeGrid
