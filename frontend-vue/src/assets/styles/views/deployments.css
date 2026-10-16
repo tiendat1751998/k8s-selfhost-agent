@@ -1,58 +1,59 @@
 /* Deployments & App Workloads View Stylesheet */
-.view-container { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 100%; box-sizing: border-box; }
+.view-container { display: flex; flex-direction: column; gap: 16px; padding: 0; width: 100%; max-width: 100%; box-sizing: border-box; }
 
 /* Sleek Unified Enterprise Toolbar */
 .deployments-toolbar-sleek {
-  height: 44px;
-  min-height: 44px;
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
   box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 8px;
+  gap: 10px;
   padding: 0 12px;
-  border-radius: 10px;
-  background: var(--color-surface-card);
+  border-radius: 8px;
+  background: var(--bg-card);
   border: 1px solid var(--color-border-subtle);
-  backdrop-filter: blur(12px);
   width: 100%;
   overflow: hidden;
   flex-wrap: nowrap;
 }
 
-/* Search Input: compact 120px - 140px */
+/* Search Input: compact 140px - 180px */
 .deployments-toolbar-sleek .toolbar-search-wrap {
   position: relative;
   display: flex;
   align-items: center;
-  height: 30px;
+  height: 32px;
 }
 .deployments-toolbar-sleek .search-icon {
   position: absolute;
   left: 8px;
   font-size: 11.5px;
-  color: var(--color-muted);
+  color: var(--text-muted);
   pointer-events: none;
   transition: color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .deployments-toolbar-sleek .toolbar-search-input {
   width: 100%;
-  height: 30px;
+  height: 32px;
   padding: 0 22px 0 26px;
-  font-size: 12px;
-  border-radius: 20px;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  border-radius: 6px;
   background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
-  color: var(--color-body);
+  color: var(--text-primary);
   box-sizing: border-box;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.deployments-toolbar-sleek .toolbar-search-input::placeholder { color: var(--color-muted); }
+.deployments-toolbar-sleek .toolbar-search-input::placeholder { color: var(--text-muted); }
 .deployments-toolbar-sleek .toolbar-search-input:hover { border-color: var(--color-border-strong); }
 .deployments-toolbar-sleek .toolbar-search-input:focus {
-  border-color: rgba(56, 189, 248, 0.5);
+  border-color: var(--color-primary);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.12);
+  box-shadow: 0 0 0 2px var(--color-ring, rgba(50, 108, 229, 0.25));
 }
 .deployments-toolbar-sleek .clear-input-btn {
   position: absolute;
@@ -66,30 +67,38 @@
   justify-content: center;
   background: none;
   border: none;
-  color: var(--color-muted);
+  color: var(--text-muted);
   cursor: pointer;
   padding: 0;
   border-radius: 4px;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.deployments-toolbar-sleek .clear-input-btn:hover { color: var(--color-body); background: var(--color-surface-elevated); }
+.deployments-toolbar-sleek .clear-input-btn:hover { color: var(--text-primary); background: var(--color-surface-elevated); }
 
-/* Smooth Capsule Pill Bar (Linear / Audit style) */
+/* Segmented Capsule Tabs */
 .deployments-toolbar-sleek .toolbar-capsule-pills {
   flex: 0 0 auto;
   width: auto;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  padding: 3px;
+  height: 32px;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 7px;
+  box-sizing: border-box;
   position: static;
   user-select: none;
 }
 .deployments-toolbar-sleek .capsule-pill {
-  border-radius: 9999px;
-  height: 28px;
+  border-radius: 5px;
+  height: 24px;
+  min-height: 24px;
+  line-height: 24px;
   padding: 0 8px;
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -97,59 +106,59 @@
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
-  background: var(--color-surface-elevated);
-  border: 1px solid var(--color-border-subtle);
-  color: var(--color-muted);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
   box-sizing: border-box;
 }
 .deployments-toolbar-sleek .capsule-pill:hover {
-  background: var(--color-surface-inset);
-  color: var(--color-body);
-  border-color: var(--color-border-strong);
+  background: var(--color-surface-hover);
+  color: var(--text-primary);
 }
 .deployments-toolbar-sleek .capsule-pill.active {
-  background: var(--color-badge-k8s-bg);
-  border: 1px solid var(--color-badge-k8s-border);
-  color: var(--color-badge-k8s-text);
-  box-shadow: none;
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 .deployments-toolbar-sleek .capsule-count {
   font-family: var(--font-mono, monospace);
-  font-size: 10.5px;
+  font-size: 11px;
   opacity: 0.85;
 }
 .deployments-toolbar-sleek .capsule-pill.active .capsule-count {
-  color: var(--color-badge-k8s-text);
+  color: var(--color-primary);
   opacity: 1;
 }
 
 /* Refined Compact Dropdown (Status) */
 .deployments-toolbar-sleek .toolbar-select {
-  flex: 0 0 115px;
-  width: 115px;
-  min-width: 115px;
+  flex: 0 0 120px;
+  width: 120px;
+  min-width: 120px;
   position: static;
   margin: 0;
-  height: 28px;
+  height: 32px;
   border-radius: 6px;
-  font-size: 11.5px;
+  font-size: 12.5px;
+  font-weight: 500;
   border: 1px solid var(--color-border-subtle);
   background: var(--color-surface-inset);
-  color: var(--color-muted-strong);
-  padding: 0 6px;
+  color: var(--text-primary);
+  padding: 0 8px;
   cursor: pointer;
   box-sizing: border-box;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.15s ease;
 }
 .deployments-toolbar-sleek .toolbar-select:hover {
   border-color: var(--color-border-strong);
-  color: var(--color-body);
 }
 .deployments-toolbar-sleek .toolbar-select:focus {
-  border-color: rgba(56, 189, 248, 0.4);
+  border-color: var(--color-primary);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.12);
+  box-shadow: 0 0 0 2px var(--color-ring, rgba(50, 108, 229, 0.25));
 }
 
 /* Primary CTA & Secondary Action Buttons */
@@ -163,9 +172,10 @@
   position: static;
 }
 .deployments-toolbar-sleek .toolbar-btn {
-  height: 28px;
-  min-height: 28px;
-  font-size: 11.5px;
+  height: 32px;
+  min-height: 32px;
+  font-size: 12.5px;
+  font-weight: 500;
   border-radius: 6px;
   display: inline-flex;
   align-items: center;
@@ -174,43 +184,43 @@
   white-space: nowrap;
   cursor: pointer;
   box-sizing: border-box;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.15s ease;
 }
 .deployments-toolbar-sleek .toolbar-btn.btn-primary.toolbar-btn-deploy {
-  width: 80px;
-  min-width: 80px;
-  max-width: 85px;
-  padding: 0 8px;
+  width: 85px;
+  min-width: 85px;
+  padding: 0 10px;
   font-weight: 600;
-  background: var(--color-primary, #326ce5);
-  border: 1px solid var(--color-primary-hover, #2557c7);
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
   color: #ffffff;
   box-shadow: none;
 }
 .deployments-toolbar-sleek .toolbar-btn.btn-primary.toolbar-btn-deploy:hover {
-  background: var(--color-primary-hover, #2557c7);
-  box-shadow: none;
-  transform: translateY(-1px);
+  background: var(--color-primary-hover);
 }
 .deployments-toolbar-sleek .toolbar-more-wrap {
   position: relative;
   display: inline-flex;
 }
 .deployments-toolbar-sleek .toolbar-btn-more {
-  width: 62px;
-  min-width: 62px;
-  max-width: 65px;
-  padding: 0 6px;
+  width: 68px;
+  min-width: 68px;
+  padding: 0 8px;
+  height: 32px;
+  min-height: 32px;
+  border-radius: 6px;
+  font-size: 12.5px;
   font-weight: 500;
   background: var(--color-surface-elevated);
   border: 1px solid var(--color-border-subtle);
-  color: var(--color-muted-strong);
+  color: var(--text-secondary);
 }
 .deployments-toolbar-sleek .toolbar-btn-more:hover,
 .deployments-toolbar-sleek .toolbar-btn-more.active {
-  background: var(--color-surface-inset);
+  background: var(--color-surface-hover);
   border-color: var(--color-border-strong);
-  color: var(--color-body);
+  color: var(--text-primary);
 }
 .deployments-toolbar-sleek .more-chevron {
   transition: transform 0.15s ease;
@@ -297,7 +307,7 @@
 .toast-close { margin-left: auto; background: none; border: none; color: inherit; cursor: pointer; }
 
 /* Main Section Box */
-.section-box { border-radius: 12px; overflow: hidden; width: 100%; box-sizing: border-box; }
+.section-box, .section-box.table-box { padding: 0 !important; border: none !important; background: transparent !important; border-radius: 8px !important; box-shadow: none !important; overflow: hidden; width: 100%; box-sizing: border-box; }
 
 /* Mobile Accordion Pills */
 .pill-btn { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 8px; background: var(--color-surface-elevated); border: 1px solid var(--color-border-subtle); color: var(--color-muted); font-size: 12px; cursor: pointer; transition: all 0.15s ease; flex-shrink: 0; white-space: nowrap; }
@@ -447,21 +457,15 @@
 
 /* RWD: Desktop & Tablet >= 768px */
 @media (min-width: 768px) {
-  .mobile-command-bar { display: none !important; }
-  .mobile-filter-strip { display: none !important; }
-  .micro-telemetry-strip { display: none !important; }
-  .mobile-cards-view { display: none !important; }
-  .desktop-table-container,
-  .desktop-table-view { display: block !important; }
+  .mobile-command-bar, .mobile-filter-strip, .micro-telemetry-strip, .mobile-cards-view { display: none !important; }
+  .desktop-table-container, .desktop-table-view { display: block !important; }
   .deployments-toolbar-sleek { display: flex !important; }
 }
 
 /* RWD: Mobile < 768px — Complete Suppression of Desktop Table & Sleek Toolbar */
 @media (max-width: 767px) {
   .view-container { gap: 8px !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; overflow-x: hidden !important; }
-  .deployments-toolbar-sleek { display: none !important; }
-  .desktop-table-container,
-  .desktop-table-view { display: none !important; }
+  .deployments-toolbar-sleek, .desktop-table-container, .desktop-table-view { display: none !important; }
   .mobile-cards-view { display: block !important; padding: 0 !important; }
   .mobile-command-bar { display: flex !important; }
   .section-box.table-box { background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
@@ -474,6 +478,5 @@
   .mobile-telemetry-pill { padding: 0 5px; font-size: 9.5px; }
 }
 @media (max-width: 360px) {
-  .mobile-telemetry-pill .pill-ok { display: none; }
-  .mobile-telemetry-pill .pill-sep { display: none; }
+  .mobile-telemetry-pill .pill-ok, .mobile-telemetry-pill .pill-sep { display: none; }
 }

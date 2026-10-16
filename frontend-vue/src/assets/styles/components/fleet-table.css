@@ -16,7 +16,16 @@
 .box-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
 /* Ensure FleetClustersTable fits 100% of viewport width without horizontal scrollbar on 1440px desktop */
-.section-box.table-box { width: 100%; max-width: 100%; box-sizing: border-box; }
+.section-box.table-box {
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
 .table-box .data-table-container { width: 100%; max-width: 100%; box-sizing: border-box; }
 .table-box .table-scroll-wrapper { width: 100%; box-sizing: border-box; }
 .table-box .data-table { width: 100%; table-layout: auto; }
