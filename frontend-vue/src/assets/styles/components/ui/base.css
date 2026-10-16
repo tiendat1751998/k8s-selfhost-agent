@@ -2,7 +2,7 @@
 .base-badge {
   padding: 2px 8px;
   font-size: var(--text-caption);
-  border-radius: var(--rounded-pill);
+  border-radius: var(--rounded-md, 6px);
   background: var(--color-surface-elevated);
   color: var(--color-muted-strong);
 }
