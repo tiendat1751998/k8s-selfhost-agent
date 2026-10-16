@@ -23,19 +23,19 @@
   overflow: hidden;
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.brand-container { display: flex; align-items: center; gap: 12px; cursor: pointer; flex: 1; min-width: 0; transition: background 0.15s ease; }
+.brand-container { display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1; min-width: 0; transition: background 0.15s ease; }
 .brand-container:hover { background: rgba(255, 255, 255, 0.02); }
-.brand-icon-wrapper { position: relative; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.brand-icon-wrapper { position: relative; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .brand-icon {
-  width: 36px; height: 36px; background: var(--color-primary, #326ce5); color: #ffffff;
+  width: 32px; height: 32px; background: var(--color-primary, #326ce5); color: #ffffff;
   border-radius: 8px; display: flex; align-items: center; justify-content: center;
-  font-size: 18px; font-weight: bold; border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: none; position: relative;
+  font-size: 16px; font-weight: bold; border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: none; position: relative;
   z-index: 2; transition: transform 0.15s ease;
 }
 .brand-glow { display: none; }
-.brand-title { font-size: 15px; font-weight: 800; letter-spacing: -0.03em; color: var(--text-primary); white-space: nowrap; }
+.brand-title { font-size: 13.5px; font-weight: 800; letter-spacing: -0.03em; color: var(--text-primary); white-space: nowrap; }
 .brand-title span { color: var(--text-secondary); margin-left: 2px; }
-.brand-subtitle { font-size: 11px; color: var(--text-muted); font-weight: 500; white-space: nowrap; }
+.brand-subtitle { font-size: 10px; color: var(--text-muted); font-weight: 500; white-space: nowrap; }
 .env-pill,
 .sidebar-brand-pill {
   margin: 12px 16px; padding: 7px 12px;
@@ -184,8 +184,8 @@
 }
 .hud-mobile-brand { display: none; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
 .hud-mobile-brand-icon { font-size: 16px; color: var(--text-primary, #f3f4f6); filter: none; }
-.hud-mobile-brand-title { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; color: #f1f5f9; font-family: var(--font-mono, monospace); }
-.hud-mobile-brand-title span { color: var(--text-secondary, #9ca3af); }
+.hud-mobile-brand-title { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; color: var(--text-primary); font-family: var(--font-mono, monospace); }
+.hud-mobile-brand-title span { color: var(--color-primary, #326ce5); }
 .mobile-search-btn {
   display: none; align-items: center;
   justify-content: center; width: 44px;

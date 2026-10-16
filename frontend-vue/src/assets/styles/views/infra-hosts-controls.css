@@ -117,8 +117,8 @@
 .status-pills-wrap {
   display: inline-flex;
   align-items: center;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  background: var(--bg-surface, #111827);
+  border: 1px solid var(--color-border-subtle, #243147);
   border-radius: 6px;
   padding: 2px 4px;
   gap: 4px;
@@ -145,21 +145,23 @@
 }
 
 .status-pill:hover {
-  color: #ffffff;
+  color: var(--text-primary);
   background: rgba(255, 255, 255, 0.05);
 }
 
 .status-pill.active {
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+  background: var(--bg-card, #161f30);
+  color: var(--text-primary);
+  border: 1px solid var(--color-border-strong, #384b6e);
   font-weight: 600;
 }
 
 .status-pill.status-pill-connected.active,
 .status-pill.status-pill-disconnected.active,
 .status-pill.status-pill-error.active {
-  background: var(--bg-elevated, #1a1b1e);
-  color: var(--text-primary, #f3f4f6);
+  background: var(--bg-card, #161f30);
+  color: var(--text-primary);
+  border: 1px solid var(--color-border-strong, #384b6e);
 }
 
 .pill-dot {
@@ -217,16 +219,16 @@
   padding: 2px 8px !important;
   font-size: 11px;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.4) !important;
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1)) !important;
-  color: #f1f5f9 !important;
+  background-color: var(--bg-surface, #111827) !important;
+  border: 1px solid var(--color-border-subtle, #243147) !important;
+  color: var(--text-primary) !important;
   outline: none;
   cursor: pointer;
   transition: border-color 0.15s ease;
 }
 
 .toolbar-select:focus {
-  border-color: #2563eb !important;
+  border-color: var(--color-primary, #326ce5) !important;
 }
 
 .toolbar-select.micro-select {
@@ -238,8 +240,8 @@
 }
 
 .toolbar-select option {
-  background: var(--bg-surface, #0f1012);
-  color: var(--text-primary, #f3f4f6);
+  background: var(--bg-card);
+  color: var(--text-primary);
 }
 
 /* View Mode Switcher */

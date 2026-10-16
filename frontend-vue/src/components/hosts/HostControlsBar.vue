@@ -209,26 +209,10 @@ const hosts = computed(() => props.hosts || { length: props.totalHosts ?? 0 })
 <style scoped>
 .host-controls-toolbar {
   background: var(--bg-card, #141516);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08));
   border-radius: 8px;
   box-shadow: none;
 }
-:deep(.status-pill.active) {
-  background: var(--bg-elevated, #1a1b1e) !important;
-  border-color: rgba(255, 255, 255, 0.18) !important;
-  color: var(--text-primary, #f3f4f6) !important;
-  box-shadow: none !important;
-}
-.toolbar-add-btn {
-  background: #f3f4f6 !important;
-  color: #08090a !important;
-  border: 1px solid #ffffff !important;
-  font-weight: 600 !important;
-  box-shadow: none !important;
-}
-.toolbar-add-btn:hover {
-  opacity: 0.9 !important;
-  box-shadow: none !important;
-}
 </style>
+
 
