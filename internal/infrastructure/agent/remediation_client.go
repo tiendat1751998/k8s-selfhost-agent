@@ -27,30 +27,41 @@ func IsEndpointNotFound(err error) bool {
 	return errors.Is(err, ErrEndpointNotFound) || strings.Contains(err.Error(), "HTTP 404")
 }
 
+// UnhealthyContainerDTO captures an unhealthy container state from node health probe.
+type UnhealthyContainerDTO struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Image        string `json:"image"`
+	State        string `json:"state"`
+	Status       string `json:"status"`
+	RestartCount int    `json:"restart_count"`
+}
+
 // NodeK8sHealthResponse matches k8s-agent's GET /k8s/health endpoint output.
 type NodeK8sHealthResponse struct {
-	NodeName          string   `json:"node_name"`
-	KubeletHealthy    bool     `json:"kubelet_healthy"`
-	KubeletLatencyMs  float64  `json:"kubelet_latency_ms"`
-	PLEGHealthy       bool     `json:"pleg_healthy"`
-	ContainerdHealthy bool     `json:"containerd_healthy"`
-	DockerHealthy     bool     `json:"docker_healthy"`
-	CRISocketPath     string   `json:"cri_socket_path,omitempty"`
-	DiskPressure      bool     `json:"disk_pressure"`
-	InodePressure     bool     `json:"inode_pressure"`
-	MemoryPressure    bool     `json:"memory_pressure"`
-	PIDPressure       bool     `json:"pid_pressure"`
-	DStateProcesses   int      `json:"d_state_processes"`
-	ZombieCount        int      `json:"zombie_count"`
-	ConntrackUsagePct  float64  `json:"conntrack_usage_pct"`
-	LastLeaseRenewUnix int64    `json:"last_lease_renew_unix,omitempty"`
-	DetectedAnomalies  []string `json:"detected_anomalies"`
-	CheckedAt          string   `json:"checked_at"`
+	NodeName            string                  `json:"node_name"`
+	KubeletHealthy      bool                    `json:"kubelet_healthy"`
+	KubeletLatencyMs    float64                 `json:"kubelet_latency_ms"`
+	PLEGHealthy         bool                    `json:"pleg_healthy"`
+	ContainerdHealthy   bool                    `json:"containerd_healthy"`
+	DockerHealthy       bool                    `json:"docker_healthy"`
+	CRISocketPath       string                  `json:"cri_socket_path,omitempty"`
+	DiskPressure        bool                    `json:"disk_pressure"`
+	InodePressure       bool                    `json:"inode_pressure"`
+	MemoryPressure      bool                    `json:"memory_pressure"`
+	PIDPressure         bool                    `json:"pid_pressure"`
+	DStateProcesses     int                     `json:"d_state_processes"`
+	ZombieCount         int                     `json:"zombie_count"`
+	ConntrackUsagePct   float64                 `json:"conntrack_usage_pct"`
+	LastLeaseRenewUnix  int64                   `json:"last_lease_renew_unix,omitempty"`
+	DetectedAnomalies   []string                `json:"detected_anomalies"`
+	UnhealthyContainers []UnhealthyContainerDTO `json:"unhealthy_containers"`
+	CheckedAt           string                  `json:"checked_at"`
 }
 
 // RemediationRequest defines payload for POST /remediate.
 type RemediationRequest struct {
-	Action string `json:"action"` // "restart_service" | "disk_pressure_cleanup" | "cni_ipam_cleanup" | "reap_zombies"
+	Action string `json:"action"` // "restart_service" | "restart_container" | "disk_pressure_cleanup" | "cni_ipam_cleanup" | "reap_zombies"
 	Target string `json:"target,omitempty"`
 	Reason string `json:"reason,omitempty"`
 }
@@ -68,9 +79,13 @@ type RemediationActionResult struct {
 	Timestamp   string `json:"timestamp"`
 }
 
+// RemediationResultDTO represents an action execution result in remediation history.
+type RemediationResultDTO = RemediationActionResult
+
 // RemediationClientInterface defines client operations for node health & remediation.
 type RemediationClientInterface interface {
 	GetNodeK8sHealth(ctx context.Context, hostEndpoint, authToken string) (*NodeK8sHealthResponse, error)
+	GetRemediationHistory(ctx context.Context, hostEndpoint, authToken string) ([]RemediationResultDTO, error)
 	ExecuteRemediation(ctx context.Context, hostEndpoint, authToken string, req RemediationRequest) (*RemediationActionResult, error)
 	ResolveHostForNode(ctx context.Context, hostRepo docker.ComputeHostRepository, nodeNameOrIP string) (*docker.ComputeHost, string, error)
 	SynthesizeHealthFromMetrics(ctx context.Context, hostEndpoint, authToken, nodeName string) (*NodeK8sHealthResponse, error)
@@ -237,6 +252,62 @@ func (c *AgentRemediationClient) ExecuteRemediation(ctx context.Context, hostEnd
 	return &actionResult, nil
 }
 
+// GetRemediationHistory queries GET /remediate/history on the specified node agent.
+func (c *AgentRemediationClient) GetRemediationHistory(ctx context.Context, hostEndpoint, authToken string) ([]RemediationResultDTO, error) {
+	baseURL := NormalizeHostEndpoint(hostEndpoint)
+	if baseURL == "" {
+		return nil, fmt.Errorf("invalid host endpoint: %q", hostEndpoint)
+	}
+
+	reqCtx := ctx
+	timeout := 10 * time.Second
+	if c.timeout > 0 && c.timeout < timeout {
+		timeout = c.timeout
+	}
+	var cancel context.CancelFunc
+	reqCtx, cancel = context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, baseURL+"/remediate/history", nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating /remediate/history request: %w", err)
+	}
+
+	if token := c.resolveToken(authToken); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("X-Agent-Token", token)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("executing /remediate/history request to %s: %w", baseURL, err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+	if err != nil {
+		return nil, fmt.Errorf("reading /remediate/history response body: %w", err)
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("agent returned HTTP 404: %w", ErrEndpointNotFound)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("agent /remediate/history returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(bodyBytes)))
+	}
+
+	var history []RemediationResultDTO
+	if err := json.Unmarshal(bodyBytes, &history); err != nil {
+		return nil, fmt.Errorf("decoding /remediate/history json: %w", err)
+	}
+	if history == nil {
+		history = []RemediationResultDTO{}
+	}
+
+	return history, nil
+}
+
 // ResolveHostForNode locates the registered ComputeHost by ID, name, or IP endpoint.
 // If hostRepo has no match but nodeNameOrIP is a valid IP, synthesizes a compute host endpoint.
 func (c *AgentRemediationClient) ResolveHostForNode(ctx context.Context, hostRepo docker.ComputeHostRepository, nodeNameOrIP string) (*docker.ComputeHost, string, error) {
@@ -334,8 +405,9 @@ func (c *AgentRemediationClient) SynthesizeHealthFromMetrics(ctx context.Context
 		KubeletHealthy:    true,
 		ContainerdHealthy: true,
 		PLEGHealthy:       true,
-		DiskPressure:      metricsData.DiskPercent >= 88.0,
-		DetectedAnomalies: []string{},
-		CheckedAt:         time.Now().UTC().Format(time.RFC3339),
+		DiskPressure:        metricsData.DiskPercent >= 88.0,
+		DetectedAnomalies:   []string{},
+		UnhealthyContainers: []UnhealthyContainerDTO{},
+		CheckedAt:           time.Now().UTC().Format(time.RFC3339),
 	}, nil
 }

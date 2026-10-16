@@ -242,3 +242,94 @@ func TestSynthesizeHealthFromMetrics_On404(t *testing.T) {
 		t.Errorf("expected synthesized kubelet and containerd to be healthy")
 	}
 }
+
+func TestGetRemediationHistory_Success(t *testing.T) {
+	expectedToken := "history-token-99"
+	expectedHistory := []agent.RemediationResultDTO{
+		{
+			Success:    true,
+			Action:     "restart_container",
+			Target:     "coredns-test",
+			Status:     "success",
+			DurationMs: 120,
+			Details:    "Container coredns-test restarted cleanly",
+			Timestamp:  "2026-10-16T12:00:00Z",
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/remediate/history" {
+			t.Errorf("expected path /remediate/history, got %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodGet {
+			t.Errorf("expected GET, got %s", r.Method)
+			http.Error(w, "invalid method", http.StatusMethodNotAllowed)
+			return
+		}
+		authHeader := r.Header.Get("Authorization")
+		if authHeader != "Bearer "+expectedToken {
+			t.Errorf("expected Authorization 'Bearer %s', got '%s'", expectedToken, authHeader)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(expectedHistory)
+	}))
+	defer server.Close()
+
+	client := agent.NewAgentRemediationClient()
+	history, err := client.GetRemediationHistory(context.Background(), server.URL, expectedToken)
+	if err != nil {
+		t.Fatalf("unexpected error fetching remediation history: %v", err)
+	}
+
+	if len(history) != 1 {
+		t.Fatalf("expected 1 history item, got %d", len(history))
+	}
+	if history[0].Action != "restart_container" || history[0].Target != "coredns-test" {
+		t.Errorf("unexpected history item: %+v", history[0])
+	}
+	if !history[0].Success {
+		t.Errorf("expected history item success to be true")
+	}
+}
+
+func TestGetNodeK8sHealth_WithUnhealthyContainers(t *testing.T) {
+	expectedResp := agent.NodeK8sHealthResponse{
+		NodeName:       "worker-02",
+		KubeletHealthy: true,
+		UnhealthyContainers: []agent.UnhealthyContainerDTO{
+			{
+				ID:           "cnt-123",
+				Name:         "kube-proxy",
+				Image:        "registry.k8s.io/kube-proxy:v1.30.0",
+				State:        "waiting",
+				Status:       "CrashLoopBackOff",
+				RestartCount: 14,
+			},
+		},
+		CheckedAt: "2026-10-16T12:00:00Z",
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(expectedResp)
+	}))
+	defer server.Close()
+
+	client := agent.NewAgentRemediationClient()
+	resp, err := client.GetNodeK8sHealth(context.Background(), server.URL, "dummy")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(resp.UnhealthyContainers) != 1 {
+		t.Fatalf("expected 1 unhealthy container, got %d", len(resp.UnhealthyContainers))
+	}
+	c := resp.UnhealthyContainers[0]
+	if c.ID != "cnt-123" || c.Name != "kube-proxy" || c.RestartCount != 14 {
+		t.Errorf("unexpected container fields: %+v", c)
+	}
+}
