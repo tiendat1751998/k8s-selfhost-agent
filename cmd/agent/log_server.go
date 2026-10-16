@@ -318,12 +318,9 @@ func (s *LogServer) HandleSearchLogs(w http.ResponseWriter, r *http.Request) {
 func (s *LogServer) HandleTailLogs(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	cli := s.dockerCli
+	eng := s.engineSrc
+	sources := s.sources
 	s.mu.RUnlock()
-
-	if cli == nil {
-		http.Error(w, "docker client unavailable", http.StatusServiceUnavailable)
-		return
-	}
 
 	q := r.URL.Query()
 	service := q.Get("service")
@@ -335,34 +332,44 @@ func (s *LogServer) HandleTailLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tailStr := q.Get("tail")
-	if tailStr == "" || tailStr == "0" {
-		tailStr = "100"
-	}
-
-	containers, err := cli.ContainerList(r.Context(), container.ListOptions{All: true})
-	if err != nil {
-		http.Error(w, "failed to list containers: "+err.Error(), http.StatusInternalServerError)
-		return
+	tail := 100
+	if tailStr != "" && tailStr != "0" {
+		if t, err := strconv.Atoi(tailStr); err == nil && t > 0 {
+			tail = t
+		}
 	}
 
 	var targetContainerID string
-	for _, c := range containers {
-		cID := c.ID
-		cName := cID
-		if len(c.Names) > 0 {
-			cName = strings.TrimPrefix(c.Names[0], "/")
-		}
-		swarmSvc := c.Labels["com.docker.swarm.service.name"]
-		composeSvc := c.Labels["com.docker.compose.service"]
+	if cli != nil && service != "" {
+		containers, err := cli.ContainerList(r.Context(), container.ListOptions{All: true})
+		if err == nil {
+			for _, c := range containers {
+				cID := c.ID
+				cName := cID
+				if len(c.Names) > 0 {
+					cName = strings.TrimPrefix(c.Names[0], "/")
+				}
+				swarmSvc := c.Labels["com.docker.swarm.service.name"]
+				composeSvc := c.Labels["com.docker.compose.service"]
 
-		if service == "" || service == cID || (len(cID) > 12 && service == cID[:12]) ||
-			service == cName || service == swarmSvc || service == composeSvc {
-			targetContainerID = cID
-			break
+				if service == cID || (len(cID) > 12 && service == cID[:12]) ||
+					service == cName || service == swarmSvc || service == composeSvc {
+					targetContainerID = cID
+					break
+				}
+			}
 		}
 	}
 
 	if targetContainerID == "" {
+		if eng != nil || (cli == nil && len(sources) > 0) || service == "" {
+			s.streamFromEngine(w, r, service, tail)
+			return
+		}
+		if cli == nil {
+			http.Error(w, "docker client unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		http.Error(w, fmt.Sprintf("service %q not found", service), http.StatusNotFound)
 		return
 	}

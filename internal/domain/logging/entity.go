@@ -1,4 +1,4 @@
-﻿package logging
+package logging
 
 import (
 	"context"
@@ -142,7 +142,7 @@ func (f *LogFilter) Validate() error {
 	return nil
 }
 
-// Sanitize applies standard bounds: limit clamped between 1 and 10000, default time range.
+// Sanitize applies standard bounds: limit clamped between 1 and 10000.
 func (f *LogFilter) Sanitize() {
 	if f.Limit <= 0 {
 		f.Limit = 500
@@ -151,12 +151,6 @@ func (f *LogFilter) Sanitize() {
 	}
 	if f.Offset < 0 {
 		f.Offset = 0
-	}
-	if f.EndTime.IsZero() {
-		f.EndTime = time.Now().UTC()
-	}
-	if f.StartTime.IsZero() {
-		f.StartTime = f.EndTime.Add(-1 * time.Hour)
 	}
 }
 

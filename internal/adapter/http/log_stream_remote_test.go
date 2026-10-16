@@ -188,3 +188,54 @@ func TestLogStreamHandler_UnregisteredNode_RejectedWithoutDial(t *testing.T) {
 	assert.Equal(t, 0, dialed, "expected zero dials to unregistered node")
 	assert.False(t, streamer.called, "expected streamer never to be called for unregistered node")
 }
+
+func TestLogStreamHandler_RemoteAgentRelay_ExtractsServiceTagWhenTargetServiceEmpty(t *testing.T) {
+	aggregator := logging.NewLogAggregator(100)
+	streamer := &mockRemoteStreamer{
+		linesToEmit: []string{
+			"2026-09-14T10:15:30.123456789Z [user@1000.service] [INFO] Started Session 1 of user datdt.",
+		},
+	}
+
+	hostRepo := newMockComputeHostRepo()
+	_ = hostRepo.Create(context.Background(), &docker.ComputeHost{
+		ID:       "remote-agent",
+		Endpoint: "http://remote-agent:9100",
+		Status:   "connected",
+	})
+	handler := NewLogStreamHandler(aggregator, streamer, hostRepo)
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	// service is empty
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "?node=http://remote-agent:9100"
+
+	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+	defer ws.Close()
+
+	var foundEntry bool
+	_ = ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+
+	for i := 0; i < 3; i++ {
+		_, msg, err := ws.ReadMessage()
+		if err != nil {
+			break
+		}
+		var entry logging.LogEntry
+		if err := json.Unmarshal(msg, &entry); err == nil {
+			if strings.Contains(entry.Message, "Started Session 1 of user datdt.") {
+				foundEntry = true
+				assert.Equal(t, "user@1000.service", entry.Service)
+				assert.Equal(t, "user@1000.service", entry.Pod)
+				assert.Equal(t, "user@1000.service", entry.Container)
+				assert.Equal(t, "INFO", entry.Level)
+				assert.Equal(t, "http://remote-agent:9100", entry.Node)
+				break
+			}
+		}
+	}
+
+	assert.True(t, foundEntry, "expected to receive relayed remote log entry with extracted service tag")
+}

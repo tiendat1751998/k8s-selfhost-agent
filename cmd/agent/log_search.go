@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -276,5 +277,81 @@ func parseRelativeDuration(val string) (time.Duration, error) {
 		}
 	}
 	return time.ParseDuration(val)
+}
+
+func (s *LogServer) streamFromEngine(w http.ResponseWriter, r *http.Request, service string, tail int) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+	flusher, hasFlusher := w.(http.Flusher)
+
+	var lastTimestamp time.Time
+	seenKeys := make(map[string]struct{})
+
+	emit := func(e LogEntry) bool {
+		key := fmt.Sprintf("%d_%s_%s", e.Timestamp.UnixNano(), e.Service, e.Message)
+		if _, seen := seenKeys[key]; seen {
+			return true
+		}
+		seenKeys[key] = struct{}{}
+		if e.Timestamp.After(lastTimestamp) {
+			lastTimestamp = e.Timestamp
+		}
+		line := formatLogEntry(e)
+		if strings.TrimSpace(line) == "" {
+			return true
+		}
+		_, err := fmt.Fprintf(w, "data: %s\n\n", line)
+		return err == nil
+	}
+
+	if initial, err := s.QueryLogs(r.Context(), service, tail, "", "", "", ""); err == nil {
+		for _, e := range initial {
+			if !emit(e) {
+				return
+			}
+		}
+		if hasFlusher {
+			flusher.Flush()
+		}
+	}
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			sinceStr := ""
+			if !lastTimestamp.IsZero() {
+				sinceStr = lastTimestamp.Add(1 * time.Nanosecond).UTC().Format(time.RFC3339Nano)
+			}
+			entries, err := s.QueryLogs(r.Context(), service, 100, sinceStr, "", "", "")
+			if err != nil {
+				continue
+			}
+			newEmitted := false
+			for _, e := range entries {
+				if !lastTimestamp.IsZero() && !e.Timestamp.After(lastTimestamp) {
+					continue
+				}
+				if !emit(e) {
+					return
+				}
+				newEmitted = true
+			}
+			if newEmitted && hasFlusher {
+				flusher.Flush()
+			}
+			if len(seenKeys) > 10000 {
+				seenKeys = make(map[string]struct{})
+			}
+		}
+	}
 }
 

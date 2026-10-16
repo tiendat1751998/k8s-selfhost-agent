@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -107,4 +108,65 @@ func TestLogServer_HandleGetLogs_TailParsing(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLogServer_HandleTailLogs_StreamsFromEngine(t *testing.T) {
+	tempDir := t.TempDir()
+	engineSrc, err := NewEngineLogSource(tempDir)
+	if err != nil {
+		t.Fatalf("failed to create engine source: %v", err)
+	}
+	defer engineSrc.Close()
+
+	_ = engineSrc.Writer().Write(logengine.Entry{
+		Timestamp: time.Now().UTC(),
+		Service:   "user@1000.service",
+		Level:     "info",
+		Message:   "Engine stream tail test",
+	})
+	_ = engineSrc.Writer().Flush()
+
+	logServer := NewLogServer(WithLogSource(engineSrc))
+
+	t.Run("streams SSE for specific service from engine", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		req := httptest.NewRequest(http.MethodGet, "/logs/tail?service=user@1000.service&tail=10", nil).WithContext(ctx)
+		rec := httptest.NewRecorder()
+
+		// Cancel after short delay to break polling loop
+		time.AfterFunc(100*time.Millisecond, cancel)
+		logServer.HandleTailLogs(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if ct := rec.Header().Get("Content-Type"); ct != "text/event-stream" {
+			t.Errorf("expected Content-Type text/event-stream, got %q", ct)
+		}
+		body := rec.Body.String()
+		if !contains(body, "user@1000.service") || !contains(body, "Engine stream tail test") {
+			t.Errorf("expected body to contain service and message, got: %s", body)
+		}
+	})
+
+	t.Run("streams SSE for empty service from engine", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		req := httptest.NewRequest(http.MethodGet, "/logs/tail?tail=10", nil).WithContext(ctx)
+		rec := httptest.NewRecorder()
+
+		time.AfterFunc(100*time.Millisecond, cancel)
+		logServer.HandleTailLogs(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+		body := rec.Body.String()
+		if !contains(body, "Engine stream tail test") {
+			t.Errorf("expected body to contain message, got: %s", body)
+		}
+	})
+}
+
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
 }

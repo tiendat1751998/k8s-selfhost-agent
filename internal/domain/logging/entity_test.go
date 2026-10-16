@@ -86,9 +86,8 @@ func TestLogFilter_ValidateAndSanitize(t *testing.T) {
 	require.NoError(t, excessiveFilter.Validate())
 	excessiveFilter.Sanitize()
 	require.Equal(t, 10000, excessiveFilter.Limit)
-	require.False(t, excessiveFilter.StartTime.IsZero())
-	require.False(t, excessiveFilter.EndTime.IsZero())
-	require.True(t, excessiveFilter.EndTime.After(excessiveFilter.StartTime))
+	require.True(t, excessiveFilter.StartTime.IsZero())
+	require.True(t, excessiveFilter.EndTime.IsZero())
 
 	// Invalid log level in filter returns ErrInvalidLogQuery
 	invalidLevelFilter := logging.LogFilter{
