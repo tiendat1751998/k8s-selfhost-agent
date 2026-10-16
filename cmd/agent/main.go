@@ -34,6 +34,7 @@ type AgentConfig struct {
 	EngineDir       string
 	ControlPlaneURL string
 	NodeIP          string
+	AutoHeal        bool
 }
 
 // validateConfig validates that required configuration options are present.
@@ -63,12 +64,30 @@ func resolveListenAddr(bindAddr string, port int) string {
 	return net.JoinHostPort(bindAddr, strconv.Itoa(port))
 }
 
-func setupHandler(collector *SystemCollector, authToken string, logServers ...*LogServer) http.Handler {
+func setupHandler(collector *SystemCollector, authToken string, opts ...any) http.Handler {
 	var ls *LogServer
-	if len(logServers) > 0 && logServers[0] != nil {
-		ls = logServers[0]
-	} else {
+	var hc *K8sHealthChecker
+	var rem *NodeRemediator
+
+	for _, opt := range opts {
+		switch v := opt.(type) {
+		case *LogServer:
+			ls = v
+		case *K8sHealthChecker:
+			hc = v
+		case *NodeRemediator:
+			rem = v
+		}
+	}
+
+	if ls == nil {
 		ls = NewLogServer()
+	}
+	if hc == nil {
+		hc = NewK8sHealthChecker(collector)
+	}
+	if rem == nil {
+		rem = NewNodeRemediator()
 	}
 
 	mux := http.NewServeMux()
@@ -102,6 +121,9 @@ func setupHandler(collector *SystemCollector, authToken string, logServers ...*L
 		_ = json.NewEncoder(w).Encode(metrics)
 	})
 
+	hc.RegisterRoutes(mux, isAuthorized)
+	rem.RegisterRoutes(mux, isAuthorized)
+
 	// Debug/profiling endpoints (gated by AGENT_ENABLE_PPROF and protected by bearer token auth)
 	if os.Getenv("AGENT_ENABLE_PPROF") == "true" {
 		withAuth := func(next http.Handler) http.Handler {
@@ -124,85 +146,29 @@ func setupHandler(collector *SystemCollector, authToken string, logServers ...*L
 		mux.Handle("/debug/pprof", withAuth(http.HandlerFunc(pprof.Index)))
 	}
 
-	mux.HandleFunc("/logs/status", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
-			return
+	authEndpoint := func(method string, h http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != method {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+				return
+			}
+			if !isAuthorized(r) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+				return
+			}
+			h(w, r)
 		}
-		if !isAuthorized(r) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
-			return
-		}
-		ls.HandleEngineStatus(w, r)
-	})
+	}
 
-	mux.HandleFunc("/logs/services", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
-			return
-		}
-		if !isAuthorized(r) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
-			return
-		}
-		ls.HandleGetServices(w, r)
-	})
-
-	mux.HandleFunc("/logs/search", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
-			return
-		}
-		if !isAuthorized(r) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
-			return
-		}
-		ls.HandleSearchLogs(w, r)
-	})
-
-	mux.HandleFunc("/logs", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
-			return
-		}
-		if !isAuthorized(r) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
-			return
-		}
-		ls.HandleGetLogs(w, r)
-	})
-
-	mux.HandleFunc("/logs/tail", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
-			return
-		}
-		if !isAuthorized(r) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
-			return
-		}
-		ls.HandleTailLogs(w, r)
-	})
+	mux.HandleFunc("/logs/status", authEndpoint(http.MethodGet, ls.HandleEngineStatus))
+	mux.HandleFunc("/logs/services", authEndpoint(http.MethodGet, ls.HandleGetServices))
+	mux.HandleFunc("/logs/search", authEndpoint(http.MethodPost, ls.HandleSearchLogs))
+	mux.HandleFunc("/logs", authEndpoint(http.MethodGet, ls.HandleGetLogs))
+	mux.HandleFunc("/logs/tail", authEndpoint(http.MethodGet, ls.HandleTailLogs))
 
 	return mux
 }
@@ -302,6 +268,7 @@ func main() {
 		engineDir       string
 		controlPlaneURL string
 		nodeIP          string
+		autoHeal        bool
 	)
 
 	flag.IntVar(&port, "port", 9100, "Port for metrics and logs HTTP server")
@@ -312,9 +279,15 @@ func main() {
 	flag.StringVar(&engineDir, "engine-dir", "", "Directory for columnar log engine data")
 	flag.StringVar(&controlPlaneURL, "control-plane-url", "", "Optional control plane URL for automatic agent registration")
 	flag.StringVar(&nodeIP, "node-ip", "", "Optional node IP to report to control plane (auto-detected if empty)")
+	flag.BoolVar(&autoHeal, "auto-heal", true, "Enable autonomous local self-healing watchdog")
 	flag.Parse()
 
 	port, bindAddr, logDir, engineDir, authToken = applyEnvOverrides(port, bindAddr, logDir, engineDir, authToken)
+	if envAutoHeal := os.Getenv("AGENT_AUTO_HEAL"); envAutoHeal != "" {
+		if val, err := strconv.ParseBool(envAutoHeal); err == nil {
+			autoHeal = val
+		}
+	}
 	if controlPlaneURL == "" {
 		controlPlaneURL = os.Getenv("CONTROL_PLANE_URL")
 	}
@@ -334,6 +307,7 @@ func main() {
 		EngineDir:       engineDir,
 		ControlPlaneURL: controlPlaneURL,
 		NodeIP:          nodeIP,
+		AutoHeal:        autoHeal,
 	}
 
 	if err := validateConfig(cfg); err != nil {
@@ -426,7 +400,20 @@ func main() {
 		go registrar.Start(ctx)
 	}
 
-	handler := setupHandler(collector, authToken, logServer)
+	healthChecker := NewK8sHealthChecker(collector, WithK8sProcPath("/proc"))
+	remediator := NewNodeRemediator(WithRemediatorLogDir(logDir))
+
+	if autoHeal {
+		var logWriter *logengine.Writer
+		if engineSrc != nil {
+			logWriter = engineSrc.Writer()
+		}
+		watchdog := NewSelfHealingWatchdog(healthChecker, remediator, WithWatchdogLogWriter(logWriter))
+		go watchdog.Start(ctx)
+		logger.Info("Autonomous self-healing watchdog started")
+	}
+
+	handler := setupHandler(collector, authToken, logServer, healthChecker, remediator)
 	srv := &http.Server{
 		Addr:        listenAddr,
 		Handler:     handler,
