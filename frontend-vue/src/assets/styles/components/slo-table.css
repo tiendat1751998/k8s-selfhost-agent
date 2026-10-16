@@ -8,8 +8,8 @@
 .section-box.table-box {
   margin: 0 !important;
   border-radius: 8px !important;
-  background: var(--bg-card, #0f172a) !important;
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)) !important;
+  background: var(--bg-card) !important;
+  border: 1px solid var(--color-border-subtle) !important;
   overflow: hidden;
   width: 100%;
   max-width: 100%;
@@ -46,7 +46,7 @@
 .slo-table-container .data-table th {
   padding: 8px 10px !important;
   font-size: 11px !important;
-  background: rgba(15, 23, 42, 0.85) !important;
+  background: var(--color-surface-inset) !important;
   height: 34px !important;
 }
 
@@ -78,7 +78,7 @@
 .service-text {
   font-size: 13px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -108,8 +108,8 @@
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-secondary, #94a3b8);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
   white-space: nowrap;
   display: inline-block;
 }
@@ -126,7 +126,7 @@
 .budget-gauge-track {
   flex: 1;
   height: 5px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-inset);
   border-radius: 9999px;
   overflow: hidden;
   min-width: 36px;
@@ -198,11 +198,11 @@
 .query-code {
   font-size: 11px;
   font-family: var(--font-mono, monospace);
-  color: #93c5fd;
-  background: rgba(15, 23, 42, 0.6);
+  color: var(--color-endpoint-syntax, #58a6ff);
+  background: var(--color-surface-inset);
   padding: 3px 6px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--color-border-subtle);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -223,10 +223,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--bg-elevated);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 4px;
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
   cursor: pointer;
   flex-shrink: 0;
   padding: 0;
@@ -236,7 +236,7 @@
 .btn-copy-query:hover {
   background: rgba(59, 130, 246, 0.15);
   border-color: #3b82f6;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 /* Row Actions (Enterprise Standard: 1 Primary + ActionDropdown) */

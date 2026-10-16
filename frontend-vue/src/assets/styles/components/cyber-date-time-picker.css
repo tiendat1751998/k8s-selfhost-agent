@@ -18,9 +18,9 @@
   justify-content: space-between;
   gap: 8px;
   min-width: 165px;
-  background: rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(56, 189, 248, 0.28);
-  color: #38bdf8;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-endpoint-syntax, #38bdf8);
   font-family: monospace;
   font-size: 11px;
   border-radius: 6px;
@@ -28,17 +28,17 @@
   cursor: pointer;
   outline: none;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .cyber-trigger-box:hover {
-  background: rgba(15, 23, 42, 0.7);
+  background: var(--bg-elevated);
   border-color: #38bdf8;
 }
 
 .cyber-trigger-box.is-open {
   border-color: #38bdf8;
-  background: rgba(15, 23, 42, 0.85);
+  background: var(--bg-elevated);
 }
 
 .cyber-trigger-box.is-disabled {
@@ -84,9 +84,9 @@
   gap: 8px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: #080c14;
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.8), 0 8px 10px -6px rgba(0, 0, 0, 0.7);
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
   min-width: 480px;
 }
 
@@ -97,7 +97,7 @@
   justify-content: space-between;
   gap: 8px;
   padding-bottom: 6px;
-  border-bottom: 1px solid rgba(56, 189, 248, 0.15);
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .nav-group {
@@ -107,9 +107,9 @@
 }
 
 .btn-cyber-nav {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #94a3b8;
+  background: var(--bg-elevated);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--text-muted);
   font-size: 9px;
   width: 20px;
   height: 20px;
@@ -132,14 +132,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 4px;
   padding: 2px 8px;
 }
 
-.badge-month { font-size: 11px; font-weight: 700; color: #e2e8f0; }
-.badge-year { font-size: 11px; font-weight: 700; color: #38bdf8; }
+.badge-month { font-size: 11px; font-weight: 700; color: var(--text-primary); }
+.badge-year { font-size: 11px; font-weight: 700; color: var(--color-endpoint-syntax, #38bdf8); }
 
 .quick-date-chips {
   display: flex;
@@ -148,9 +148,9 @@
 }
 
 .btn-date-chip {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #cbd5e1;
+  background: var(--bg-elevated);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--text-secondary);
   font-size: 9.5px;
   font-family: monospace;
   padding: 2px 5px;
