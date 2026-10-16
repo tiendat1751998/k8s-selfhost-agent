@@ -10,19 +10,19 @@ export interface SurfaceLadderTokens {
 }
 
 export const DARK_SURFACE_LADDER: SurfaceLadderTokens = {
-  canvasDark: '#08090a',
-  surfaceInset: '#0f1011',
-  surfaceCard: '#141516',
-  surfaceElevated: '#1a1b1e',
-  hairline: 'rgba(255, 255, 255, 0.08)'
+  canvasDark: '#0b0f17',
+  surfaceInset: '#111827',
+  surfaceCard: '#161f30',
+  surfaceElevated: '#222f46',
+  hairline: '#243147'
 }
 
 export const LIGHT_SURFACE_LADDER: SurfaceLadderTokens = {
-  canvasDark: '#f6f8fa',
-  surfaceInset: '#edf2f7',
+  canvasDark: '#f8fafc',
+  surfaceInset: '#f1f5f9',
   surfaceCard: '#ffffff',
   surfaceElevated: '#ffffff',
-  hairline: 'rgba(0, 0, 0, 0.08)'
+  hairline: '#e2e8f0'
 }
 
 export function parseHexColor(hex: string): { r: number; g: number; b: number } {
@@ -57,19 +57,19 @@ export function resolveSurfaceLadder(theme: 'dark' | 'light'): SurfaceLadderToke
 
 describe('Task 018: Linear Surface Ladder & Tabular-Nums Typography Standard Specifications', () => {
   it('DARK_SURFACE_LADDER conforms to exact enterprise 4-tier dark surface ladder', () => {
-    assert.equal(DARK_SURFACE_LADDER.canvasDark, '#08090a')
-    assert.equal(DARK_SURFACE_LADDER.surfaceInset, '#0f1011')
-    assert.equal(DARK_SURFACE_LADDER.surfaceCard, '#141516')
-    assert.equal(DARK_SURFACE_LADDER.surfaceElevated, '#1a1b1e')
-    assert.equal(DARK_SURFACE_LADDER.hairline, 'rgba(255, 255, 255, 0.08)')
+    assert.equal(DARK_SURFACE_LADDER.canvasDark, '#0b0f17')
+    assert.equal(DARK_SURFACE_LADDER.surfaceInset, '#111827')
+    assert.equal(DARK_SURFACE_LADDER.surfaceCard, '#161f30')
+    assert.equal(DARK_SURFACE_LADDER.surfaceElevated, '#222f46')
+    assert.equal(DARK_SURFACE_LADDER.hairline, '#243147')
   })
 
   it('LIGHT_SURFACE_LADDER conforms to exact enterprise 4-tier light surface ladder', () => {
-    assert.equal(LIGHT_SURFACE_LADDER.canvasDark, '#f6f8fa')
-    assert.equal(LIGHT_SURFACE_LADDER.surfaceInset, '#edf2f7')
+    assert.equal(LIGHT_SURFACE_LADDER.canvasDark, '#f8fafc')
+    assert.equal(LIGHT_SURFACE_LADDER.surfaceInset, '#f1f5f9')
     assert.equal(LIGHT_SURFACE_LADDER.surfaceCard, '#ffffff')
     assert.equal(LIGHT_SURFACE_LADDER.surfaceElevated, '#ffffff')
-    assert.equal(LIGHT_SURFACE_LADDER.hairline, 'rgba(0, 0, 0, 0.08)')
+    assert.equal(LIGHT_SURFACE_LADDER.hairline, '#e2e8f0')
   })
 
   it('Dark mode text (#ffffff) has high WCAG AAA contrast (>= 7:1) against surface card', () => {

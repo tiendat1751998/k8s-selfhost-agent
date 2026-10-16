@@ -129,7 +129,7 @@ function handleMobileAction(action: string, host: ComputeHost) {
             <span class="m-host-name font-semibold" :title="host.name">
               {{ host.name }}
             </span>
-            <span class="m-type-chip font-mono">
+            <span class="m-type-chip font-mono" :class="getHostTypeMeta(host.host_type).badgeClass">
               {{ getHostTypeMeta(host.host_type).label }}
             </span>
           </div>
@@ -224,16 +224,16 @@ function handleMobileAction(action: string, host: ComputeHost) {
   height: auto;
   padding: 10px 12px;
   border-radius: 8px;
-  background: var(--bg-card, #141516);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
   cursor: pointer;
   box-sizing: border-box;
   width: 100%;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 .mobile-host-card:hover {
-  background: var(--bg-elevated, #1a1b1e);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--bg-elevated);
+  border-color: var(--color-border-strong);
 }
 .mobile-host-card:active {
   transform: scale(0.99);
@@ -262,14 +262,14 @@ function handleMobileAction(action: string, host: ComputeHost) {
   display: inline-block;
 }
 .m-status-dot.dot-connected {
-  background: var(--status-success, #10b981);
+  background: var(--color-status-online, #3fb950);
 }
 .m-status-dot.dot-disconnected {
-  background: var(--status-danger, #ef4444);
+  background: var(--color-status-offline, #f85149);
 }
 .m-host-name {
   font-size: 13.5px;
-  color: var(--text-primary, #f3f4f6);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -278,13 +278,10 @@ function handleMobileAction(action: string, host: ComputeHost) {
 .m-type-chip {
   display: inline-flex;
   align-items: center;
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: 4px;
   font-size: 10px;
-  font-weight: 500;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-  color: var(--text-secondary, #9ca3af);
+  font-weight: 600;
   flex-shrink: 0;
   white-space: nowrap;
   text-transform: uppercase;
@@ -304,16 +301,16 @@ function handleMobileAction(action: string, host: ComputeHost) {
   font-size: 11px;
   font-weight: 500;
   border-radius: 4px;
-  background: transparent;
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
-  color: var(--text-secondary, #9ca3af);
+  background: var(--bg-elevated);
+  border: 1px solid var(--color-border-strong);
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .btn-m-probe:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-primary, #f3f4f6);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--color-surface-elevated, #222f46);
+  color: var(--text-primary, #f8fafc);
+  border-color: var(--color-border-strong, #384b6e);
 }
 .btn-m-probe:disabled {
   opacity: 0.5;
@@ -335,8 +332,10 @@ function handleMobileAction(action: string, host: ComputeHost) {
   overflow: hidden;
 }
 .m-endpoint {
+  font-family: var(--font-mono, monospace);
   font-size: 11.5px;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--color-endpoint-syntax, #58a6ff);
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

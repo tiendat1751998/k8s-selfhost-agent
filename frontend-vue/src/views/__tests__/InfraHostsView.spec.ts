@@ -118,4 +118,20 @@ describe('Zero-Neon Redesign & Hosts Architecture Verification', () => {
     // Base and desktop toolbar-select min-width 84px
     expect(cssContent).toContain('min-width: 84px;')
   })
+
+  it('verifies CNCF Blue (#326ce5) primary CTA and syntax-colored endpoints in table and card styles', () => {
+    const tableCss = readFileSync(
+      resolve(__dirname, '../../assets/styles/views/infra-hosts-table.css'),
+      'utf-8'
+    )
+    expect(tableCss).toContain('var(--color-primary, #326ce5)')
+    expect(tableCss).toContain('var(--color-endpoint-syntax')
+
+    const cardCss = readFileSync(
+      resolve(__dirname, '../../assets/styles/views/infra-hosts-card.css'),
+      'utf-8'
+    )
+    expect(cardCss).toContain('var(--color-endpoint-syntax')
+  })
 })
+

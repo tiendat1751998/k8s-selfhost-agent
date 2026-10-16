@@ -180,19 +180,19 @@ const availabilityPct = computed(() => {
 }
 
 .dot-emerald {
-  background-color: #10b981;
+  background-color: var(--color-status-online, #3fb950);
 }
 
 .dot-amber {
-  background-color: #f59e0b;
+  background-color: var(--color-status-warning, #f59e0b);
 }
 
 .dot-rose {
-  background-color: #ef4444;
+  background-color: var(--color-status-offline, #f85149);
 }
 
 .dot-slate {
-  background-color: #6b7280;
+  background-color: var(--text-muted, #94a3b8);
 }
 
 .diag-card-value {
@@ -211,7 +211,7 @@ const availabilityPct = computed(() => {
 }
 
 .val-danger {
-  color: #ef4444;
+  color: var(--color-status-offline, #f85149);
 }
 
 .diag-card-sub {
