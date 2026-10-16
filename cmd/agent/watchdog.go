@@ -144,7 +144,7 @@ func (w *SelfHealingWatchdog) runOnce(ctx context.Context) {
 	}
 
 	// 3. Autonomous CRI Socket Recovery
-	if !health.ContainerdHealthy && health.CRISocketPath == "/run/containerd/containerd.sock" {
+	if !health.ContainerdHealthy && (health.CRISocketPath == "/run/containerd/containerd.sock" || (!health.DockerHealthy && health.CRISocketPath == "")) {
 		w.consecutiveCRIFail++
 		if w.consecutiveCRIFail >= 3 {
 			w.consecutiveCRIFail = 0

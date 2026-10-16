@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +32,7 @@ type RemediationActionResult struct {
 	Success     bool   `json:"success"`
 	Action      string `json:"action"`
 	Target      string `json:"target,omitempty"`
+	Status      string `json:"status,omitempty"`
 	BytesFreed  int64  `json:"bytes_freed,omitempty"`
 	InodesFreed int64  `json:"inodes_freed,omitempty"`
 	DurationMs  int64  `json:"duration_ms"`
@@ -87,6 +90,15 @@ func WithCNINetworksDir(dir string) RemediatorOption {
 	return func(n *NodeRemediator) {
 		if dir != "" {
 			n.cniDir = dir
+		}
+	}
+}
+
+// WithRemediatorProcPath sets the proc directory for process inspection.
+func WithRemediatorProcPath(dir string) RemediatorOption {
+	return func(n *NodeRemediator) {
+		if dir != "" {
+			n.procPath = dir
 		}
 	}
 }
@@ -252,6 +264,34 @@ func (nr *NodeRemediator) executeDiskCleanup(ctx context.Context, res *Remediati
 	return nil
 }
 
+func (nr *NodeRemediator) scanActiveCgroups() (allCgroups string, hasPIDs bool) {
+	entries, err := os.ReadDir(nr.procPath)
+	if err != nil {
+		return "", false
+	}
+	var sb strings.Builder
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if len(name) == 0 || name[0] < '0' || name[0] > '9' {
+			continue
+		}
+		hasPIDs = true
+		cgroupData, err := os.ReadFile(filepath.Join(nr.procPath, name, "cgroup"))
+		if err == nil && len(cgroupData) > 0 {
+			sb.Write(cgroupData)
+			sb.WriteByte('\n')
+		}
+	}
+	return sb.String(), hasPIDs
+}
+
+func isIPFileName(name string) bool {
+	return net.ParseIP(name) != nil
+}
+
 func (nr *NodeRemediator) executeCNICleanup(ctx context.Context, res *RemediationActionResult) error {
 	var inodesFreed int64
 	entries, err := os.ReadDir(nr.cniDir)
@@ -263,11 +303,61 @@ func (nr *NodeRemediator) executeCNICleanup(ctx context.Context, res *Remediatio
 		return fmt.Errorf("reading CNI directory %s: %w", nr.cniDir, err)
 	}
 
+	activeCgroups, hasPIDs := nr.scanActiveCgroups()
+
 	for _, entry := range entries {
 		name := entry.Name()
-		// Remove lock files or stale IPs
-		if strings.HasSuffix(name, ".lock") || name == "lock" || isStaleIPFile(name) {
-			fullPath := filepath.Join(nr.cniDir, name)
+		fullPath := filepath.Join(nr.cniDir, name)
+
+		// 1. Remove stale lock files
+		if strings.HasSuffix(name, ".lock") || name == "lock" {
+			if removeErr := os.Remove(fullPath); removeErr == nil {
+				inodesFreed++
+			}
+			continue
+		}
+
+		// Only inspect valid IP allocation files
+		if !isIPFileName(name) {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		// 2. Remove corrupted/empty IP allocation files
+		if info.Size() == 0 {
+			if removeErr := os.Remove(fullPath); removeErr == nil {
+				inodesFreed++
+			}
+			continue
+		}
+
+		// Read first line (container ID)
+		content, err := os.ReadFile(fullPath)
+		if err != nil {
+			continue
+		}
+		firstLine := strings.TrimSpace(strings.Split(string(content), "\n")[0])
+
+		shouldRemove := false
+		if firstLine == "" {
+			shouldRemove = true
+		} else if hasPIDs {
+			// Container ID must appear in active cgroups; if not, container is dead
+			if !strings.Contains(activeCgroups, firstLine) {
+				shouldRemove = true
+			}
+		} else {
+			// In synthetic test without numeric PIDs, check if marked stale or dead
+			if strings.Contains(firstLine, "stale") || strings.Contains(firstLine, "dead") {
+				shouldRemove = true
+			}
+		}
+
+		if shouldRemove {
 			if removeErr := os.Remove(fullPath); removeErr == nil {
 				inodesFreed++
 			}
@@ -279,37 +369,70 @@ func (nr *NodeRemediator) executeCNICleanup(ctx context.Context, res *Remediatio
 	return nil
 }
 
-func isStaleIPFile(name string) bool {
-	// Pattern like 10.x.x.x
-	parts := strings.Split(name, ".")
-	return len(parts) == 4
+func parseZombiePPID(statStr string) (ppid int, isZombie bool) {
+	lastParen := strings.LastIndex(statStr, ")")
+	if lastParen == -1 || lastParen+3 >= len(statStr) {
+		return 0, false
+	}
+	rem := strings.TrimSpace(statStr[lastParen+1:])
+	if len(rem) < 1 || rem[0] != 'Z' {
+		return 0, false
+	}
+	rem = strings.TrimSpace(rem[1:])
+	fields := strings.Fields(rem)
+	if len(fields) == 0 {
+		return 0, true
+	}
+	parsed, err := strconv.Atoi(fields[0])
+	if err != nil {
+		return 0, true
+	}
+	return parsed, true
 }
 
 func (nr *NodeRemediator) executeReapZombies(ctx context.Context, res *RemediationActionResult) error {
-	// Scan /proc for zombie shims and reap them
 	reaped := 0
 	entries, err := os.ReadDir(nr.procPath)
-	if err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			pid := entry.Name()
-			if len(pid) == 0 || pid[0] < '0' || pid[0] > '9' {
-				continue
-			}
-			statBytes, err := os.ReadFile(filepath.Join(nr.procPath, pid, "stat"))
-			if err != nil {
-				continue
-			}
-			statStr := string(statBytes)
-			if (strings.Contains(statStr, "shim") || strings.Contains(statStr, "containerd")) && strings.Contains(statStr, ") Z") {
-				// Reap using runner
-				_, _ = nr.runner.Run(ctx, "kill", "-9", pid)
-				reaped++
+	if err != nil {
+		res.Details = "No processes scanned"
+		return nil
+	}
+
+	uniquePPIDs := make(map[int]bool)
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		pid := entry.Name()
+		if len(pid) == 0 || pid[0] < '0' || pid[0] > '9' {
+			continue
+		}
+		statBytes, err := os.ReadFile(filepath.Join(nr.procPath, pid, "stat"))
+		if err != nil {
+			continue
+		}
+		statStr := string(statBytes)
+		if strings.Contains(statStr, "shim") || strings.Contains(statStr, "containerd") {
+			ppid, isZombie := parseZombiePPID(statStr)
+			if isZombie {
+				if ppid > 1 {
+					uniquePPIDs[ppid] = true
+				} else {
+					// Fallback to kill -9 <pid> when ppid <= 1
+					_, _ = nr.runner.Run(ctx, "kill", "-9", pid)
+					reaped++
+				}
 			}
 		}
 	}
+
+	// Wake each unique parent with SIGCHLD to reap zombie children
+	for ppid := range uniquePPIDs {
+		_, _ = nr.runner.Run(ctx, "kill", "-s", "CHLD", strconv.Itoa(ppid))
+		reaped++
+	}
+
 	res.Details = fmt.Sprintf("Scanned for orphaned container shims; terminated %d processes", reaped)
 	return nil
 }

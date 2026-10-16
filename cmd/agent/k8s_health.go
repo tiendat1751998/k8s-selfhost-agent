@@ -24,10 +24,11 @@ type NodeK8sHealthResponse struct {
 	MemoryPressure    bool     `json:"memory_pressure"`
 	PIDPressure       bool     `json:"pid_pressure"`
 	DStateProcesses   int      `json:"d_state_processes"`
-	ZombieCount       int      `json:"zombie_count"`
-	ConntrackUsagePct float64  `json:"conntrack_usage_pct"`
-	DetectedAnomalies []string `json:"detected_anomalies"`
-	CheckedAt         string   `json:"checked_at"`
+	ZombieCount        int      `json:"zombie_count"`
+	ConntrackUsagePct  float64  `json:"conntrack_usage_pct"`
+	LastLeaseRenewUnix int64    `json:"last_lease_renew_unix,omitempty"`
+	DetectedAnomalies  []string `json:"detected_anomalies"`
+	CheckedAt          string   `json:"checked_at"`
 }
 
 // RuntimeProber defines methods to probe local Kubelet and container runtime sockets.
@@ -169,7 +170,10 @@ func (h *K8sHealthChecker) CheckHealth(ctx context.Context) NodeK8sHealthRespons
 	if h.prober.ProbeSocket(containerdSock, 1*time.Second) {
 		resp.ContainerdHealthy = true
 		resp.CRISocketPath = containerdSock
+	} else if _, err := os.Stat(containerdSock); err == nil {
+		resp.CRISocketPath = containerdSock
 	}
+
 	if h.prober.ProbeSocket(dockerSock, 1*time.Second) {
 		resp.DockerHealthy = true
 		if resp.CRISocketPath == "" {
@@ -180,6 +184,11 @@ func (h *K8sHealthChecker) CheckHealth(ctx context.Context) NodeK8sHealthRespons
 		if resp.CRISocketPath == "" {
 			resp.CRISocketPath = crioSock
 		}
+	}
+
+	// Default to containerdSock if neither docker nor crio succeeded
+	if resp.CRISocketPath == "" && !resp.DockerHealthy {
+		resp.CRISocketPath = containerdSock
 	}
 
 	// 4. Scan /proc for D-state and Zombie processes

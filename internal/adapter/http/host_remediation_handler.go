@@ -118,7 +118,20 @@ func (h *HostRemediationHandler) RemediateHost(w http.ResponseWriter, r *http.Re
 			zap.String("action", req.Action),
 			zap.Error(err),
 		)
+		errStr := err.Error()
+		if strings.Contains(errStr, "429") || strings.Contains(strings.ToLower(errStr), "cooldown") {
+			writeError(w, http.StatusTooManyRequests, "remediation rate limit exceeded, target in cooldown", err)
+			return
+		}
+		if strings.Contains(errStr, "400") || strings.Contains(strings.ToLower(errStr), "allowlist") {
+			writeError(w, http.StatusBadRequest, "invalid remediation request", err)
+			return
+		}
 		writeError(w, http.StatusBadGateway, "failed to execute remediation on host agent", err)
+		return
+	}
+	if res != nil && (res.Status == "cooldown" || strings.Contains(strings.ToLower(res.Details), "cooldown")) {
+		writeError(w, http.StatusTooManyRequests, "remediation rate limit exceeded, target in cooldown", nil)
 		return
 	}
 
@@ -164,7 +177,20 @@ func (h *HostRemediationHandler) RemediateNode(w http.ResponseWriter, r *http.Re
 			zap.String("action", req.Action),
 			zap.Error(err),
 		)
+		errStr := err.Error()
+		if strings.Contains(errStr, "429") || strings.Contains(strings.ToLower(errStr), "cooldown") {
+			writeError(w, http.StatusTooManyRequests, "remediation rate limit exceeded, target in cooldown", err)
+			return
+		}
+		if strings.Contains(errStr, "400") || strings.Contains(strings.ToLower(errStr), "allowlist") {
+			writeError(w, http.StatusBadRequest, "invalid remediation request", err)
+			return
+		}
 		writeError(w, http.StatusBadGateway, "failed to execute remediation on node agent", err)
+		return
+	}
+	if res != nil && (res.Status == "cooldown" || strings.Contains(strings.ToLower(res.Details), "cooldown")) {
+		writeError(w, http.StatusTooManyRequests, "remediation rate limit exceeded, target in cooldown", nil)
 		return
 	}
 

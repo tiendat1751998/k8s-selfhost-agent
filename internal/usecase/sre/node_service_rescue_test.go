@@ -319,3 +319,99 @@ func TestDefaultHostProber_CheckKubeletHealth_ViaAgentK8sHealth(t *testing.T) {
 	}
 }
 
+func TestDefaultHostProber_CheckKubeletHealth_StaleLeaseRejected(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/k8s/health" && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			// Lease renewed 10 minutes ago (> 2 minutes)
+			staleUnix := time.Now().Add(-10 * time.Minute).Unix()
+			res := map[string]interface{}{
+				"kubelet_healthy":       true,
+				"containerd_healthy":    true,
+				"last_lease_renew_unix": staleUnix,
+			}
+			_ = json.NewEncoder(w).Encode(res)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	hostRepo := &rescueMockHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-worker-stale",
+				Name:     "worker-agent-stale",
+				Endpoint: server.URL,
+			},
+		},
+	}
+
+	mgr := sre.NewNodeServiceRescueManager(nil, nil)
+	mgr.SetComputeHostRepo(hostRepo)
+
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-agent-stale"},
+	}
+
+	prober := mgr.Prober()
+	kubeletOk, containerdOk, err := prober.CheckKubeletHealth(context.Background(), node)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Stale lease must result in kubeletOk == false
+	if kubeletOk {
+		t.Errorf("expected kubeletOk to be false due to stale lease (> 2m old)")
+	}
+	if !containerdOk {
+		t.Errorf("expected containerdOk to remain true")
+	}
+}
+
+func TestDefaultHostProber_CheckKubeletHealth_FreshLeaseAccepted(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/k8s/health" && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			// Lease renewed 30 seconds ago (< 2 minutes)
+			freshUnix := time.Now().Add(-30 * time.Second).Unix()
+			res := map[string]interface{}{
+				"kubelet_healthy":       true,
+				"containerd_healthy":    true,
+				"last_lease_renew_unix": freshUnix,
+			}
+			_ = json.NewEncoder(w).Encode(res)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	hostRepo := &rescueMockHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-worker-fresh",
+				Name:     "worker-agent-fresh",
+				Endpoint: server.URL,
+			},
+		},
+	}
+
+	mgr := sre.NewNodeServiceRescueManager(nil, nil)
+	mgr.SetComputeHostRepo(hostRepo)
+
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-agent-fresh"},
+	}
+
+	prober := mgr.Prober()
+	kubeletOk, containerdOk, err := prober.CheckKubeletHealth(context.Background(), node)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !kubeletOk || !containerdOk {
+		t.Errorf("expected both kubeletOk and containerdOk to be true, got %t, %t", kubeletOk, containerdOk)
+	}
+}
+

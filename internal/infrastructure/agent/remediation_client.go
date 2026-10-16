@@ -41,10 +41,11 @@ type NodeK8sHealthResponse struct {
 	MemoryPressure    bool     `json:"memory_pressure"`
 	PIDPressure       bool     `json:"pid_pressure"`
 	DStateProcesses   int      `json:"d_state_processes"`
-	ZombieCount       int      `json:"zombie_count"`
-	ConntrackUsagePct float64  `json:"conntrack_usage_pct"`
-	DetectedAnomalies []string `json:"detected_anomalies"`
-	CheckedAt         string   `json:"checked_at"`
+	ZombieCount        int      `json:"zombie_count"`
+	ConntrackUsagePct  float64  `json:"conntrack_usage_pct"`
+	LastLeaseRenewUnix int64    `json:"last_lease_renew_unix,omitempty"`
+	DetectedAnomalies  []string `json:"detected_anomalies"`
+	CheckedAt          string   `json:"checked_at"`
 }
 
 // RemediationRequest defines payload for POST /remediate.
@@ -59,6 +60,7 @@ type RemediationActionResult struct {
 	Success     bool   `json:"success"`
 	Action      string `json:"action"`
 	Target      string `json:"target,omitempty"`
+	Status      string `json:"status,omitempty"`
 	BytesFreed  int64  `json:"bytes_freed,omitempty"`
 	InodesFreed int64  `json:"inodes_freed,omitempty"`
 	DurationMs  int64  `json:"duration_ms"`

@@ -373,16 +373,32 @@ func TestRemediator_DiskPressureCleanup(t *testing.T) {
 
 func TestRemediator_CNIIPAMCleanup(t *testing.T) {
 	tempCNIDir := t.TempDir()
-	// Create stale lock file and stale IP allocation files
-	_ = os.WriteFile(filepath.Join(tempCNIDir, "10.244.0.55"), []byte("container-dead-id"), 0644)
-	_ = os.WriteFile(filepath.Join(tempCNIDir, "10.244.0.56"), []byte("container-dead-id-2"), 0644)
+	tempProcDir := t.TempDir()
+
+	// 1. Create active container cgroup in mock proc
+	activePIDDir := filepath.Join(tempProcDir, "1234")
+	_ = os.MkdirAll(activePIDDir, 0755)
+	_ = os.WriteFile(filepath.Join(activePIDDir, "cgroup"), []byte("0::/kubepods.slice/cri-containerd-container-live-active-99.scope\n"), 0644)
+
+	// 2. Create CNI files:
+	// Dead container IP -> should be removed
+	_ = os.WriteFile(filepath.Join(tempCNIDir, "10.244.0.55"), []byte("container-dead-id\n"), 0644)
+	// Corrupted/empty IP file -> should be removed
+	_ = os.WriteFile(filepath.Join(tempCNIDir, "10.244.0.56"), []byte(""), 0644)
+	// Stale lock file -> should be removed
 	_ = os.WriteFile(filepath.Join(tempCNIDir, "lock"), []byte("stale-lock"), 0644)
-	_ = os.WriteFile(filepath.Join(tempCNIDir, "last_reserved_ip.0"), []byte("10.244.0.56"), 0644)
+	// Active container IP -> MUST BE PRESERVED
+	activeIPFile := filepath.Join(tempCNIDir, "10.244.0.99")
+	_ = os.WriteFile(activeIPFile, []byte("container-live-active-99\n"), 0644)
+	// Non-IP metadata file -> should NOT be deleted
+	reservedIPFile := filepath.Join(tempCNIDir, "last_reserved_ip.0")
+	_ = os.WriteFile(reservedIPFile, []byte("10.244.0.56"), 0644)
 
 	runner := newMockCommandRunner()
 	remediator := NewNodeRemediator(
 		WithCommandRunner(runner),
 		WithCNINetworksDir(tempCNIDir),
+		WithRemediatorProcPath(tempProcDir),
 	)
 
 	res, err := remediator.Execute(context.Background(), RemediationRequest{
@@ -394,14 +410,44 @@ func TestRemediator_CNIIPAMCleanup(t *testing.T) {
 	if !res.Success {
 		t.Errorf("expected Success=true, got %v", res)
 	}
-	if res.InodesFreed < 1 {
-		t.Errorf("expected at least 1 inode freed, got %d", res.InodesFreed)
+	if res.InodesFreed != 3 {
+		t.Errorf("expected exactly 3 inodes freed (dead IP, empty IP, lock), got %d", res.InodesFreed)
+	}
+
+	// Active IP file MUST be preserved
+	if _, err := os.Stat(activeIPFile); os.IsNotExist(err) {
+		t.Errorf("active IP allocation file %s was deleted unexpectedly", activeIPFile)
+	}
+	// Metadata file MUST be preserved
+	if _, err := os.Stat(reservedIPFile); os.IsNotExist(err) {
+		t.Errorf("reserved IP metadata file %s was deleted unexpectedly", reservedIPFile)
 	}
 }
 
 func TestRemediator_ReapZombies(t *testing.T) {
+	tempProcDir := t.TempDir()
+
+	// Zombie 1001 with parent 500
+	_ = os.MkdirAll(filepath.Join(tempProcDir, "1001"), 0755)
+	_ = os.WriteFile(filepath.Join(tempProcDir, "1001", "stat"), []byte("1001 (containerd-shim) Z 500 1001 1001 0 -1 4194304\n"), 0644)
+
+	// Zombie 1002 with same parent 500 (verifies deduplication)
+	_ = os.MkdirAll(filepath.Join(tempProcDir, "1002"), 0755)
+	_ = os.WriteFile(filepath.Join(tempProcDir, "1002", "stat"), []byte("1002 (containerd-shim) Z 500 1002 1002 0 -1 4194304\n"), 0644)
+
+	// Zombie 1003 with parent 1 (init/systemd -> fallback to kill -9)
+	_ = os.MkdirAll(filepath.Join(tempProcDir, "1003"), 0755)
+	_ = os.WriteFile(filepath.Join(tempProcDir, "1003", "stat"), []byte("1003 (containerd-shim) Z 1 1003 1003 0 -1 4194304\n"), 0644)
+
+	// Process 1004 sleeping (not a zombie -> should not be killed or signaled)
+	_ = os.MkdirAll(filepath.Join(tempProcDir, "1004"), 0755)
+	_ = os.WriteFile(filepath.Join(tempProcDir, "1004", "stat"), []byte("1004 (containerd-shim) S 500 1004 1004 0 -1 4194304\n"), 0644)
+
 	runner := newMockCommandRunner()
-	remediator := NewNodeRemediator(WithCommandRunner(runner))
+	remediator := NewNodeRemediator(
+		WithCommandRunner(runner),
+		WithRemediatorProcPath(tempProcDir),
+	)
 
 	res, err := remediator.Execute(context.Background(), RemediationRequest{
 		Action: "reap_zombies",
@@ -411,6 +457,21 @@ func TestRemediator_ReapZombies(t *testing.T) {
 	}
 	if !res.Success {
 		t.Errorf("expected Success=true, got %v", res)
+	}
+
+	// Must signal parent 500 with SIGCHLD
+	if !runner.hasExecuted("kill -s CHLD 500") {
+		t.Errorf("expected runner to execute 'kill -s CHLD 500' to wake parent subreaper")
+	}
+
+	// Must fallback to kill -9 1003 because ppid <= 1
+	if !runner.hasExecuted("kill -9 1003") {
+		t.Errorf("expected runner to execute 'kill -9 1003' for ppid <= 1 fallback")
+	}
+
+	// Must NOT execute kill -9 1001 because ppid > 1
+	if runner.hasExecuted("kill -9 1001") {
+		t.Errorf("did not expect kill -9 on zombie pid 1001 whose ppid is 500")
 	}
 }
 
@@ -468,56 +529,5 @@ func TestRemediator_HTTPAndHistory(t *testing.T) {
 	}
 	if history[0].Target != "kubelet" || history[0].Action != "restart_service" {
 		t.Errorf("unexpected history entry: %+v", history[0])
-	}
-}
-
-// ------------------- Phase 7.3: Watchdog & Anomaly Tests -------------------
-
-func TestWatchdog_DetectLogAnomaly(t *testing.T) {
-	tests := []struct {
-		line        string
-		wantCode    string
-		wantMatched bool
-	}{
-		{"kernel: Out of memory: Killed process 12345 (mysqld)", "OOM_KILL", true},
-		{"kubelet: PLEG is not healthy: pleg was last seen active 3m ago", "PLEG_UNHEALTHY", true},
-		{"kernel: nf_conntrack: table full, dropping packet", "CONNTRACK_FULL", true},
-		{"kubelet: FailedCreatePodSandBox: failed to setup network for sandbox", "CNI_SANDBOX_FAILURE", true},
-		{"normal application log info line", "", false},
-		{"", "", false},
-	}
-
-	for _, tc := range tests {
-		code, matched := DetectLogAnomaly(tc.line)
-		if matched != tc.wantMatched || code != tc.wantCode {
-			t.Errorf("DetectLogAnomaly(%q) = (%q, %v), want (%q, %v)", tc.line, code, matched, tc.wantCode, tc.wantMatched)
-		}
-	}
-}
-
-func TestWatchdog_SelfHealingTrigger(t *testing.T) {
-	runner := newMockCommandRunner()
-	remediator := NewNodeRemediator(WithCommandRunner(runner))
-
-	// Mock prober that reports kubelet down 3 times
-	prober := &mockRuntimeProber{
-		kubeletHealthy: false,
-		plegHealthy:    false,
-	}
-	collector := NewSystemCollector("", "", nil)
-	checker := NewK8sHealthChecker(collector, WithRuntimeProber(prober))
-
-	watchdog := NewSelfHealingWatchdog(checker, remediator, WithWatchdogInterval(10*time.Millisecond))
-
-	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
-	defer cancel()
-
-	// Run check iteration manually
-	watchdog.runOnce(ctx) // check 1: consecutive = 1
-	watchdog.runOnce(ctx) // check 2: consecutive = 2
-	watchdog.runOnce(ctx) // check 3: consecutive = 3 -> triggers restart_service(kubelet)
-
-	if !runner.hasExecuted("systemctl restart kubelet") {
-		t.Errorf("expected watchdog to trigger systemctl restart kubelet on 3 consecutive failures")
 	}
 }

@@ -285,9 +285,17 @@ func (p *defaultHostProber) CheckKubeletHealth(ctx context.Context, node *corev1
 	}
 	if target != "" {
 		if host, token, err := cli.ResolveHostForNode(ctx, p.hostRepo, target); err == nil && host != nil {
-			health, hErr := cli.GetNodeK8sHealth(ctx, host.Endpoint, token)
-			if hErr == nil && health != nil {
-				return health.KubeletHealthy, health.ContainerdHealthy, nil
+			resp, hErr := cli.GetNodeK8sHealth(ctx, host.Endpoint, token)
+			if hErr == nil && resp != nil {
+				leaseHealthy := true
+				if resp.LastLeaseRenewUnix > 0 {
+					leaseHealthy = time.Since(time.Unix(resp.LastLeaseRenewUnix, 0)) < 2*time.Minute
+				}
+				kubeletOk := resp.KubeletHealthy && leaseHealthy
+				if kubeletOk && resp.ContainerdHealthy {
+					return true, true, nil
+				}
+				return kubeletOk, resp.ContainerdHealthy, nil
 			}
 		}
 	}

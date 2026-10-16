@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -204,5 +205,64 @@ func TestHostRemediationHandler_RemediateNode_Success(t *testing.T) {
 	_ = json.NewDecoder(rec.Body).Decode(&res)
 	if !res.Success || res.BytesFreed != 104857600 {
 		t.Errorf("unexpected result: %+v", res)
+	}
+}
+
+func TestHostRemediationHandler_RemediateHost_CooldownReturns429(t *testing.T) {
+	// Case 1: Error containing 429
+	client := &mockRemediationClient{
+		actionErr: errors.New("agent /remediate returned HTTP 429: rate limit exceeded, target in cooldown"),
+	}
+	handler := adapthttp.NewHostRemediationHandler(nil, client, nil)
+	router := setupRemediationTestRouter(handler)
+
+	payload := `{"action":"restart_service","target":"kubelet","reason":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/hosts/worker-01/remediate", bytes.NewBufferString(payload))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 Too Many Requests, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Case 2: Result with Status == "cooldown"
+	client2 := &mockRemediationClient{
+		actionResult: &agent.RemediationActionResult{
+			Success: false,
+			Action:  "restart_service",
+			Target:  "kubelet",
+			Status:  "cooldown",
+			Details: "target in cooldown",
+		},
+	}
+	handler2 := adapthttp.NewHostRemediationHandler(nil, client2, nil)
+	router2 := setupRemediationTestRouter(handler2)
+
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/hosts/worker-01/remediate", bytes.NewBufferString(payload))
+	req2.Header.Set("Content-Type", "application/json")
+	router2.ServeHTTP(rec2, req2)
+
+	if rec2.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 for cooldown status, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+}
+
+func TestHostRemediationHandler_RemediateNode_BadRequestReturns400(t *testing.T) {
+	client := &mockRemediationClient{
+		actionErr: errors.New("agent /remediate returned HTTP 400: allowlist violation"),
+	}
+	handler := adapthttp.NewHostRemediationHandler(nil, client, nil)
+	router := setupRemediationTestRouter(handler)
+
+	payload := `{"action":"restart_service","target":"kubelet","reason":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/k8s/nodes/node-alpha/remediate", bytes.NewBufferString(payload))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
