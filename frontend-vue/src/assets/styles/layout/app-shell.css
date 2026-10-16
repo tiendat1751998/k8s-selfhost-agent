@@ -184,8 +184,8 @@
 }
 .hud-mobile-brand { display: none; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
 .hud-mobile-brand-icon { font-size: 16px; color: var(--text-primary, #f3f4f6); filter: none; }
-.hud-mobile-brand-title { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; color: var(--text-primary); font-family: var(--font-mono, monospace); }
-.hud-mobile-brand-title span { color: var(--color-primary, #326ce5); }
+.hud-mobile-brand-title { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); font-family: var(--font-sans); }
+.hud-mobile-brand-title span { color: var(--color-primary, #326ce5); margin-left: 3px; }
 .mobile-search-btn {
   display: none; align-items: center;
   justify-content: center; width: 44px;
@@ -396,7 +396,7 @@
     display: block; position: fixed; inset: 0;
     background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 99;
   }
-  .mobile-menu-btn { display: flex !important; position: relative !important; min-width: 44px !important; min-height: 44px !important; }
+  .mobile-menu-btn { display: inline-flex !important; position: relative !important; width: 32px !important; height: 32px !important; min-width: 32px !important; min-height: 32px !important; border-radius: 6px !important; }
   .main-wrapper { margin-left: 0 !important; width: 100% !important; max-width: 100vw !important; }
   .sidebar-toggle-btn, .sidebar-rail-tooltip { display: none !important; }
   .drawer-mobile-meta { display: flex !important; }
@@ -416,18 +416,18 @@
   }
   .sidebar.sidebar-open .nav-menu,
   .sidebar.is-collapsed.sidebar-open .nav-menu { padding: 8px 12px !important; }
-  .top-hud { padding: 0 12px; gap: 8px; height: 42px; min-height: 42px; max-height: 42px; }
+  .top-hud { padding: 0 12px; gap: 8px; height: 48px; min-height: 48px; max-height: 48px; }
   .hud-left { padding-left: 0 !important; display: flex !important; align-items: center; gap: 10px; flex: 1; min-width: 0 !important; width: auto !important; }
   .hud-center { display: none !important; }
   .hud-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-  .theme-toggle-btn { width: 34px !important; height: 34px !important; min-width: 34px !important; min-height: 34px !important; }
+  .theme-toggle-btn { width: 32px !important; height: 32px !important; min-width: 32px !important; min-height: 32px !important; border-radius: 6px !important; }
   .tenant-selector-wrap { display: none !important; }
   .hud-user { display: none !important; }
   .hud-status-pill { display: none !important; }
   .command-search-btn { display: none !important; }
   .hud-mobile-brand { display: flex !important; }
-  .mobile-search-btn { display: inline-flex !important; position: relative !important; min-width: 44px !important; min-height: 44px !important; }
-  .page-container { overflow: visible; padding: 6px 12px 80px; }
+  .mobile-search-btn { display: inline-flex !important; position: relative !important; width: 32px !important; height: 32px !important; min-width: 32px !important; min-height: 32px !important; border-radius: 6px !important; }
+  .page-container, .page-container.route-hosts { overflow: visible; padding: 10px 12px 80px; }
   .page-container.route-logs { padding: 4px 0 calc(50px + var(--sab, env(safe-area-inset-bottom, 0px))) 0; overflow: hidden; height: calc(100vh - 42px); display: flex; flex-direction: column; }
   .mobile-bottom-bar {
     display: flex; position: fixed;

@@ -187,7 +187,7 @@
 
 /* 6. Responsive Styles */
 @media (max-width: 640px) {
-  .hud-bell-pill { padding: 5px 8px; gap: 0; min-width: 32px; justify-content: center; }
+  .hud-bell-pill { width: 32px !important; height: 32px !important; min-width: 32px !important; min-height: 32px !important; padding: 0 !important; border-radius: 6px !important; justify-content: center; }
   .bell-count-text { display: none; }
   .bell-mobile-badge {
     position: absolute; top: -6px; right: -10px; font-size: 9px; font-weight: 700;

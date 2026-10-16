@@ -41,24 +41,27 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px;
-  background: var(--bg-surface, #0f1012);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  padding: 0 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
+  gap: 8px;
 }
 
 .hosts-mobile-command-bar .command-bar-left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
 .hosts-mobile-command-bar .command-bar-title {
-  font-size: 13.5px;
+  font-family: var(--font-sans);
+  font-size: 15px;
   font-weight: 600;
-  color: var(--text-primary, #f3f4f6);
+  color: var(--text-primary);
   letter-spacing: -0.01em;
+  line-height: 1;
   white-space: nowrap;
 }
 
@@ -69,34 +72,34 @@
 }
 
 .btn-icon-cmd {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  min-height: 28px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  background: var(--bg-card, #141516);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   cursor: pointer;
   touch-action: manipulation;
   transition: all 0.15s ease;
 }
 
 .btn-icon-cmd:hover:not(:disabled) {
-  background: var(--bg-elevated, #1a1b1e);
-  color: var(--text-primary, #f3f4f6);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--color-border-strong);
 }
 
 .btn-icon-cmd.active {
-  background: var(--bg-elevated, #1a1b1e);
-  border-color: rgba(255, 255, 255, 0.18);
-  color: var(--text-primary, #f3f4f6);
+  background: var(--bg-elevated);
+  border-color: var(--color-border-strong);
+  color: var(--text-primary);
 }
 
 .btn-icon-cmd:disabled {
