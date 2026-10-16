@@ -269,6 +269,7 @@ func main() {
 		controlPlaneURL string
 		nodeIP          string
 		autoHeal        bool
+		allowedServices string
 	)
 
 	flag.IntVar(&port, "port", 9100, "Port for metrics and logs HTTP server")
@@ -280,9 +281,17 @@ func main() {
 	flag.StringVar(&controlPlaneURL, "control-plane-url", "", "Optional control plane URL for automatic agent registration")
 	flag.StringVar(&nodeIP, "node-ip", "", "Optional node IP to report to control plane (auto-detected if empty)")
 	flag.BoolVar(&autoHeal, "auto-heal", true, "Enable autonomous local self-healing watchdog")
+	flag.StringVar(&allowedServices, "allowed-services", "", "Comma-separated list of additional allowed systemd services")
 	flag.Parse()
 
 	port, bindAddr, logDir, engineDir, authToken = applyEnvOverrides(port, bindAddr, logDir, engineDir, authToken)
+	if envServices := os.Getenv("AGENT_ALLOWED_SERVICES"); envServices != "" {
+		if allowedServices != "" {
+			allowedServices += "," + envServices
+		} else {
+			allowedServices = envServices
+		}
+	}
 	if envAutoHeal := os.Getenv("AGENT_AUTO_HEAL"); envAutoHeal != "" {
 		if val, err := strconv.ParseBool(envAutoHeal); err == nil {
 			autoHeal = val
@@ -402,6 +411,9 @@ func main() {
 
 	healthChecker := NewK8sHealthChecker(collector, WithK8sProcPath("/proc"))
 	remediator := NewNodeRemediator(WithRemediatorLogDir(logDir))
+	if allowedServices != "" {
+		remediator.AddAllowedServices(strings.Split(allowedServices, ","))
+	}
 
 	if autoHeal {
 		var logWriter *logengine.Writer

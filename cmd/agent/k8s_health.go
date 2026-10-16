@@ -10,25 +10,36 @@ import (
 	"time"
 )
 
+// UnhealthyContainerInfo holds diagnostic details of a non-running or unhealthy container.
+type UnhealthyContainerInfo struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Image        string `json:"image"`
+	State        string `json:"state"`
+	Status       string `json:"status"`
+	RestartCount int    `json:"restart_count"`
+}
+
 // NodeK8sHealthResponse represents structured Kubernetes node-level diagnostics.
 type NodeK8sHealthResponse struct {
-	NodeName          string   `json:"node_name"`
-	KubeletHealthy    bool     `json:"kubelet_healthy"`
-	KubeletLatencyMs  float64  `json:"kubelet_latency_ms"`
-	PLEGHealthy       bool     `json:"pleg_healthy"`
-	ContainerdHealthy bool     `json:"containerd_healthy"`
-	DockerHealthy     bool     `json:"docker_healthy"`
-	CRISocketPath     string   `json:"cri_socket_path,omitempty"`
-	DiskPressure      bool     `json:"disk_pressure"`
-	InodePressure     bool     `json:"inode_pressure"`
-	MemoryPressure    bool     `json:"memory_pressure"`
-	PIDPressure       bool     `json:"pid_pressure"`
-	DStateProcesses   int      `json:"d_state_processes"`
-	ZombieCount        int      `json:"zombie_count"`
-	ConntrackUsagePct  float64  `json:"conntrack_usage_pct"`
-	LastLeaseRenewUnix int64    `json:"last_lease_renew_unix,omitempty"`
-	DetectedAnomalies  []string `json:"detected_anomalies"`
-	CheckedAt          string   `json:"checked_at"`
+	NodeName            string                   `json:"node_name"`
+	KubeletHealthy      bool                     `json:"kubelet_healthy"`
+	KubeletLatencyMs    float64                  `json:"kubelet_latency_ms"`
+	PLEGHealthy         bool                     `json:"pleg_healthy"`
+	ContainerdHealthy   bool                     `json:"containerd_healthy"`
+	DockerHealthy       bool                     `json:"docker_healthy"`
+	CRISocketPath       string                   `json:"cri_socket_path,omitempty"`
+	DiskPressure        bool                     `json:"disk_pressure"`
+	InodePressure       bool                     `json:"inode_pressure"`
+	MemoryPressure      bool                     `json:"memory_pressure"`
+	PIDPressure         bool                     `json:"pid_pressure"`
+	DStateProcesses     int                      `json:"d_state_processes"`
+	ZombieCount         int                      `json:"zombie_count"`
+	ConntrackUsagePct   float64                  `json:"conntrack_usage_pct"`
+	LastLeaseRenewUnix  int64                    `json:"last_lease_renew_unix,omitempty"`
+	UnhealthyContainers []UnhealthyContainerInfo `json:"unhealthy_containers"`
+	DetectedAnomalies   []string                 `json:"detected_anomalies"`
+	CheckedAt           string                   `json:"checked_at"`
 }
 
 // RuntimeProber defines methods to probe local Kubelet and container runtime sockets.
@@ -88,6 +99,7 @@ type K8sHealthChecker struct {
 	collector *SystemCollector
 	prober    RuntimeProber
 	procPath  string
+	runner    CommandRunner
 }
 
 // HealthCheckerOption configures K8sHealthChecker.
@@ -111,12 +123,22 @@ func WithK8sProcPath(p string) HealthCheckerOption {
 	}
 }
 
+// WithHealthCommandRunner injects custom CommandRunner for container inspection.
+func WithHealthCommandRunner(r CommandRunner) HealthCheckerOption {
+	return func(h *K8sHealthChecker) {
+		if r != nil {
+			h.runner = r
+		}
+	}
+}
+
 // NewK8sHealthChecker constructs a new K8sHealthChecker.
 func NewK8sHealthChecker(collector *SystemCollector, opts ...HealthCheckerOption) *K8sHealthChecker {
 	checker := &K8sHealthChecker{
 		collector: collector,
 		prober:    newDefaultRuntimeProber(),
 		procPath:  "/proc",
+		runner:    &osCommandRunner{},
 	}
 	for _, opt := range opts {
 		opt(checker)
@@ -127,8 +149,9 @@ func NewK8sHealthChecker(collector *SystemCollector, opts ...HealthCheckerOption
 // CheckHealth runs an exhaustive local health inspection and returns NodeK8sHealthResponse.
 func (h *K8sHealthChecker) CheckHealth(ctx context.Context) NodeK8sHealthResponse {
 	resp := NodeK8sHealthResponse{
-		CheckedAt:         time.Now().UTC().Format(time.RFC3339),
-		DetectedAnomalies: make([]string, 0),
+		CheckedAt:           time.Now().UTC().Format(time.RFC3339),
+		UnhealthyContainers: make([]UnhealthyContainerInfo, 0),
+		DetectedAnomalies:   make([]string, 0),
 	}
 
 	// 1. Host identity & resource metrics
@@ -223,6 +246,12 @@ func (h *K8sHealthChecker) CheckHealth(ctx context.Context) NodeK8sHealthRespons
 	}
 	if resp.ZombieCount > 0 {
 		resp.DetectedAnomalies = append(resp.DetectedAnomalies, "ZOMBIE_PROCESSES_DETECTED")
+	}
+
+	// 6. Inspect local containers
+	resp.UnhealthyContainers = detectUnhealthyContainers(ctx, h.runner)
+	if len(resp.UnhealthyContainers) > 0 {
+		resp.DetectedAnomalies = append(resp.DetectedAnomalies, "UNHEALTHY_CONTAINERS_DETECTED")
 	}
 
 	return resp

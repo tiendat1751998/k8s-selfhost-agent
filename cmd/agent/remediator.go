@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -54,14 +53,15 @@ func (r *osCommandRunner) Run(ctx context.Context, name string, args ...string) 
 
 // NodeRemediator executes allowlisted remediation tasks with circuit breakers and audit logging.
 type NodeRemediator struct {
-	mu             sync.Mutex
-	runner         CommandRunner
-	logDir         string
-	cniDir         string
-	procPath       string
-	history        []RemediationActionResult
-	historyLimit   int
-	restartHistory map[string][]time.Time
+	mu              sync.Mutex
+	runner          CommandRunner
+	logDir          string
+	cniDir          string
+	procPath        string
+	history         []RemediationActionResult
+	historyLimit    int
+	restartHistory  map[string][]time.Time
+	allowedServices map[string]bool
 }
 
 // RemediatorOption configures NodeRemediator.
@@ -106,28 +106,23 @@ func WithRemediatorProcPath(dir string) RemediatorOption {
 // NewNodeRemediator creates a new allowlisted remediation engine.
 func NewNodeRemediator(opts ...RemediatorOption) *NodeRemediator {
 	nr := &NodeRemediator{
-		runner:         &osCommandRunner{},
-		logDir:         "/var/log",
-		cniDir:         "/var/lib/cni/networks",
-		procPath:       "/proc",
-		history:        make([]RemediationActionResult, 0, 50),
-		historyLimit:   50,
-		restartHistory: make(map[string][]time.Time),
+		runner:          &osCommandRunner{},
+		logDir:          "/var/log",
+		cniDir:          "/var/lib/cni/networks",
+		procPath:        "/proc",
+		history:         make([]RemediationActionResult, 0, 50),
+		historyLimit:    50,
+		restartHistory:  make(map[string][]time.Time),
+		allowedServices: make(map[string]bool),
+	}
+	for k, v := range defaultAllowedServices {
+		nr.allowedServices[k] = v
 	}
 	for _, opt := range opts {
 		opt(nr)
 	}
 	return nr
 }
-
-var validTargets = map[string]bool{
-	"kubelet":    true,
-	"containerd": true,
-	"docker":     true,
-	"crio":       true,
-}
-
-var safeNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 // Execute performs an allowlisted remediation action safely.
 func (nr *NodeRemediator) Execute(ctx context.Context, req RemediationRequest) (RemediationActionResult, error) {
@@ -138,7 +133,7 @@ func (nr *NodeRemediator) Execute(ctx context.Context, req RemediationRequest) (
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
 
-	if err := validateRemediationRequest(req); err != nil {
+	if err := nr.validateRequest(req); err != nil {
 		res.DurationMs = time.Since(start).Milliseconds()
 		res.Success = false
 		res.Details = err.Error()
@@ -149,6 +144,8 @@ func (nr *NodeRemediator) Execute(ctx context.Context, req RemediationRequest) (
 	switch req.Action {
 	case "restart_service":
 		err = nr.executeRestartService(ctx, req, &res)
+	case "restart_container":
+		err = nr.executeRestartContainer(ctx, req, &res)
 	case "disk_pressure_cleanup":
 		err = nr.executeDiskCleanup(ctx, &res)
 	case "cni_ipam_cleanup":
@@ -167,21 +164,6 @@ func (nr *NodeRemediator) Execute(ctx context.Context, req RemediationRequest) (
 
 	nr.recordHistory(res)
 	return res, err
-}
-
-func validateRemediationRequest(req RemediationRequest) error {
-	switch req.Action {
-	case "restart_service":
-		target := strings.TrimSpace(req.Target)
-		if !safeNamePattern.MatchString(target) || !validTargets[target] {
-			return fmt.Errorf("unsupported target %q: strictly one of kubelet, containerd, docker, crio allowed", req.Target)
-		}
-	case "disk_pressure_cleanup", "cni_ipam_cleanup", "reap_zombies":
-		// valid
-	default:
-		return fmt.Errorf("unsupported action %q: only restart_service, disk_pressure_cleanup, cni_ipam_cleanup, reap_zombies allowed", req.Action)
-	}
-	return nil
 }
 
 func (nr *NodeRemediator) checkAndRecordCooldown(target string) error {
@@ -211,8 +193,8 @@ func (nr *NodeRemediator) checkAndRecordCooldown(target string) error {
 
 func (nr *NodeRemediator) executeRestartService(ctx context.Context, req RemediationRequest, res *RemediationActionResult) error {
 	target := strings.TrimSpace(req.Target)
-	if !safeNamePattern.MatchString(target) || !validTargets[target] {
-		return fmt.Errorf("unsupported target %q: strictly one of kubelet, containerd, docker, crio allowed", req.Target)
+	if !nr.IsServiceAllowed(target) {
+		return fmt.Errorf("unsupported or disallowed service target %q", req.Target)
 	}
 
 	if err := nr.checkAndRecordCooldown(target); err != nil {
@@ -457,63 +439,51 @@ func (nr *NodeRemediator) GetHistory() []RemediationActionResult {
 	return res
 }
 
+func sendJSON(w http.ResponseWriter, code int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
 // RegisterRoutes mounts /remediate and /remediate/history onto the ServeMux.
 func (nr *NodeRemediator) RegisterRoutes(mux *http.ServeMux, isAuthorized func(r *http.Request) bool) {
 	mux.HandleFunc("/remediate/history", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+			sendJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 			return
 		}
 		if !isAuthorized(r) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			sendJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 			return
 		}
-
-		history := nr.GetHistory()
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(history)
+		sendJSON(w, http.StatusOK, nr.GetHistory())
 	})
 
 	mux.HandleFunc("/remediate", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+			sendJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 			return
 		}
 		if !isAuthorized(r) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+			sendJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 			return
 		}
 
 		var req RemediationRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid json payload: " + err.Error()})
+			sendJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json payload: " + err.Error()})
 			return
 		}
 
 		res, err := nr.Execute(r.Context(), req)
-		w.Header().Set("Content-Type", "application/json")
 		if err != nil {
+			status := http.StatusBadRequest
 			if errors.Is(err, ErrRemediationCooldown) {
-				w.WriteHeader(http.StatusTooManyRequests)
-			} else {
-				w.WriteHeader(http.StatusBadRequest)
+				status = http.StatusTooManyRequests
 			}
-			_ = json.NewEncoder(w).Encode(res)
+			sendJSON(w, status, res)
 			return
 		}
-
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(res)
+		sendJSON(w, http.StatusOK, res)
 	})
 }

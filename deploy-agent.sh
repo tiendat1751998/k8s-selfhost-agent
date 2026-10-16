@@ -12,17 +12,23 @@ if [ $# -lt 1 ]; then
     exit 1
 fi
 
+TOKEN_EXPLICIT=false
+if [ -n "$AGENT_AUTH_TOKEN" ]; then
+    TOKEN_EXPLICIT=true
+fi
+
 # Auto-load AGENT_AUTH_TOKEN and CONTROL_PLANE_URL from .env if present and unset in shell
 if [ -f "$ENV_FILE" ]; then
-    if [ -z "$AGENT_AUTH_TOKEN" ]; then
-        VAL=$(grep -E '^[[:space:]]*AGENT_AUTH_TOKEN=' "$ENV_FILE" | tail -n 1 | cut -d '=' -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
+    if [ "$TOKEN_EXPLICIT" = "false" ]; then
+        VAL=$(grep -E '^[[:space:]]*AGENT_AUTH_TOKEN=' "$ENV_FILE" | tail -n 1 | cut -d '=' -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
         if [ -n "$VAL" ]; then
             AGENT_AUTH_TOKEN="$VAL"
+            TOKEN_EXPLICIT=true
             echo "🔑 Loaded AGENT_AUTH_TOKEN from $ENV_FILE"
         fi
     fi
     if [ -z "$CONTROL_PLANE_URL" ]; then
-        VAL=$(grep -E '^[[:space:]]*CONTROL_PLANE_URL=' "$ENV_FILE" | tail -n 1 | cut -d '=' -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
+        VAL=$(grep -E '^[[:space:]]*CONTROL_PLANE_URL=' "$ENV_FILE" | tail -n 1 | cut -d '=' -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
         if [ -n "$VAL" ]; then
             CONTROL_PLANE_URL="$VAL"
             echo "🌐 Loaded CONTROL_PLANE_URL from $ENV_FILE ($CONTROL_PLANE_URL)"
@@ -32,7 +38,7 @@ fi
 
 # Auto-generate AGENT_AUTH_TOKEN if still empty
 if [ -z "$AGENT_AUTH_TOKEN" ]; then
-    echo "🔑 Generating secure AGENT_AUTH_TOKEN..."
+    echo "🔑 Generating fallback AGENT_AUTH_TOKEN (TOKEN_EXPLICIT=false)..."
     if command -v openssl >/dev/null 2>&1; then
         AGENT_AUTH_TOKEN=$(openssl rand -hex 32)
     else
@@ -91,6 +97,13 @@ for REMOTE in "$@"; do
       (systemctl --user stop k8s-agent 2>/dev/null || true) && \
       mv -f /tmp/$LOCAL_BIN_COPY ~/k8s-agent && \
       chmod +x ~/k8s-agent && \
+      if [ \"$TOKEN_EXPLICIT\" = \"false\" ] && [ -f ~/.k8s-agent/agent.env ]; then
+        REMOTE_EXISTING_TOKEN=\$(grep -E '^[[:space:]]*AGENT_AUTH_TOKEN=' ~/.k8s-agent/agent.env | tail -n 1 | cut -d '=' -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^[\"\'']//' -e 's/[\"\'']$//')
+        if [ -n \"\$REMOTE_EXISTING_TOKEN\" ]; then
+          sed -i \"s|^AGENT_AUTH_TOKEN=.*|AGENT_AUTH_TOKEN=\$REMOTE_EXISTING_TOKEN|\" /tmp/$LOCAL_ENV_FILE
+          echo '🔑 Preserved existing remote AGENT_AUTH_TOKEN from ~/.k8s-agent/agent.env'
+        fi
+      fi && \
       mv -f /tmp/$LOCAL_ENV_FILE ~/.k8s-agent/agent.env && \
       chmod 600 ~/.k8s-agent/agent.env && \
       cat > ~/.config/systemd/user/k8s-agent.service << 'UNIT'

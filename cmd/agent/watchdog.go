@@ -35,9 +35,13 @@ type SelfHealingWatchdog struct {
 	interval               time.Duration
 	diskCooldown           time.Duration
 	lastDiskClean          time.Time
+	lastZombieReap         time.Time
+	lastCNICleanup         time.Time
+	pendingAnomalies       map[string]time.Time
 	consecutiveKubeletFail int
 	consecutiveCRIFail     int
 	logWriter              *logengine.Writer
+	nowFn                  func() time.Time
 	mu                     sync.Mutex
 }
 
@@ -60,18 +64,50 @@ func WithWatchdogLogWriter(writer *logengine.Writer) WatchdogOption {
 	}
 }
 
+// WithWatchdogNowFunc injects a custom clock for deterministic testing.
+func WithWatchdogNowFunc(fn func() time.Time) WatchdogOption {
+	return func(w *SelfHealingWatchdog) {
+		if fn != nil {
+			w.nowFn = fn
+		}
+	}
+}
+
 // NewSelfHealingWatchdog constructs an autonomous watchdog.
 func NewSelfHealingWatchdog(checker *K8sHealthChecker, remediator *NodeRemediator, opts ...WatchdogOption) *SelfHealingWatchdog {
 	w := &SelfHealingWatchdog{
-		checker:      checker,
-		remediator:   remediator,
-		interval:     30 * time.Second,
-		diskCooldown: 15 * time.Minute,
+		checker:          checker,
+		remediator:       remediator,
+		interval:         30 * time.Second,
+		diskCooldown:     15 * time.Minute,
+		pendingAnomalies: make(map[string]time.Time),
+		nowFn:            time.Now,
 	}
 	for _, opt := range opts {
 		opt(w)
 	}
 	return w
+}
+
+func (w *SelfHealingWatchdog) now() time.Time {
+	if w.nowFn != nil {
+		return w.nowFn()
+	}
+	return time.Now()
+}
+
+// RecordLogLine inspects a log line for known anomalies and registers them with timestamps.
+func (w *SelfHealingWatchdog) RecordLogLine(line string) {
+	code, matched := DetectLogAnomaly(line)
+	if !matched || code == "" {
+		return
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.pendingAnomalies == nil {
+		w.pendingAnomalies = make(map[string]time.Time)
+	}
+	w.pendingAnomalies[code] = w.now()
 }
 
 // Start begins the background monitoring loop.
@@ -99,7 +135,7 @@ func (w *SelfHealingWatchdog) runOnce(ctx context.Context) {
 	defer w.mu.Unlock()
 
 	health := w.checker.CheckHealth(ctx)
-	now := time.Now()
+	now := w.now()
 
 	// 1. Autonomous Disk & Inode Pressure Relief
 	if health.DiskPressure || health.InodePressure {
@@ -164,6 +200,72 @@ func (w *SelfHealingWatchdog) runOnce(ctx context.Context) {
 		}
 	} else if health.ContainerdHealthy {
 		w.consecutiveCRIFail = 0
+	}
+
+	// 4. Rule 3: Autonomous Zombie Process Reap
+	if health.ZombieCount > 0 && now.Sub(w.lastZombieReap) >= 10*time.Minute {
+		w.lastZombieReap = now
+		slog.Warn("[SELF-HEAL] Zombie processes detected, executing reap", slog.Int("zombies", health.ZombieCount))
+		res, err := w.remediator.Execute(ctx, RemediationRequest{
+			Action: "reap_zombies",
+			Reason: "autonomous_watchdog: zombie processes detected",
+		})
+		if err != nil {
+			slog.Error("[SELF-HEAL] Zombie reaping failed", slog.String("error", err.Error()))
+		} else {
+			msg := fmt.Sprintf("[SELF-HEAL] Zombie reap complete: %s", res.Details)
+			slog.Info(msg)
+			w.writeLogEntry("warn", msg)
+		}
+	}
+
+	// 5. Rule 4: Autonomous CNI IPAM Cleanup on CNI_SANDBOX_FAILURE anomaly
+	if recordedAt, exists := w.pendingAnomalies["CNI_SANDBOX_FAILURE"]; exists {
+		if now.Sub(recordedAt) <= 5*time.Minute && now.Sub(w.lastCNICleanup) >= 10*time.Minute {
+			w.lastCNICleanup = now
+			delete(w.pendingAnomalies, "CNI_SANDBOX_FAILURE")
+			slog.Warn("[SELF-HEAL] CNI_SANDBOX_FAILURE anomaly detected, executing CNI IPAM cleanup")
+			res, err := w.remediator.Execute(ctx, RemediationRequest{
+				Action: "cni_ipam_cleanup",
+				Reason: "autonomous_watchdog: CNI_SANDBOX_FAILURE log anomaly",
+			})
+			if err != nil {
+				slog.Error("[SELF-HEAL] CNI IPAM cleanup failed", slog.String("error", err.Error()))
+			} else {
+				msg := fmt.Sprintf("[SELF-HEAL] CNI IPAM cleanup complete: %d inodes freed", res.InodesFreed)
+				slog.Info(msg)
+				w.writeLogEntry("warn", msg)
+			}
+		}
+	}
+
+	// 6. Rule 5: Autonomous Unhealthy App Container Restart (capped at max 2 per tick)
+	restartedContainers := 0
+	for _, c := range health.UnhealthyContainers {
+		if restartedContainers >= 2 {
+			break
+		}
+		target := strings.TrimSpace(c.Name)
+		if target == "" {
+			target = strings.TrimSpace(c.ID)
+		}
+		if target == "" {
+			continue
+		}
+		slog.Warn("[SELF-HEAL] Unhealthy container detected, restarting", slog.String("target", target), slog.String("status", c.Status))
+		res, err := w.remediator.Execute(ctx, RemediationRequest{
+			Action: "restart_container",
+			Target: target,
+			Reason: "autonomous_watchdog: unhealthy container " + c.Status,
+		})
+		if err != nil {
+			slog.Error("[SELF-HEAL] Restarting container failed", slog.String("target", target), slog.String("error", err.Error()))
+		} else {
+			msg := fmt.Sprintf("[SELF-HEAL] Successfully restarted container %s: %s", target, res.Details)
+			slog.Info(msg)
+			w.writeLogEntry("warn", msg)
+		}
+		restartedContainers++
 	}
 }
 

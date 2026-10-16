@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -86,3 +88,107 @@ func TestWatchdog_RestartContainerdOnFailure(t *testing.T) {
 		t.Errorf("expected watchdog to trigger systemctl restart containerd on 3 consecutive CRI failures")
 	}
 }
+
+func TestWatchdog_RecordLogLine(t *testing.T) {
+	runner := newMockCommandRunner()
+	remediator := NewNodeRemediator(WithCommandRunner(runner))
+	collector := NewSystemCollector("", "", nil)
+	checker := NewK8sHealthChecker(collector)
+	watchdog := NewSelfHealingWatchdog(checker, remediator)
+
+	watchdog.RecordLogLine("kubelet: FailedCreatePodSandBox: network setup failed")
+	if _, exists := watchdog.pendingAnomalies["CNI_SANDBOX_FAILURE"]; !exists {
+		t.Errorf("expected CNI_SANDBOX_FAILURE to be recorded in pendingAnomalies")
+	}
+
+	watchdog.RecordLogLine("random info message")
+	if len(watchdog.pendingAnomalies) != 1 {
+		t.Errorf("expected only 1 pending anomaly, got %d", len(watchdog.pendingAnomalies))
+	}
+}
+
+func TestWatchdog_Rule3_ZombieReap(t *testing.T) {
+	tempProc := t.TempDir()
+	// Create a zombie process
+	pidDir := filepath.Join(tempProc, "201")
+	_ = os.MkdirAll(pidDir, 0755)
+	_ = os.WriteFile(filepath.Join(pidDir, "stat"), []byte("201 (containerd-shim) Z 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0"), 0644)
+
+	runner := newMockCommandRunner()
+	remediator := NewNodeRemediator(WithCommandRunner(runner), WithRemediatorProcPath(tempProc))
+	collector := NewSystemCollector("", "", nil)
+	checker := NewK8sHealthChecker(collector, WithK8sProcPath(tempProc))
+
+	watchdog := NewSelfHealingWatchdog(checker, remediator)
+	ctx := context.Background()
+
+	// First execution should trigger reap_zombies
+	watchdog.runOnce(ctx)
+
+	if !runner.hasExecuted("kill -9 201") {
+		t.Errorf("expected watchdog to trigger reap_zombies terminating zombie pid 201")
+	}
+
+	// Immediate second execution must be in 10-minute cooldown
+	runner.executed = make([][]string, 0)
+	watchdog.runOnce(ctx)
+	if runner.hasExecuted("kill -9 201") {
+		t.Errorf("expected zombie reap to be throttled by 10m cooldown on second run")
+	}
+}
+
+func TestWatchdog_Rule4_CNIIPAMCleanup(t *testing.T) {
+	tempCNI := t.TempDir()
+	_ = os.WriteFile(filepath.Join(tempCNI, "lock"), []byte("stale"), 0644)
+
+	runner := newMockCommandRunner()
+	remediator := NewNodeRemediator(WithCommandRunner(runner), WithCNINetworksDir(tempCNI))
+	collector := NewSystemCollector("", "", nil)
+	checker := NewK8sHealthChecker(collector)
+
+	watchdog := NewSelfHealingWatchdog(checker, remediator)
+	ctx := context.Background()
+
+	// Record anomaly
+	watchdog.RecordLogLine("kubelet: FailedCreatePodSandBox: failed network")
+
+	// Trigger runOnce
+	watchdog.runOnce(ctx)
+
+	// Verify lock file was removed by cni_ipam_cleanup
+	if _, err := os.Stat(filepath.Join(tempCNI, "lock")); !os.IsNotExist(err) {
+		t.Errorf("expected CNI lock file to be cleaned up after CNI_SANDBOX_FAILURE anomaly")
+	}
+
+	// Verify anomaly was cleared
+	if _, exists := watchdog.pendingAnomalies["CNI_SANDBOX_FAILURE"]; exists {
+		t.Errorf("expected CNI_SANDBOX_FAILURE anomaly to be cleared after cleanup")
+	}
+}
+
+func TestWatchdog_Rule5_RestartUnhealthyContainers(t *testing.T) {
+	runner := newMockCommandRunner()
+	// Mock docker ps output: 3 unhealthy containers
+	runner.outputs["docker ps -a --filter health=unhealthy --format {{.ID}}|{{.Names}}|{{.Image}}|{{.State}}|{{.Status}}"] = []byte("c1|app-1|repo/app:v1|running|unhealthy\nc2|app-2|repo/app:v2|running|unhealthy\nc3|app-3|repo/app:v3|running|unhealthy\n")
+
+	remediator := NewNodeRemediator(WithCommandRunner(runner))
+	collector := NewSystemCollector("", "", nil)
+	checker := NewK8sHealthChecker(collector, WithHealthCommandRunner(runner))
+
+	watchdog := NewSelfHealingWatchdog(checker, remediator)
+	ctx := context.Background()
+
+	watchdog.runOnce(ctx)
+
+	// Rule 5 caps at max 2 containers per tick
+	if !runner.hasExecuted("docker restart app-1") {
+		t.Errorf("expected docker restart app-1 to be executed")
+	}
+	if !runner.hasExecuted("docker restart app-2") {
+		t.Errorf("expected docker restart app-2 to be executed")
+	}
+	if runner.hasExecuted("docker restart app-3") {
+		t.Errorf("expected app-3 NOT to be restarted on first tick due to max 2 cap")
+	}
+}
+
