@@ -102,11 +102,18 @@
 }
 .tab-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); }
 .tab-btn.active {
-  background: rgba(2, 132, 199, 0.15); border-color: rgba(2, 132, 199, 0.4); color: #0284c7;
+  background: var(--color-badge-k8s-bg, rgba(50, 108, 229, 0.15));
+  border-color: var(--color-badge-k8s-border, rgba(50, 108, 229, 0.4));
+  color: var(--color-badge-k8s-text, #326ce5);
 }
 .tab-count {
   background: var(--bg-card-hover); padding: 1px 6px; border-radius: 9999px;
   font-size: 10px; font-family: var(--font-mono, monospace);
+}
+.tab-btn.active .tab-count {
+  background: var(--color-badge-k8s-border, rgba(50, 108, 229, 0.25));
+  color: var(--color-badge-k8s-text, #326ce5);
+  border-color: transparent;
 }
 
 /* --- Desktop Tenant Table (TenantListTable.vue) --- */
@@ -417,6 +424,12 @@
   display: flex; align-items: center; height: 30px;
   border-radius: 20px; background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle);
   padding: 0 10px; position: relative;
+}
+.search-pill .search-icon {
+  position: static;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 .search-input-sleek {
   background: transparent; border: none; color: var(--text-primary); font-size: 12px; width: 140px; padding-left: 6px; padding-right: 20px;

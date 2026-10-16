@@ -81,20 +81,20 @@
 
 /* Stepper States */
 .step-item.step-active .step-circle {
-  background: var(--accent-cyan, #06b6d4);
-  border-color: var(--accent-cyan, #06b6d4);
-  color: #000;
-  box-shadow: 0 0 14px rgba(6, 182, 212, 0.5);
+  background: var(--color-primary, #326ce5);
+  border-color: var(--color-primary, #326ce5);
+  color: #ffffff;
+  box-shadow: none;
 }
-.step-item.step-active .step-title { color: var(--accent-cyan, #06b6d4); }
+.step-item.step-active .step-title { color: var(--color-primary, #326ce5); }
 .step-item.step-completed .step-circle {
-  background: rgba(16, 185, 129, 0.2);
-  border-color: var(--accent-emerald, #10b981);
-  color: var(--accent-emerald, #10b981);
+  background: var(--color-status-online-bg, rgba(16, 185, 129, 0.2));
+  border-color: var(--color-status-online, #10b981);
+  color: var(--color-status-online, #10b981);
 }
 .step-item.step-completed .step-title { color: var(--text-primary); }
-.step-item.step-completed .step-line { background: rgba(16, 185, 129, 0.4); }
-.step-item.step-disabled { opacity: 0.5; }
+.step-item.step-completed .step-line { background: var(--color-status-online-border, rgba(16, 185, 129, 0.4)); }
+.step-item.step-disabled { opacity: 0.75; color: var(--text-secondary); }
 
 /* --------------------------------------------------------------------------
    2. QR Code Viewer & Secret Key Widget (QRCodeDisplay.vue)

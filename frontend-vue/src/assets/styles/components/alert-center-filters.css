@@ -136,9 +136,9 @@
 }
 
 .btn-unmute-single {
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.35);
-  color: #34d399;
+  background: var(--color-status-online-bg, rgba(16, 185, 129, 0.15));
+  border: 1px solid var(--color-status-online-border, rgba(16, 185, 129, 0.35));
+  color: var(--color-status-online, #34d399);
   padding: 5px 12px;
   border-radius: 6px;
   font-size: 11px;
@@ -151,7 +151,7 @@
 }
 
 .btn-unmute-single:hover {
-  background: rgba(16, 185, 129, 0.3);
-  border-color: rgba(16, 185, 129, 0.6);
-  color: #fff;
+  background: var(--color-status-online-bg, rgba(16, 185, 129, 0.3));
+  border-color: var(--color-status-online-border, rgba(16, 185, 129, 0.6));
+  color: var(--color-status-online, #34d399);
 }

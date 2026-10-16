@@ -88,7 +88,8 @@
   position: relative;
   display: flex;
   align-items: center;
-  flex: 0 1 220px;
+  flex: 0 1 245px;
+  max-width: 260px;
   min-width: 140px;
   height: 28px;
 }
@@ -241,8 +242,9 @@
 }
 
 .runbooks-toolbar-sleek .mode-btn.active {
-  background: var(--accent-cyan, #0284c7);
-  color: #fff;
+  background: var(--color-badge-k8s-bg, rgba(50, 108, 229, 0.15));
+  border: 1px solid var(--color-badge-k8s-border, rgba(50, 108, 229, 0.4));
+  color: var(--color-badge-k8s-text, #326ce5);
   font-weight: 700;
 }
 
@@ -262,14 +264,17 @@
 }
 
 .runbooks-toolbar-sleek .btn-toolbar.btn-primary {
-  background: var(--accent-emerald, #10b981);
-  border: 1px solid rgba(16, 185, 129, 0.5);
-  color: #fff;
+  background: var(--color-primary, #326ce5);
+  border: 1px solid var(--color-primary, #326ce5);
+  color: #ffffff;
+  box-shadow: none;
 }
 
 .runbooks-toolbar-sleek .btn-toolbar.btn-primary:hover:not(:disabled) {
-  background: #059669;
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+  background: var(--color-primary-hover, #2557c7);
+  border-color: var(--color-primary-hover, #2557c7);
+  color: #ffffff;
+  box-shadow: none;
 }
 
 .runbooks-toolbar-sleek .btn-toolbar.btn-secondary {
@@ -323,11 +328,11 @@
 /* Action Buttons & Utilities */
 .btn-delete-crimson {
   cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  color: #f43f5e !important; border-color: rgba(244, 63, 94, 0.35) !important;
-  background: rgba(244, 63, 94, 0.08) !important;
+  color: var(--color-status-offline, #f43f5e) !important; border-color: var(--color-status-offline-border, rgba(244, 63, 94, 0.35)) !important;
+  background: var(--color-status-offline-bg, rgba(244, 63, 94, 0.08)) !important;
 }
 .btn-delete-crimson:hover {
-  background: rgba(244, 63, 94, 0.22) !important; color: #fff !important; border-color: #f43f5e !important;
+  background: var(--color-status-offline-bg, rgba(244, 63, 94, 0.22)) !important; color: var(--color-status-offline, #f43f5e) !important; border-color: var(--color-status-offline, #f43f5e) !important;
 }
 
 /* Runbooks Desktop Table & Fixed Column Width Caps */
@@ -365,12 +370,12 @@
   border-color: var(--accent-cyan); background: rgba(6, 182, 212, 0.15);
 }
 .table-action-btn:disabled, .rb-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-run-action { background: rgba(6, 182, 212, 0.15); border-color: rgba(6, 182, 212, 0.4); color: #38bdf8; }
-.btn-run-action:hover:not(:disabled) { background: rgba(6, 182, 212, 0.3); border-color: #38bdf8; color: #fff; }
+.btn-run-action { background: var(--color-badge-agent-bg, rgba(6, 182, 212, 0.15)); border-color: var(--color-badge-agent-border, rgba(6, 182, 212, 0.4)); color: var(--color-badge-agent-text, #38bdf8); }
+.btn-run-action:hover:not(:disabled) { background: var(--color-badge-agent-bg, rgba(6, 182, 212, 0.3)); border-color: var(--color-badge-agent-border, #38bdf8); color: var(--color-badge-k8s-text, #38bdf8); }
 .btn-steps-action, .btn-edit-action { background: var(--color-surface-inset); border-color: var(--color-border-subtle); color: var(--text-secondary); }
 .btn-steps-action:hover:not(:disabled), .btn-edit-action:hover:not(:disabled) { background: var(--bg-card-hover); color: var(--text-primary); }
-.btn-delete-action { color: #f43f5e; border-color: rgba(244, 63, 94, 0.3); background: rgba(244, 63, 94, 0.08); }
-.btn-delete-action:hover:not(:disabled) { background: rgba(244, 63, 94, 0.25); border-color: #f43f5e; color: #fff; }
+.btn-delete-action { color: var(--color-status-offline, #f43f5e); border-color: var(--color-status-offline-border, rgba(244, 63, 94, 0.3)); background: var(--color-status-offline-bg, rgba(244, 63, 94, 0.08)); }
+.btn-delete-action:hover:not(:disabled) { background: var(--color-status-offline-bg, rgba(244, 63, 94, 0.25)); border-color: var(--color-status-offline, #f43f5e); color: var(--color-status-offline, #f43f5e); }
 
 /* Mobile Cards Stream (~70-75px/item) */
 .mobile-only-stream { display: flex; flex-direction: column; gap: 8px; width: 100%; }

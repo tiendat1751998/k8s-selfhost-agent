@@ -117,9 +117,9 @@
 }
 
 .btn-unmute-all-header, .btn-footer-unmute {
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  color: #34d399;
+  background: var(--color-status-online-bg, rgba(16, 185, 129, 0.15));
+  border: 1px solid var(--color-status-online-border, rgba(16, 185, 129, 0.4));
+  color: var(--color-status-online, #34d399);
   padding: 6px 12px;
   border-radius: 6px;
   font-size: 11px;
@@ -130,9 +130,9 @@
 
 .btn-footer-unmute { padding: 7px 14px; border-radius: 8px; font-size: 12px; }
 .btn-unmute-all-header:hover, .btn-footer-unmute:hover {
-  background: rgba(16, 185, 129, 0.3);
-  border-color: rgba(16, 185, 129, 0.6);
-  color: #fff;
+  background: var(--color-status-online-bg, rgba(16, 185, 129, 0.3));
+  border-color: var(--color-status-online-border, rgba(16, 185, 129, 0.6));
+  color: var(--color-status-online, #34d399);
 }
 
 .btn-modal-close {

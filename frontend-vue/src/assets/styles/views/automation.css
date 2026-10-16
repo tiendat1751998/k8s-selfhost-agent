@@ -321,15 +321,19 @@ input:checked + .slider:before { transform: translateX(16px); }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box;
 }
 .actions-cell { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
-.btn-trigger-action:hover:not(:disabled) { background: rgba(6, 182, 212, 0.2) !important; border-color: #06b6d4 !important; color: #fff !important; }
+.btn-trigger-action:hover:not(:disabled) {
+  background: var(--color-badge-agent-bg, rgba(6, 182, 212, 0.2)) !important;
+  border-color: var(--color-badge-agent-border, #06b6d4) !important;
+  color: var(--color-badge-k8s-text, #38bdf8) !important;
+}
 .btn-edit-action:hover:not(:disabled) { background: var(--bg-card-hover) !important; border-color: var(--color-border-strong) !important; }
 .btn-crimson-delete {
-  background: rgba(244, 63, 94, 0.12) !important; border: 1px solid rgba(244, 63, 94, 0.35) !important;
-  color: #f43f5e !important; transition: all 0.2s ease-in-out;
+  background: var(--color-status-offline-bg, rgba(244, 63, 94, 0.12)) !important; border: 1px solid var(--color-status-offline-border, rgba(244, 63, 94, 0.35)) !important;
+  color: var(--color-status-offline, #f43f5e) !important; transition: all 0.2s ease-in-out;
 }
 .btn-crimson-delete:hover:not(:disabled) {
-  background: rgba(244, 63, 94, 0.25) !important; border-color: #f43f5e !important;
-  color: #fff !important; box-shadow: 0 0 10px rgba(244, 63, 94, 0.35);
+  background: var(--color-status-offline-bg, rgba(244, 63, 94, 0.25)) !important; border-color: var(--color-status-offline, #f43f5e) !important;
+  color: var(--color-status-offline, #f43f5e) !important; box-shadow: none;
 }
 .duration-badge {
   display: inline-flex; align-items: padding: 2px 7px; background: var(--color-surface-inset);
