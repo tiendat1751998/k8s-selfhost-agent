@@ -22,8 +22,8 @@
 .iface-card {
   padding: 6px 8px;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   display: flex;
@@ -74,7 +74,7 @@
   letter-spacing: 0.05em;
   padding: 1px 3px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-surface-elevated);
   color: var(--text-muted);
   border: 1px solid var(--border-subtle);
   flex-shrink: 0;
@@ -87,10 +87,10 @@
   gap: 2px;
   font-size: 9.5px;
   font-weight: 600;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--color-surface-inset);
   padding: 2px 5px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .iface-rate-item {
@@ -101,7 +101,7 @@
 }
 
 .rate-arrow { font-weight: 800; font-size: 9px; }
-.iface-rate-sep { color: rgba(255, 255, 255, 0.2); font-size: 9px; }
+.iface-rate-sep { color: var(--color-border-strong); font-size: 9px; }
 
 /* Disk I/O & Block Device Telemetry */
 .disk-io-section {
@@ -116,8 +116,8 @@
   gap: 12px;
   padding: 10px 14px;
   border-radius: 10px;
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
 }
 
 @media (max-width: 900px) {
@@ -146,6 +146,7 @@
 .disk-summary-val {
   font-size: 13.5px;
   font-weight: 700;
+  color: var(--color-body);
   white-space: nowrap;
 }
 
@@ -164,8 +165,8 @@
 .disk-device-card {
   padding: 10px 12px;
   border-radius: 10px;
-  background: rgba(15, 23, 42, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   display: flex;
@@ -185,7 +186,7 @@
   justify-content: space-between;
   gap: 6px;
   padding-bottom: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .dev-name-group {
@@ -231,10 +232,10 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px 8px;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--color-surface-inset);
   padding: 6px 8px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .dev-metric-col {
@@ -254,6 +255,7 @@
 .dev-metric-val {
   font-size: 10.5px;
   font-weight: 600;
+  color: var(--color-body);
   white-space: nowrap;
 }
 
@@ -285,8 +287,8 @@
 .disk-fallback-panel {
   padding: 12px 16px;
   border-radius: 10px;
-  background: rgba(15, 23, 42, 0.45);
-  border: 1px dashed rgba(255, 255, 255, 0.1);
+  background: var(--color-surface-inset);
+  border: 1px dashed var(--color-border-subtle);
 }
 
 .fallback-content {
@@ -330,6 +332,6 @@
   font-weight: 700;
   padding: 3px 8px;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-subtle);
 }

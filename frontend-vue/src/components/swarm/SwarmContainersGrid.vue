@@ -84,7 +84,7 @@ function formatDate(d?: string): string {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: rgba(11, 15, 25, 0.65);
+  background: var(--color-surface-card, rgba(11, 15, 25, 0.65));
 }
 
 .cont-top {
@@ -100,7 +100,7 @@ function formatDate(d?: string): string {
 }
 
 .cont-box-icon { font-size: 22px; }
-.cont-name { font-size: 14px; font-weight: 700; color: #fff; }
+.cont-name { font-size: 14px; font-weight: 700; color: var(--color-heading, #fff); }
 .cont-img { font-size: 11px; }
 
 .power-switch-btn {
@@ -140,8 +140,8 @@ function formatDate(d?: string): string {
 }
 
 .power-off {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--border-subtle);
+  background: var(--color-surface-elevated, rgba(255, 255, 255, 0.06));
+  border-color: var(--color-border-subtle, var(--border-subtle));
   color: var(--text-muted);
 }
 
@@ -164,7 +164,7 @@ function formatDate(d?: string): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--color-border-subtle, var(--border-subtle));
   padding-top: 10px;
 }
 </style>

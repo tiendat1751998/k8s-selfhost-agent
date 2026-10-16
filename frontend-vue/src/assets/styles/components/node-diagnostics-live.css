@@ -3,7 +3,7 @@
   padding: 36px 24px;
   text-align: center;
   border-radius: 14px;
-  background: rgba(15, 23, 42, 0.4);
+  background: var(--color-surface-inset);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px dashed rgba(56, 189, 248, 0.25);
@@ -80,7 +80,7 @@
 .troubleshooting-hint-box {
   width: 100%;
   text-align: left;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--color-surface-card);
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
   padding: 12px 16px;
@@ -115,7 +115,7 @@
 
 .hint-list code {
   font-family: var(--font-mono);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-elevated);
   padding: 1px 5px;
   border-radius: 4px;
   color: var(--accent-cyan);
@@ -142,7 +142,7 @@
 
 .btn-clear-inline {
   background: none;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--color-border-subtle);
   padding: 3px 10px;
   border-radius: 6px;
   color: var(--text-secondary);
@@ -152,7 +152,7 @@
 }
 
 .btn-clear-inline:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-elevated);
   color: var(--text-primary);
   border-color: var(--border-accent);
 }
@@ -160,8 +160,8 @@
 .node-services-section {
   padding: 18px 20px;
   border-radius: 14px;
-  background: rgba(15, 23, 42, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   display: flex;
@@ -173,7 +173,7 @@
   overflow-x: auto;
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--color-surface-inset);
 }
 
 .services-mini-table {
@@ -184,7 +184,7 @@
 }
 
 .services-mini-table thead tr {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-surface-elevated);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -199,7 +199,7 @@
 }
 
 .services-mini-table tbody tr {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--color-border-subtle);
   transition: background 0.15s ease;
 }
 
@@ -216,7 +216,7 @@
 .node-section-empty {
   padding: 18px;
   text-align: center;
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--color-surface-inset);
   border-radius: 8px;
   border: 1px dashed var(--border-subtle);
 }

@@ -236,8 +236,8 @@ onMounted(async () => {
   justify-content: center !important;
   align-items: center !important;
   border-radius: 12px !important;
-  background: rgba(11, 15, 25, 0.85) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: var(--color-surface-card) !important;
+  border: 1px solid var(--color-border-subtle) !important;
   margin: 12px 0 !important;
 }
 
@@ -252,13 +252,13 @@ onMounted(async () => {
 .empty-title {
   margin: 0 !important;
   font-size: 1rem !important;
-  color: #f1f5f9 !important;
+  color: var(--color-body) !important;
 }
 
 .empty-desc {
   margin: 0 !important;
   font-size: 0.82rem !important;
-  color: #94a3b8 !important;
+  color: var(--color-muted) !important;
   word-break: break-word !important;
 }
 </style>

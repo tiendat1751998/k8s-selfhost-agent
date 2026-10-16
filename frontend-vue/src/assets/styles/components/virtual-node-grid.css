@@ -32,9 +32,9 @@
   min-width: 0;
 }
 .default-virtual-card {
-  background: rgba(15, 23, 42, 0.7);
+  background: var(--color-surface-card);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   padding: 14px;
   cursor: pointer;
@@ -64,7 +64,7 @@
 .node-title {
   font-weight: 600;
   font-size: 0.875rem;
-  color: #f1f5f9;
+  color: var(--color-body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -75,8 +75,8 @@
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #94a3b8;
+  background: var(--color-surface-elevated);
+  color: var(--color-muted);
   letter-spacing: 0.05em;
 }
 .metrics-row {
@@ -87,19 +87,19 @@
 .metric {
   display: flex;
   justify-content: space-between;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--color-surface-inset);
   padding: 6px 8px;
   border-radius: 4px;
 }
 .metric-label {
   font-size: 0.6875rem;
-  color: #94a3b8;
+  color: var(--color-muted);
   font-weight: 600;
 }
 .metric-val {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #e2e8f0;
+  color: var(--color-body);
 }
 .tabular-nums {
   font-variant-numeric: tabular-nums;

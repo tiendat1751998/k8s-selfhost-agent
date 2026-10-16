@@ -132,7 +132,7 @@ function formatMemory(mem?: number): string {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  background: rgba(11, 15, 25, 0.65);
+  background: var(--color-surface-card, rgba(11, 15, 25, 0.65));
 }
 
 .node-draining {
@@ -153,7 +153,7 @@ function formatMemory(mem?: number): string {
 }
 
 .server-icon { font-size: 22px; }
-.rack-node-name { font-size: 14px; font-weight: 700; color: #fff; }
+.rack-node-name { font-size: 14px; font-weight: 700; color: var(--color-heading, #fff); }
 .rack-role { font-size: 10px; font-weight: 700; }
 .role-mgr { color: #c4b5fd; }
 .role-wrk { color: var(--text-muted); }
@@ -162,7 +162,7 @@ function formatMemory(mem?: number): string {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--color-surface-inset, rgba(0, 0, 0, 0.3));
   padding: 12px;
   border-radius: 10px;
 }
@@ -173,7 +173,7 @@ function formatMemory(mem?: number): string {
 .meter-bar-bg {
   width: 100%;
   height: 6px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-elevated, rgba(255, 255, 255, 0.08));
   border-radius: 9999px;
   overflow: hidden;
 }
@@ -186,7 +186,7 @@ function formatMemory(mem?: number): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--color-border-subtle, var(--border-subtle));
   padding-top: 10px;
 }
 

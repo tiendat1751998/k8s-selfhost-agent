@@ -10,8 +10,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   font-size: 11px;
 }
@@ -40,7 +40,7 @@
 .scope-cluster-badge {
   padding: 2px 6px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-surface-elevated);
   color: var(--text-muted);
   font-size: 10px;
 }
@@ -57,7 +57,7 @@
   align-items: center;
   padding: 10px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-surface-elevated);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   cursor: pointer;
@@ -66,14 +66,14 @@
 }
 
 .scale-tab-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--color-surface-inset);
+  color: var(--color-body);
 }
 
 .scale-tab-btn.active {
   background: rgba(6, 182, 212, 0.15);
   border-color: var(--accent-cyan);
-  color: #fff;
+  color: var(--color-body);
 }
 
 .tab-icon {
@@ -95,9 +95,9 @@
   flex-direction: column;
   gap: 14px;
   padding: 14px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--color-surface-card);
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .section-subhead {
@@ -109,7 +109,7 @@
 .subhead-title {
   font-size: 13px;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-body);
 }
 
 .subhead-desc {
@@ -162,8 +162,8 @@
 .preset-btn {
   padding: 6px 10px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-subtle);
   color: var(--text-secondary);
   font-size: 11px;
   font-family: var(--font-mono);
@@ -172,8 +172,8 @@
 }
 
 .preset-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--color-surface-inset);
+  color: var(--color-body);
 }
 
 .preset-btn.active {
@@ -191,9 +191,9 @@
 
 .resource-block {
   padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--color-surface-card);
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--color-border-subtle);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -214,7 +214,7 @@
 .resource-name {
   font-size: 12px;
   font-weight: 600;
-  color: #fff;
+  color: var(--color-body);
 }
 
 .resource-hint {
@@ -255,17 +255,17 @@
   width: 90px;
   padding: 4px 6px;
   font-size: 11px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 4px;
-  color: #fff;
+  color: var(--color-body);
   outline: none;
 }
 
 .unit-toggle-group {
   display: flex;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -290,8 +290,8 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   padding: 10px 14px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   font-size: 11px;
 }

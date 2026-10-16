@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    Explorer - Resource Tree Navigator Stylesheet
    Decomposed sub-sheet - Target < 350 lines
    ========================================================================== */
@@ -11,10 +11,10 @@
   gap: 14px;
   padding: 16px;
   max-height: calc(100vh - 100px);
-  background: rgba(11, 15, 25, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 16px;
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(20px);
   z-index: 20;
 }
@@ -30,7 +30,7 @@
   align-items: center;
   justify-content: space-between;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .sidebar-brand {
@@ -51,7 +51,7 @@
 .sidebar-title {
   font-weight: 800;
   font-size: 0.95rem;
-  color: #fff;
+  color: var(--color-body);
   text-transform: uppercase;
 }
 
@@ -64,7 +64,7 @@
   display: none;
   background: none;
   border: none;
-  color: #94a3b8;
+  color: var(--color-muted);
   font-size: 1.1rem;
   cursor: pointer;
 }
@@ -82,7 +82,7 @@
 .sidebar-search-icon {
   position: absolute;
   left: 10px;
-  color: #64748b;
+  color: var(--color-muted);
   pointer-events: none;
 }
 
@@ -90,10 +90,10 @@
   width: 100%;
   padding: 7px 28px 7px 36px;
   font-size: 0.76rem;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
-  color: #fff;
+  color: var(--color-body);
   outline: none;
   transition: border-color 0.15s ease;
 }
@@ -107,7 +107,7 @@
   right: 8px;
   background: none;
   border: none;
-  color: #64748b;
+  color: var(--color-muted);
   cursor: pointer;
 }
 
@@ -126,7 +126,7 @@
 .section-heading {
   font-size: 0.7rem;
   font-weight: 700;
-  color: #64748b;
+  color: var(--color-muted);
   text-transform: uppercase;
   font-family: var(--font-mono);
 }
@@ -159,17 +159,18 @@
   justify-content: space-between;
   font-size: 0.68rem;
   font-weight: 700;
-  color: #64748b;
+  color: var(--color-muted);
   text-transform: uppercase;
   padding: 4px 6px;
   font-family: var(--font-mono);
 }
 
 .category-badge {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--color-surface-elevated);
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 0.65rem;
+  color: var(--color-muted);
 }
 
 .category-items {
@@ -187,7 +188,7 @@
   background: none;
   border: 1px solid transparent;
   border-radius: 8px;
-  color: #94a3b8;
+  color: var(--color-muted);
   cursor: pointer;
   text-align: left;
   font-size: 0.8rem;
@@ -195,8 +196,8 @@
 }
 
 .tree-item-btn:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: #f1f5f9;
+  background: var(--color-surface-inset);
+  color: var(--color-body);
 }
 
 .tree-item-btn.is-active {

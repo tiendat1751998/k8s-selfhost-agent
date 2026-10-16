@@ -278,19 +278,19 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.canvas-timeseries-container { position: relative; width: 100%; user-select: none; overflow: hidden; border-radius: 6px; background: rgba(15, 23, 42, 0.45); }
+.canvas-timeseries-container { position: relative; width: 100%; user-select: none; overflow: hidden; border-radius: 6px; background: var(--color-surface-inset, rgba(15, 23, 42, 0.45)); }
 .canvas-timeseries { display: block; width: 100%; }
 .crosshair-tooltip-pill {
   position: absolute; pointer-events: none; transform: translateX(-50%);
-  background: rgba(15, 23, 42, 0.94); border: 1px solid rgba(56, 189, 248, 0.4);
+  background: var(--color-surface-card, rgba(15, 23, 42, 0.94)); border: 1px solid var(--color-border-subtle, rgba(56, 189, 248, 0.4));
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5); backdrop-filter: blur(8px);
   padding: 4px 8px; border-radius: 4px; font-size: 11px; line-height: 1.25; white-space: nowrap; z-index: 10;
 }
 .crosshair-tooltip-pill.pill-right-aligned { transform: translateX(-95%); }
-.pill-time { color: #94a3b8; font-size: 10px; margin-bottom: 2px; }
+.pill-time { color: var(--color-muted, #94a3b8); font-size: 10px; margin-bottom: 2px; }
 .pill-metrics { display: flex; flex-direction: column; gap: 2px; }
 .pill-item { display: flex; align-items: center; gap: 4px; }
 .pill-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
-.pill-name { color: #cbd5e1; }
-.pill-val { color: #f8fafc; }
+.pill-name { color: var(--color-muted-strong, #cbd5e1); }
+.pill-val { color: var(--color-heading, #f8fafc); }
 </style>

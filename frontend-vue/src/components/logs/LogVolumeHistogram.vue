@@ -207,8 +207,8 @@ function getBarX(idx: number): number {
 <style scoped>
 .log-histogram-container {
   padding: 6px 12px;
-  background: rgba(11, 15, 25, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-card, rgba(11, 15, 25, 0.75));
+  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08));
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -223,8 +223,8 @@ function getBarX(idx: number): number {
   height: 16px;
 }
 .histogram-legend { display: flex; align-items: center; gap: 8px; }
-.legend-title { font-weight: 700; color: #cbd5e1; letter-spacing: 0.05em; }
-.legend-item { display: inline-flex; align-items: center; gap: 3px; font-size: 9px; color: #94a3b8; }
+.legend-title { font-weight: 700; color: var(--color-heading, #cbd5e1); letter-spacing: 0.05em; }
+.legend-item { display: inline-flex; align-items: center; gap: 3px; font-size: 9px; color: var(--color-muted, #94a3b8); }
 .legend-dot { width: 5px; height: 5px; border-radius: 50%; }
 .bg-rose { background-color: #ef4444; }
 .bg-amber { background-color: #f59e0b; }

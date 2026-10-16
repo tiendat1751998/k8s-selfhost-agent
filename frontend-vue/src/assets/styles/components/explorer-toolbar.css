@@ -12,7 +12,7 @@
   height: 42px; min-height: 42px; max-height: 42px;
   display: flex !important; align-items: center; justify-content: space-between;
   padding: 0 12px; border-radius: 8px; margin-bottom: 8px; box-sizing: border-box;
-  background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(148, 163, 184, 0.15);
+  background: var(--color-surface-card); border: 1px solid var(--color-border-subtle);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   width: 100%; overflow: hidden; flex-wrap: nowrap; gap: 10px;
 }
@@ -26,16 +26,16 @@
 }
 .explorer-command-bar .search-icon,
 .explorer-toolbar-sleek .search-icon {
-  position: absolute; left: 8px; font-size: 11.5px; color: #94a3b8; pointer-events: none;
+  position: absolute; left: 8px; font-size: 11.5px; color: var(--color-muted); pointer-events: none;
 }
 .explorer-command-bar .toolbar-search-input,
 .explorer-toolbar-sleek .toolbar-search-input {
   width: 100%; height: 30px; padding: 0 24px 0 26px; font-size: 11.5px;
-  border-radius: 6px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(148, 163, 184, 0.15);
-  color: #f8fafc; box-sizing: border-box; transition: all 0.15s ease;
+  border-radius: 6px; background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle);
+  color: var(--color-body); box-sizing: border-box; transition: all 0.15s ease;
 }
 .explorer-command-bar .toolbar-search-input::placeholder,
-.explorer-toolbar-sleek .toolbar-search-input::placeholder { color: #64748b; }
+.explorer-toolbar-sleek .toolbar-search-input::placeholder { color: var(--color-muted); }
 .explorer-command-bar .toolbar-search-input:focus,
 .explorer-toolbar-sleek .toolbar-search-input:focus {
   border-color: rgba(56, 189, 248, 0.5); outline: none; box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.12);
@@ -44,15 +44,15 @@
 .explorer-toolbar-sleek .clear-input-btn {
   position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
   width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;
-  background: none; border: none; color: #94a3b8; cursor: pointer; padding: 0; border-radius: 4px;
+  background: none; border: none; color: var(--color-muted); cursor: pointer; padding: 0; border-radius: 4px;
 }
 .explorer-command-bar .clear-input-btn:hover,
-.explorer-toolbar-sleek .clear-input-btn:hover { color: #f8fafc; background: rgba(255, 255, 255, 0.08); }
+.explorer-toolbar-sleek .clear-input-btn:hover { color: var(--color-body); background: var(--color-surface-inset); }
 
 /* Zone 2 (Center - Linear-style Segmented Control) */
 .linear-segmented-group {
   display: inline-flex; align-items: center; gap: 2px; user-select: none;
-  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(148, 163, 184, 0.15);
+  background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle);
   border-radius: 6px; padding: 2px; flex-shrink: 1; min-width: 0;
   overflow-x: auto; scrollbar-width: none;
 }
@@ -63,10 +63,10 @@
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; white-space: nowrap; user-select: none; flex-shrink: 0;
   background: transparent; border: 1px solid transparent; border-radius: 4px;
-  color: #94a3b8; transition: all 0.15s ease; box-sizing: border-box;
+  color: var(--color-muted); transition: all 0.15s ease; box-sizing: border-box;
 }
 .linear-segment-btn:hover {
-  background: rgba(255, 255, 255, 0.05); color: #f8fafc;
+  background: var(--color-surface-elevated); color: var(--color-body);
 }
 .linear-segment-btn.active {
   background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.35);
@@ -89,11 +89,11 @@
 }
 .explorer-command-bar .toolbar-btn.btn-secondary,
 .explorer-toolbar-sleek .toolbar-btn.btn-secondary {
-  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(148, 163, 184, 0.15); color: #cbd5e1;
+  background: var(--color-surface-elevated); border: 1px solid var(--color-border-subtle); color: var(--color-muted-strong);
 }
 .explorer-command-bar .toolbar-btn.btn-secondary:hover:not(:disabled),
 .explorer-toolbar-sleek .toolbar-btn.btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.09); border-color: rgba(148, 163, 184, 0.3); color: #f8fafc;
+  background: var(--color-surface-inset); border-color: var(--color-border-strong); color: var(--color-body);
 }
 .explorer-command-bar .toolbar-btn.btn-secondary:disabled,
 .explorer-toolbar-sleek .toolbar-btn.btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -118,12 +118,12 @@
 .row-actions-wrap .inline-action-btn {
   height: 24px; min-height: 24px; padding: 0 8px; font-size: 11px;
   display: inline-flex; align-items: center; gap: 4px; border-radius: 4px;
-  white-space: nowrap; background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(148, 163, 184, 0.15); color: #cbd5e1;
+  white-space: nowrap; background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-subtle); color: var(--color-muted-strong);
   cursor: pointer; transition: all 0.15s ease;
 }
 .row-actions-wrap .inline-action-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1); border-color: rgba(148, 163, 184, 0.3); color: #f8fafc;
+  background: var(--color-surface-inset); border-color: var(--color-border-strong); color: var(--color-body);
 }
 .row-actions-wrap .inline-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -141,24 +141,24 @@
 .explorer-mobile-command-bar,
 .mobile-command-bar {
   display: none; height: 44px; align-items: center; justify-content: space-between;
-  padding: 0 10px; background: rgba(11, 15, 25, 0.95); border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0 10px; background: var(--color-surface-card); border: 1px solid var(--color-border-subtle);
   border-radius: 10px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); margin-bottom: 6px;
 }
 .mobile-command-brand { display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mobile-command-title { font-size: 0.85rem; font-weight: 700; color: #fff; font-family: var(--font-mono); }
+.mobile-command-title { font-size: 0.85rem; font-weight: 700; color: var(--color-body); font-family: var(--font-mono); }
 .mobile-count-badge { font-size: 0.72rem; color: #06b6d4; background: rgba(6, 182, 212, 0.12); padding: 1px 6px; border-radius: 9999px; font-weight: 600; }
 .mobile-command-actions { display: flex; align-items: center; gap: 4px; }
 .btn-mobile-cmd {
   height: 32px; min-height: 32px; width: 32px; padding: 0; border-radius: 6px;
-  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-surface-elevated); border: 1px solid var(--color-border-subtle);
   color: #38bdf8; font-size: 0.85rem; font-family: var(--font-mono); font-weight: 600;
   display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
   transition: all 0.15s ease; flex-shrink: 0;
 }
-.btn-mobile-cmd:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(6, 182, 212, 0.4); }
+.btn-mobile-cmd:hover { background: var(--color-surface-inset); border-color: rgba(6, 182, 212, 0.4); }
 .btn-mobile-cmd:active { transform: scale(0.95); background: rgba(6, 182, 212, 0.2); }
 .mobile-micro-telemetry {
-  display: none; height: 20px; line-height: 20px; font-size: 0.68rem; color: #94a3b8;
+  display: none; height: 20px; line-height: 20px; font-size: 0.68rem; color: var(--color-muted);
   font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; margin-bottom: 6px;
 }
 .mobile-kind-scroller {
@@ -168,8 +168,8 @@
 .mobile-kind-scroller::-webkit-scrollbar { display: none; }
 .mobile-kind-scroller .mobile-kind-pill {
   display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
-  background: transparent; border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 9999px; color: #94a3b8; font-size: 0.75rem; white-space: nowrap;
+  background: transparent; border: 1px solid var(--color-border-subtle);
+  border-radius: 9999px; color: var(--color-muted); font-size: 0.75rem; white-space: nowrap;
   flex-shrink: 0; cursor: pointer; scroll-snap-align: start; min-height: 30px; transition: all 0.15s ease;
 }
 .mobile-kind-scroller .mobile-kind-pill.is-active {
