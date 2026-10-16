@@ -155,11 +155,11 @@ function handleFirstFencing() {
       <div class="fencing-alert-actions">
         <button
           type="button"
-          class="btn btn-action-fence font-mono"
+          class="btn btn-action-fence"
           @click="handleFirstFencing"
         >
           <BaseIcon name="shield" size="xs" />
-          <span>Fence Host...</span>
+          <span>Fence Host</span>
         </button>
       </div>
     </div>
@@ -167,13 +167,21 @@ function handleFirstFencing() {
 </template>
 
 <style scoped>
+.infra-hosts-header-bar-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 .hosts-mobile-command-bar {
+  height: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--bg-surface, #0f1012);
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
   gap: 8px;
 }
 .command-bar-left {
@@ -182,19 +190,28 @@ function handleFirstFencing() {
   gap: 8px;
 }
 .command-bar-title {
-  font-size: 14px;
+  font-family: var(--font-sans);
+  font-size: 15px;
   font-weight: 600;
-  color: var(--text-primary, #f3f4f6);
+  color: var(--text-primary);
   letter-spacing: -0.01em;
+  line-height: 1;
 }
 .command-bar-count-pill {
+  height: 20px;
+  min-width: 22px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 11px;
-  font-family: var(--font-mono, monospace);
-  color: var(--text-secondary, #9ca3af);
-  background: rgba(255, 255, 255, 0.06);
-  padding: 1px 6px;
-  border-radius: 9999px;
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  line-height: 1;
 }
 .command-bar-actions {
   display: flex;
@@ -202,30 +219,33 @@ function handleFirstFencing() {
   gap: 6px;
 }
 .btn-icon-cmd {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  background: var(--bg-card, #141516);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-  color: var(--text-secondary, #9ca3af);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .btn-icon-cmd:hover {
-  background: var(--bg-elevated, #1a1b1e);
-  color: var(--text-primary, #f3f4f6);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--color-border-strong);
 }
 .btn-cmd-add {
-  height: 28px;
-  padding: 0 10px;
+  height: 30px;
+  padding: 0 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 6px;
+  font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 600;
   background: var(--color-primary, #326ce5) !important;
@@ -317,13 +337,12 @@ function handleFirstFencing() {
   border-radius: 4px;
 }
 .fencing-alert-strip {
-  min-height: 36px;
-  padding: 6px 12px;
-  margin-bottom: 10px;
-  background: var(--bg-card, #141516);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-  border-left: 2px solid #f59e0b;
-  border-radius: 6px;
+  min-height: 42px;
+  padding: 8px 12px;
+  margin: 0;
+  background: var(--color-status-warning-bg, rgba(210, 153, 34, 0.10));
+  border: 1px solid var(--color-status-warning-border, rgba(245, 158, 11, 0.35));
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -338,27 +357,28 @@ function handleFirstFencing() {
   overflow: hidden;
 }
 .fencing-alert-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: #f59e0b;
+  background: var(--color-status-warning, #f59e0b);
   flex-shrink: 0;
 }
 .fencing-alert-texts {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .fencing-alert-title {
-  color: var(--text-primary, #f3f4f6);
-  font-weight: 500;
+  color: var(--text-primary);
+  font-weight: 600;
 }
 .fencing-alert-sub {
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 .fencing-alert-actions {
   display: flex;
@@ -366,14 +386,15 @@ function handleFirstFencing() {
   flex-shrink: 0;
 }
 .btn-action-fence {
-  height: 26px;
+  height: 28px;
   padding: 0 10px;
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   font-weight: 500;
-  background: var(--bg-elevated, #1a1b1e);
-  color: var(--text-primary, #f3f4f6);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 5px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
   white-space: nowrap;
   display: inline-flex;
   align-items: center;
@@ -382,23 +403,23 @@ function handleFirstFencing() {
   transition: all 0.15s ease;
 }
 .btn-action-fence:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.24);
-  color: #ffffff;
+  background: var(--bg-elevated);
+  border-color: var(--color-border-strong);
+  color: var(--text-primary);
 }
 @media (max-width: 640px) {
   .fencing-alert-strip {
-    padding: 6px 10px;
-    margin-bottom: 8px;
-    gap: 6px;
+    padding: 8px 12px;
+    margin: 0;
+    gap: 8px;
   }
   .fencing-alert-sub {
     display: none;
   }
   .btn-action-fence {
-    height: 24px;
-    padding: 0 8px;
-    font-size: 10.5px;
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
   }
 }
 </style>

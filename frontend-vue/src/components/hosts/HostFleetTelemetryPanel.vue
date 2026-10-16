@@ -46,7 +46,7 @@ const availabilityPct = computed(() => {
           <div class="diag-card-value font-mono">
             {{ availabilityPct }}<span class="diag-unit">%</span>
           </div>
-          <div class="diag-card-sub text-muted font-mono">
+          <div class="diag-card-sub text-muted">
             {{ onlineHostsCount }} of {{ totalHosts }} reachable
           </div>
         </div>
@@ -64,7 +64,7 @@ const availabilityPct = computed(() => {
           <div class="diag-card-value font-mono">
             {{ avgLatency > 0 ? `${avgLatency}ms` : '--' }}
           </div>
-          <div class="diag-card-sub text-muted font-mono">
+          <div class="diag-card-sub text-muted">
             {{ avgLatency > 0 ? 'Active HTTP/TCP probe' : 'Run probe to measure' }}
           </div>
         </div>
@@ -82,7 +82,7 @@ const availabilityPct = computed(() => {
           <div class="diag-card-value font-mono" :class="{ 'val-danger': (disconnectedHosts + errorHosts) > 0 }">
             {{ disconnectedHosts + errorHosts }}
           </div>
-          <div class="diag-card-sub text-muted font-mono">
+          <div class="diag-card-sub text-muted">
             {{ errorHosts }} error · {{ disconnectedHosts }} offline
           </div>
         </div>
@@ -96,7 +96,7 @@ const availabilityPct = computed(() => {
           <div class="diag-card-value font-mono">
             {{ (typeCounts['k8s'] || 0) + (typeCounts['agent'] || 0) + (typeCounts['docker'] || 0) }}
           </div>
-          <div class="diag-card-sub text-muted font-mono">
+          <div class="diag-card-sub text-muted">
             {{ typeCounts['k8s'] || 0 }} K8s · {{ typeCounts['agent'] || 0 }} Agent · {{ typeCounts['docker'] || 0 }} Docker
           </div>
         </div>
@@ -107,11 +107,11 @@ const availabilityPct = computed(() => {
 
 <style scoped>
 .fleet-diagnostics-panel {
-  background: var(--bg-card, #141516);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   padding: 14px 16px;
-  margin-bottom: 14px;
+  margin: 0;
   box-shadow: none;
 }
 
@@ -119,7 +119,7 @@ const availabilityPct = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .diagnostics-title-group {
@@ -129,17 +129,18 @@ const availabilityPct = computed(() => {
 }
 
 .diagnostics-title {
-  font-family: var(--font-sans, system-ui, sans-serif);
-  font-size: 13.5px;
+  font-family: var(--font-sans);
+  font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary, #f3f4f6);
+  color: var(--text-primary);
   margin: 0;
   letter-spacing: -0.01em;
 }
 
 .diagnostics-subtitle {
-  font-size: 11px;
-  color: var(--text-secondary, #9ca3af);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-secondary);
   line-height: 1.3;
 }
 
@@ -150,13 +151,14 @@ const availabilityPct = computed(() => {
 }
 
 .diagnostic-card {
-  background: var(--bg-surface, #0f1012);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
 }
 
 .diag-card-header {
@@ -166,10 +168,13 @@ const availabilityPct = computed(() => {
 }
 
 .diag-card-label {
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   font-weight: 500;
-  color: var(--text-secondary, #9ca3af);
-  letter-spacing: 0.01em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .diag-status-dot {
@@ -196,10 +201,11 @@ const availabilityPct = computed(() => {
 }
 
 .diag-card-value {
+  font-family: var(--font-mono);
   font-size: 20px;
   font-weight: 700;
-  color: var(--text-primary, #f3f4f6);
-  line-height: 1.1;
+  color: var(--text-primary);
+  line-height: 1.15;
   letter-spacing: -0.02em;
 }
 
@@ -215,15 +221,20 @@ const availabilityPct = computed(() => {
 }
 
 .diag-card-sub {
-  font-size: 10.5px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 400;
   line-height: 1.3;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 640px) {
   .fleet-diagnostics-panel {
-    padding: 10px 12px;
-    margin-bottom: 10px;
+    padding: 12px;
+    margin: 0;
   }
   .diagnostics-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -234,13 +245,13 @@ const availabilityPct = computed(() => {
     gap: 4px;
   }
   .diag-card-value {
-    font-size: 17px;
+    font-size: 18px;
   }
   .diag-card-label {
-    font-size: 10px;
+    font-size: 11px;
   }
   .diag-card-sub {
-    font-size: 9.5px;
+    font-size: 10px;
   }
 }
 </style>

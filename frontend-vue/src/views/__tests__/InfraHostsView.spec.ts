@@ -145,7 +145,7 @@ describe('Zero-Neon Redesign & Hosts Architecture Verification', () => {
       resolve(__dirname, '../../assets/styles/layout/app-shell.css'),
       'utf-8'
     )
-    expect(appShellCss).toContain('.hud-mobile-brand-title { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; color: var(--text-primary);')
+    expect(appShellCss).toContain('.hud-mobile-brand-title { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); font-family: var(--font-sans); }')
 
     const baseCss = readFileSync(
       resolve(__dirname, '../../assets/css/base.css'),
@@ -158,6 +158,32 @@ describe('Zero-Neon Redesign & Hosts Architecture Verification', () => {
       'utf-8'
     )
     expect(controlsCss).toContain('background: var(--bg-surface, #111827);')
+  })
+
+  it('verifies pixel-perfect grid, fencing strip radius, and Inter font hierarchy', () => {
+    const headerBar = readFileSync(
+      resolve(__dirname, '../../components/hosts/InfraHostsHeaderBar.vue'),
+      'utf-8'
+    )
+    expect(headerBar).toContain('.infra-hosts-header-bar-wrapper {')
+    expect(headerBar).toContain('gap: 10px;')
+    expect(headerBar).toContain('min-height: 42px;')
+    expect(headerBar).toContain('border-radius: 8px;')
+    expect(headerBar).not.toContain('btn-action-fence font-mono')
+    expect(headerBar).toContain('<span>Fence Host</span>')
+
+    const telemetry = readFileSync(
+      resolve(__dirname, '../../components/hosts/HostFleetTelemetryPanel.vue'),
+      'utf-8'
+    )
+    expect(telemetry).not.toContain('diag-card-sub text-muted font-mono')
+
+    const mobileCards = readFileSync(
+      resolve(__dirname, '../../components/hosts/HostsMobileCards.vue'),
+      'utf-8'
+    )
+    expect(mobileCards).not.toContain('btn-m-probe font-mono')
+    expect(mobileCards).toContain('m-latency font-mono')
   })
 })
 

@@ -136,7 +136,7 @@ function handleMobileAction(action: string, host: ComputeHost) {
           <div class="m-card-header-right" @click.stop>
             <button
               type="button"
-              class="btn-m-probe font-mono"
+              class="btn-m-probe"
               :disabled="testingHostId === host.id"
               title="Probe connection"
               @click.stop="emit('test', host)"
@@ -168,10 +168,10 @@ function handleMobileAction(action: string, host: ComputeHost) {
             </span>
           </div>
 
-          <div class="m-meta-info-right font-mono">
+          <div class="m-meta-info-right">
             <span
               v-if="hostTestResults[host.id]"
-              class="m-latency"
+              class="m-latency font-mono"
               :class="getLatencyBadgeClass(hostTestResults[host.id].latency_ms)"
             >
               <template v-if="hostTestResults[host.id].latency_ms > 0">
@@ -213,16 +213,16 @@ function handleMobileAction(action: string, host: ComputeHost) {
 .mobile-hosts-stream {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 .mobile-host-card {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 6px;
-  min-height: 62px;
+  gap: 8px;
+  min-height: 68px;
   height: auto;
-  padding: 10px 12px;
+  padding: 12px;
   border-radius: 8px;
   background: var(--bg-card);
   border: 1px solid var(--color-border-subtle);
@@ -249,14 +249,14 @@ function handleMobileAction(action: string, host: ComputeHost) {
 .m-card-header-left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
 }
 .m-status-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
   display: inline-block;
@@ -268,8 +268,11 @@ function handleMobileAction(action: string, host: ComputeHost) {
   background: var(--color-status-offline, #f85149);
 }
 .m-host-name {
-  font-size: 13.5px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -278,10 +281,13 @@ function handleMobileAction(action: string, host: ComputeHost) {
 .m-type-chip {
   display: inline-flex;
   align-items: center;
-  padding: 1px 6px;
+  height: 20px;
+  padding: 0 6px;
   border-radius: 4px;
-  font-size: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
   font-weight: 600;
+  line-height: 1;
   flex-shrink: 0;
   white-space: nowrap;
   text-transform: uppercase;
@@ -319,21 +325,22 @@ function handleMobileAction(action: string, host: ComputeHost) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 24px;
-  padding: 0 8px;
-  font-size: 11px;
+  height: 28px;
+  padding: 0 10px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   font-weight: 500;
-  border-radius: 4px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   color: var(--text-primary);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .btn-m-probe:hover:not(:disabled) {
-  background: var(--color-surface-elevated, #222f46);
-  color: var(--text-primary, #f8fafc);
-  border-color: var(--color-border-strong, #384b6e);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--color-border-strong);
 }
 .btn-m-probe:disabled {
   opacity: 0.5;
@@ -355,10 +362,11 @@ function handleMobileAction(action: string, host: ComputeHost) {
   overflow: hidden;
 }
 .m-endpoint {
-  font-family: var(--font-mono, monospace);
-  font-size: 11.5px;
-  color: var(--color-endpoint-syntax, #58a6ff);
+  font-family: var(--font-mono);
+  font-size: 12px;
   font-weight: 500;
+  color: var(--color-endpoint-syntax, #58a6ff);
+  line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -374,6 +382,10 @@ function handleMobileAction(action: string, host: ComputeHost) {
   font-weight: 500;
 }
 .m-last-check {
-  font-size: 10.5px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+  line-height: 1.3;
 }
 </style>
