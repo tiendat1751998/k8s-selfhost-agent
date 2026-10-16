@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,19 +30,31 @@ func (s *LogServer) QueryLogs(ctx context.Context, app string, tail int, sinceSt
 	// Instant retrieval via embedded columnar engine using Bloom filter & sparse primary index
 	if eng != nil {
 		entries, err := eng.GetLogs(ctx, app, tail, sinceTime, untilTime, query, level)
-		if err == nil && len(entries) > 0 {
-			sort.SliceStable(entries, func(i, j int) bool {
-				return entries[i].Timestamp.Before(entries[j].Timestamp)
-			})
-			if tail > 0 && len(entries) > tail {
-				entries = entries[len(entries)-tail:]
+		if err == nil {
+			hasOtherSources := false
+			for _, src := range sources {
+				if src != eng {
+					hasOtherSources = true
+					break
+				}
 			}
-			return entries, nil
+			if len(entries) > 0 || eng.BlockCount() > 0 || !hasOtherSources {
+				sort.SliceStable(entries, func(i, j int) bool {
+					return entries[i].Timestamp.Before(entries[j].Timestamp)
+				})
+				if tail > 0 && len(entries) > tail {
+					entries = entries[len(entries)-tail:]
+				}
+				return entries, nil
+			}
 		}
 	}
 
 	var allEntries []LogEntry
 	for _, src := range sources {
+		if eng != nil && src == eng {
+			continue
+		}
 		entries, err := src.GetLogs(ctx, app, tail, sinceTime, untilTime, query, level)
 		if err != nil {
 			continue
@@ -264,5 +277,81 @@ func parseRelativeDuration(val string) (time.Duration, error) {
 		}
 	}
 	return time.ParseDuration(val)
+}
+
+func (s *LogServer) streamFromEngine(w http.ResponseWriter, r *http.Request, service string, tail int) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+	flusher, hasFlusher := w.(http.Flusher)
+
+	var lastTimestamp time.Time
+	seenKeys := make(map[string]struct{})
+
+	emit := func(e LogEntry) bool {
+		key := fmt.Sprintf("%d_%s_%s", e.Timestamp.UnixNano(), e.Service, e.Message)
+		if _, seen := seenKeys[key]; seen {
+			return true
+		}
+		seenKeys[key] = struct{}{}
+		if e.Timestamp.After(lastTimestamp) {
+			lastTimestamp = e.Timestamp
+		}
+		line := formatLogEntry(e)
+		if strings.TrimSpace(line) == "" {
+			return true
+		}
+		_, err := fmt.Fprintf(w, "data: %s\n\n", line)
+		return err == nil
+	}
+
+	if initial, err := s.QueryLogs(r.Context(), service, tail, "", "", "", ""); err == nil {
+		for _, e := range initial {
+			if !emit(e) {
+				return
+			}
+		}
+		if hasFlusher {
+			flusher.Flush()
+		}
+	}
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			sinceStr := ""
+			if !lastTimestamp.IsZero() {
+				sinceStr = lastTimestamp.Add(1 * time.Nanosecond).UTC().Format(time.RFC3339Nano)
+			}
+			entries, err := s.QueryLogs(r.Context(), service, 100, sinceStr, "", "", "")
+			if err != nil {
+				continue
+			}
+			newEmitted := false
+			for _, e := range entries {
+				if !lastTimestamp.IsZero() && !e.Timestamp.After(lastTimestamp) {
+					continue
+				}
+				if !emit(e) {
+					return
+				}
+				newEmitted = true
+			}
+			if newEmitted && hasFlusher {
+				flusher.Flush()
+			}
+			if len(seenKeys) > 10000 {
+				seenKeys = make(map[string]struct{})
+			}
+		}
+	}
 }
 

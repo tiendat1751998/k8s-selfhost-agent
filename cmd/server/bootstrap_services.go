@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -151,7 +152,7 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 		log,
 		usecaseMetrics.WithRequestCountFn(mw.GetRequestCount),
 		usecaseMetrics.WithIncidentRepo(incRepo),
-		usecaseMetrics.WithHostProbe(true),
+		usecaseMetrics.WithHostProbe(os.Getenv("ENABLE_LOCAL_HOST_PROBE") == "true"),
 	)
 	go metricsCollector.Start(ctx)
 

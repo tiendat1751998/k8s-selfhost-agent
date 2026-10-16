@@ -214,6 +214,20 @@ func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, view *BlockV
 		}
 	}
 
+	targetLevelMask := LevelFilterMask(params.Level)
+	var targetServiceBit uint64
+	if params.Service != "" {
+		if svcID, ok := r.dict.LookupID(params.Service); ok {
+			targetServiceBit = ServiceBloomBit(svcID)
+		}
+	}
+
+	compBuf := GetBlockBuffer()
+	defer PutBlockBuffer(compBuf)
+
+	scratch := GetBlockBuffer()
+	defer PutBlockBuffer(scratch)
+
 	for _, bIdx := range blocks {
 		if len(results) >= limit {
 			break
@@ -225,19 +239,28 @@ func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, view *BlockV
 
 		var mark BlockMark
 		mark.Decode(marksData[markOffset : markOffset+BlockMarkSize])
-		compressedBuf := make([]byte, mark.CompressedLength)
-		if _, err := dataFile.ReadAt(compressedBuf, int64(mark.CompressedOffset)); err != nil {
+
+		// 1. Bitmask Pruning: skip block if level bitmask does not intersect
+		if targetLevelMask != 0xFFFF && mark.LevelMask != 0 && (mark.LevelMask&targetLevelMask) == 0 {
+			continue // zero disk read, zero decompression!
+		}
+
+		// 2. ServiceBloom Pruning: skip block if service bloom hash mask does not contain target bit
+		if targetServiceBit != 0 && mark.ServiceBloom != 0 && (mark.ServiceBloom&targetServiceBit) != targetServiceBit {
+			continue // zero disk read, zero decompression!
+		}
+
+		readLen := int(mark.CompressedLength)
+		if readLen > cap(compBuf) {
+			compBuf = make([]byte, readLen)
+		}
+		compressedSlice := compBuf[:readLen]
+		if _, err := dataFile.ReadAt(compressedSlice, int64(mark.CompressedOffset)); err != nil {
 			continue
 		}
 
-		scratch := GetBlockBuffer()
-		uncompressed, err := DecompressBlock(compressedBuf, scratch)
-		if err != nil {
-			PutBlockBuffer(scratch)
-			continue
-		}
-		if err := view.Unpack(uncompressed); err != nil {
-			PutBlockBuffer(scratch)
+		// 3. Late Materialization: unpack ONLY metadata columns first
+		if err := view.UnpackMeta(compressedSlice, scratch); err != nil {
 			continue
 		}
 
@@ -246,6 +269,35 @@ func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, view *BlockV
 			start, end, step = view.RowCount-1, -1, -1
 		}
 
+		// First pass: check if any row matches timestamp, service, and level filters
+		hasMatchingRow := false
+		for i := start; i != end; i += step {
+			ts := view.Timestamps[i]
+			if (sinceUnix > 0 && ts < sinceUnix) || (untilUnix > 0 && ts > untilUnix) {
+				continue
+			}
+			svc, _ := r.dict.Lookup(view.ServiceIDs[i])
+			if params.Service != "" && !matchFilter(svc, params.Service) {
+				continue
+			}
+			lvl := LevelIDToString(view.LevelIDs[i])
+			if params.Level != "" && !matchLevel(lvl, params.Level) {
+				continue
+			}
+			hasMatchingRow = true
+			break
+		}
+
+		if !hasMatchingRow {
+			continue // LATE MATERIALIZATION: Zero message decompression!
+		}
+
+		// Row matched! Decompress messages frame now
+		if err := view.EnsureMessagesDecompressed(scratch); err != nil {
+			continue
+		}
+
+		// Extract matched entries
 		for i := start; i != end && len(results) < limit; i += step {
 			ts := view.Timestamps[i]
 			if (sinceUnix > 0 && ts < sinceUnix) || (untilUnix > 0 && ts > untilUnix) {
@@ -255,7 +307,7 @@ func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, view *BlockV
 			if params.Service != "" && !matchFilter(svc, params.Service) {
 				continue
 			}
-			lvl, _ := r.dict.Lookup(view.LevelIDs[i])
+			lvl := LevelIDToString(view.LevelIDs[i])
 			if params.Level != "" && !matchLevel(lvl, params.Level) {
 				continue
 			}
@@ -270,7 +322,6 @@ func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, view *BlockV
 				Message:   string(msg),
 			})
 		}
-		PutBlockBuffer(scratch)
 	}
 	return results
 }

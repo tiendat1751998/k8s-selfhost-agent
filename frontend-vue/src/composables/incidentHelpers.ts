@@ -58,21 +58,21 @@ export const SIMULATION_SCENARIOS: SimulationScenario[] = [
     key: 'oom',
     icon: '🔥',
     title: 'Pod OOMKilled (Exit Code 137)',
-    subtitle: 'JVM Heap Memory Exhaustion on checkout-api',
-    workload: 'checkout-api',
-    namespace: 'ecommerce',
+    subtitle: 'Memory Exhaustion on target-pod',
+    workload: 'target-pod',
+    namespace: 'default',
     cluster: '--',
     type: 'OOMKilled',
     severity: 'critical',
     description: 'cgroup memory limit reached. Kubernetes Linux kernel OOM killer terminated container with exit code 137.',
-    badgeText: 'JVM Heap Exhaustion'
+    badgeText: 'Memory Exhaustion'
   },
   {
     key: 'node_down',
     icon: '🚨',
     title: 'Server Node Down (NodeNotReady)',
-    subtitle: 'Infrastructure Host masterdb Unreachable',
-    workload: 'masterdb',
+    subtitle: 'Infrastructure Host target-node Unreachable',
+    workload: 'target-node',
     namespace: 'kube-system',
     cluster: '--',
     type: 'NodeNotReady',
@@ -84,14 +84,14 @@ export const SIMULATION_SCENARIOS: SimulationScenario[] = [
     key: 'crashloop',
     icon: '⚠️',
     title: 'CrashLoopBackOff',
-    subtitle: 'PostgreSQL Connection Refused on payment-gateway',
-    workload: 'payment-gateway',
-    namespace: 'payments',
+    subtitle: 'Connection Refused on target-service',
+    workload: 'target-service',
+    namespace: 'default',
     cluster: '--',
     type: 'CrashLoopBackOff',
     severity: 'high',
-    description: 'PostgreSQL Connection Refused on payment-gateway. Repeated container exits triggered CrashLoopBackOff.',
-    badgeText: 'DB Connection Refused'
+    description: 'Connection Refused on target-service. Repeated container exits triggered CrashLoopBackOff.',
+    badgeText: 'Connection Refused'
   }
 ]
 

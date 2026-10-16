@@ -63,7 +63,7 @@ const allClusterServices = computed<DeepDiveServiceItem[]>(() => {
   const totalBw = list.reduce((acc, s) => acc + s.rx_bytes_per_sec + s.tx_bytes_per_sec, 0)
   return list.map(s => ({
     ...s,
-    traffic_percent: totalRps > 0 ? (s.requests_per_sec / totalRps) * 100 : (totalBw > 0 ? ((s.rx_bytes_per_sec + s.tx_bytes_per_sec) / totalBw) * 100 : (list.length ? 100 / list.length : 0)),
+    traffic_percent: totalRps > 0 ? (s.requests_per_sec / totalRps) * 100 : (totalBw > 0 ? ((s.rx_bytes_per_sec + s.tx_bytes_per_sec) / totalBw) * 100 : 0),
   }))
 })
 

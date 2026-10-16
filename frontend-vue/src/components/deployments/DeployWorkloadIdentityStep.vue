@@ -36,7 +36,7 @@ defineProps<Props>()
       </div>
       <div class="form-group flex-1">
         <label class="form-label">Target Cluster / Host</label>
-        <input v-model="form.target" type="text" placeholder="prod-us-east-1" class="input-glass font-mono" />
+        <input v-model="form.target" type="text" placeholder="default" class="input-glass font-mono" />
       </div>
       <div class="form-group flex-1">
         <label class="form-label">Initial Replicas</label>

@@ -194,8 +194,7 @@ function handleSave() {
           <label>Cluster Scope</label>
           <select v-model="clusterScope" class="input-glass">
             <option value="all-clusters">All Clusters (Global Mesh)</option>
-            <option value="prod-us-east-1">prod-us-east-1 (Primary)</option>
-            <option value="prod-eu-west-1">prod-eu-west-1 (Secondary)</option>
+            <option value="default">Default Cluster</option>
           </select>
         </div>
       </div>

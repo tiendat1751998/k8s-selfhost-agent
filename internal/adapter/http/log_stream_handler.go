@@ -118,6 +118,35 @@ func parseStreamLogLine(line string) (time.Time, string) {
 	return time.Now().UTC(), line
 }
 
+func extractStreamServiceTag(msg string) (string, string) {
+	trimmed := strings.TrimSpace(msg)
+	if !strings.HasPrefix(trimmed, "[") {
+		return "", msg
+	}
+	endIdx := strings.IndexByte(trimmed, ']')
+	if endIdx <= 1 {
+		return "", msg
+	}
+	candidate := trimmed[1:endIdx]
+	upper := strings.ToUpper(candidate)
+	if upper == "INFO" || upper == "WARN" || upper == "WARNING" || upper == "ERROR" || upper == "DEBUG" || upper == "FATAL" || upper == "TRACE" || upper == "PANIC" {
+		return "", msg
+	}
+	rest := strings.TrimSpace(trimmed[endIdx+1:])
+	if strings.HasPrefix(rest, "[") {
+		if lvlEnd := strings.IndexByte(rest, ']'); lvlEnd > 1 {
+			lvl := strings.ToUpper(rest[1:lvlEnd])
+			if lvl == "INFO" || lvl == "WARN" || lvl == "WARNING" || lvl == "ERROR" || lvl == "DEBUG" || lvl == "FATAL" || lvl == "TRACE" || lvl == "PANIC" {
+				rest = strings.TrimSpace(rest[lvlEnd+1:])
+			}
+		}
+	}
+	if rest == "" {
+		rest = msg
+	}
+	return candidate, rest
+}
+
 func detectStreamLogLevel(msg string) string {
 	u := strings.ToUpper(msg)
 	switch {
@@ -166,6 +195,7 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	w.Header().Del("Sec-WebSocket-Protocol")
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.Get().Error("failed to upgrade websocket for log streaming", zap.Error(err))
@@ -219,17 +249,25 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			if err := h.streamer.StreamLogs(streamCtx, agentURL, targetService, func(line string) {
 				entryTS, msg := parseStreamLogLine(line)
+				svc := targetService
+				cleanMsg := msg
+				if extractedSvc, rest := extractStreamServiceTag(msg); extractedSvc != "" {
+					if svc == "" {
+						svc = extractedSvc
+					}
+					cleanMsg = rest
+				}
 				h.aggregator.Ingest(logging.LogEntry{
 					Timestamp: entryTS,
 					TenantID:  tenantID,
 					Namespace: namespace,
-					Pod:       targetService,
-					Container: targetService,
-					Service:   targetService,
+					Pod:       svc,
+					Container: svc,
+					Service:   svc,
 					Node:      node,
 					Stream:    "stdout",
 					Level:     detectStreamLogLevel(msg),
-					Message:   msg,
+					Message:   cleanMsg,
 				})
 			}); err != nil && streamCtx.Err() == nil {
 				logger.Get().Warn("remote agent log stream failed",

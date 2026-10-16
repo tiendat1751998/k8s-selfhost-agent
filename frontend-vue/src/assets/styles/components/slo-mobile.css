@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    Touch-Optimized Mobile SLO Workload Stream (<768px)
    Strict Enterprise Modularity - Target < 300 lines
    ========================================================================== */
@@ -27,12 +27,15 @@
   letter-spacing: -0.01em;
 }
 
-.mobile-stream-count {
+.mobile-stream-count,
+.slo-count-pill {
   font-size: 10.5px;
   color: var(--accent-cyan, #06b6d4);
   background: rgba(6, 182, 212, 0.1);
   padding: 1px 6px;
   border-radius: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .mobile-stream-empty {

@@ -63,7 +63,7 @@ function openDeclareModal() {
   createForm.value = {
     pod_name: '',
     namespace: 'default',
-    cluster_name: 'prod-us-east-1',
+    cluster_name: 'default',
     type: 'CrashLoopBackOff',
     severity: 'critical',
     message: ''
@@ -253,7 +253,7 @@ function formatRelativeTime(dateStr?: string): string {
               v-model="createForm.cluster_name"
               type="text"
               class="toolbar-search-input font-mono"
-              placeholder="e.g. prod-us-east-1"
+              placeholder="e.g. default"
               required
             />
           </div>

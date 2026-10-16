@@ -166,3 +166,82 @@ func TestNodeHistoryWorker_RecordRollupAndIncident(t *testing.T) {
 		t.Errorf("expected node_name in incident raw data, got %v", inc.RawData)
 	}
 }
+
+func TestNodeHistoryWorker_SkipSyntheticNodeAnomaly(t *testing.T) {
+	testCases := []struct {
+		name     string
+		nodeID   string
+		role     string
+		source   string
+		nodeName string
+	}{
+		{
+			name:     "Host source node",
+			nodeID:   "host-DESKTOP-GKK38T1",
+			role:     "standalone",
+			source:   "host",
+			nodeName: "DESKTOP-GKK38T1",
+		},
+		{
+			name:     "Standalone role node",
+			nodeID:   "custom-id",
+			role:     "standalone",
+			source:   "agent",
+			nodeName: "local-box",
+		},
+		{
+			name:     "host- prefix nodeID",
+			nodeID:   "host-my-laptop",
+			role:     "worker",
+			source:   "agent",
+			nodeName: "my-laptop",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			sp := &mockSnapshotProvider{
+				snapshot: &metrics.SystemOverview{
+					Nodes: []metrics.NodeMetrics{
+						{
+							NodeID:     tc.nodeID,
+							NodeName:   tc.nodeName,
+							Role:       tc.role,
+							Source:     tc.source,
+							Status:     "ready",
+							CPUPercent: 20.0,
+						},
+					},
+				},
+			}
+
+			nmRepo := &mockNodeMetricsRepo{}
+			incRepo := &mockIncidentRepo{}
+
+			worker := metrics.NewNodeHistoryWorker(
+				sp, nmRepo, incRepo, zap.NewNop(),
+				metrics.WithRollupInterval(100*time.Millisecond),
+			)
+
+			ctx := context.Background()
+
+			// 1. Initial cycle (online)
+			if err := worker.RecordRollupOnce(ctx); err != nil {
+				t.Fatalf("first RecordRollupOnce failed: %v", err)
+			}
+
+			// 2. Transition to offline
+			sp.snapshot.Nodes[0].Status = "down"
+			sp.snapshot.Nodes[0].CPUPercent = 99.0
+
+			if err := worker.RecordRollupOnce(ctx); err != nil {
+				t.Fatalf("second RecordRollupOnce failed: %v", err)
+			}
+
+			// Must NOT generate incidents for synthetic host nodes
+			if len(incRepo.incidents) != 0 {
+				t.Fatalf("expected 0 incidents for synthetic node %s (%s), got %d", tc.nodeName, tc.nodeID, len(incRepo.incidents))
+			}
+		})
+	}
+}

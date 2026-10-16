@@ -12,10 +12,9 @@ import Disable2FAModal from '../components/settings/Disable2FAModal.vue'
 import SettingsMobileNav from '../components/settings/SettingsMobileNav.vue'
 import {
   useSettings,
+  buildSettingsTabsList,
   timezoneOptions,
-  languageOptions,
-  type TabKey,
-  type CategoryKey,
+  languageOptions
 } from '../composables/useSettings'
 
 const {
@@ -37,21 +36,12 @@ const {
   disableError,
   handleDisable2FA,
   isDirtyCategory,
+  apiKeys,
+  loadApiKeys,
 } = useSettings()
 
-const tabsList: { id: TabKey; label: string; icon: string; category?: CategoryKey; count?: number }[] = [
-  { id: 'general', label: 'General', icon: 'sliders', category: 'platform' },
-  { id: 'security', label: 'Security', icon: 'shield', category: 'security' },
-  { id: 'tenancy', label: 'Tenancy', icon: 'server', category: 'tenancy' },
-  { id: 'notifications', label: 'Notifications', icon: 'bell', category: 'notifications' },
-  { id: 'apikeys', label: 'API Keys', icon: 'key', category: 'apikeys', count: 3 },
-  { id: 'about', label: 'About', icon: 'help-circle' },
-]
+const tabsList = computed(() => buildSettingsTabsList(apiKeys.value))
 
-const activeTabLabel = computed(() => {
-  const found = tabsList.find(t => t.id === activeTab.value)
-  return found ? found.label : 'General'
-})
 
 function handleSaveSettings() {
   if (activeTab.value === 'general') {
@@ -157,17 +147,6 @@ function handleResetSettings() {
       </div>
     </div>
 
-    <!-- Mobile 20px Centered Micro-Telemetry Strip (<768px): Active Tab · 2FA · API Keys · Org -->
-    <div class="settings-micro-telemetry mobile-only font-mono" role="status" aria-label="Settings Micro Telemetry">
-      <span class="tel-item tel-name"><BaseIcon name="sliders" size="xs" /> {{ activeTabLabel }}</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-sec"><BaseIcon name="shield" size="xs" /> {{ totpStatus?.enabled ? '2FA' : 'No 2FA' }}</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-alert"><BaseIcon name="key" size="xs" /> 3 Keys</span>
-      <span class="tel-sep">·</span>
-      <span class="tel-item tel-tenancy"><BaseIcon name="server" size="xs" /> {{ form.name ? 'Active' : 'Default' }}</span>
-    </div>
-
     <!-- Mobile Tabs Navigation (Pills with snap, <768px) -->
     <SettingsMobileNav
       v-model:active-tab="activeTab"
@@ -234,8 +213,11 @@ function handleResetSettings() {
 
       <SettingsApiKeysTab
         v-if="activeTab === 'apikeys'"
+        :keys="apiKeys"
         :saving="saving"
         @save="saveCategory"
+        @update:keys="apiKeys = $event"
+        @refresh="loadApiKeys"
       />
 
       <AboutSettingsTab

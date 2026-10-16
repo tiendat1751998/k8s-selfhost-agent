@@ -98,15 +98,6 @@ function navigateHome() {
       </button>
     </div>
 
-    <!-- Live Environment & Tenant Scope Pill -->
-    <div class="env-pill sidebar-brand-pill">
-      <span class="pulse-dot pulse-dot-emerald"></span>
-      <div class="env-pill-text">
-        <span class="env-mesh">Air-Gapped Mesh</span>
-        <span class="env-cluster">{{ selectedTenant }}</span>
-      </div>
-      <span class="env-chip">v2.4</span>
-    </div>
 
     <!-- Navigation Menu with 5 Collapsible Groups -->
     <nav class="nav-menu" @scroll.passive="handleItemMouseLeave">

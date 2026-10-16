@@ -6,11 +6,12 @@ import { securityApi } from '../../api/security'
 const props = defineProps<{ show: boolean }>()
 const emit = defineEmits<{ (e: 'update:show', val: boolean): void; (e: 'close'): void }>()
 
-const activeKeyId = ref('kms-k8s-root-9f82c')
-const keyVersion = ref(4)
-const rotationStatus = ref<'idle' | 'rotating' | 'rotated'>('idle')
+const activeKeyId = ref('--')
+const keyVersion = ref(0)
+const rotationStatus = ref<'idle' | 'rotating' | 'rotated' | 'error'>('idle')
 const verificationStatus = ref<'idle' | 'verifying' | 'verified'>('idle')
 const copiedKey = ref(false)
+const kmsError = ref<string | null>(null)
 
 function handleClose() {
   emit('update:show', false)
@@ -21,19 +22,27 @@ function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && props.show) handleClose()
 }
 
-onMounted(async () => {
-  window.addEventListener('keydown', handleKeydown)
+async function loadKmsStatus() {
+  kmsError.value = null
   try {
     const k = await securityApi.getKmsKey()
     if (k?.key_id) activeKeyId.value = k.key_id
     if (k?.version) keyVersion.value = k.version
-  } catch {
-    // Keep initial secure key reference
+  } catch (err: unknown) {
+    activeKeyId.value = '--'
+    keyVersion.value = 0
+    kmsError.value = err instanceof Error ? err.message : 'Failed to load KMS key status'
   }
+}
+
+onMounted(async () => {
+  window.addEventListener('keydown', handleKeydown)
+  await loadKmsStatus()
 })
 onUnmounted(() => { window.removeEventListener('keydown', handleKeydown) })
 
 async function copyKeyId() {
+  if (activeKeyId.value === '--') return
   try {
     await navigator.clipboard.writeText(activeKeyId.value)
     copiedKey.value = true
@@ -44,13 +53,17 @@ async function copyKeyId() {
 async function rotateKey() {
   if (rotationStatus.value === 'rotating') return
   rotationStatus.value = 'rotating'
+  kmsError.value = null
   try {
     const res = await securityApi.rotateKmsKey()
     if (res?.key_id) activeKeyId.value = res.key_id
     if (res?.version) keyVersion.value = res.version
     rotationStatus.value = 'rotated'
-  } catch {
-    rotationStatus.value = 'idle'
+  } catch (err: unknown) {
+    activeKeyId.value = '--'
+    keyVersion.value = 0
+    rotationStatus.value = 'error'
+    kmsError.value = err instanceof Error ? err.message : 'KMS key rotation failed'
   }
 }
 
@@ -148,6 +161,11 @@ async function downloadAttestation() {
         </header>
 
         <div class="drawer-body">
+          <div v-if="kmsError" class="zt-error-alert" role="alert">
+            <BaseIcon name="alert-triangle" size="xs" />
+            <span>{{ kmsError }}</span>
+          </div>
+
           <!-- KMS Enclave Status -->
           <section class="zt-section">
             <div class="section-badge-row">
@@ -166,7 +184,7 @@ async function downloadAttestation() {
           <section class="zt-section">
             <div class="section-badge-row">
               <span class="section-tag">CRYPTOGRAPHIC KEY INFO</span>
-              <span class="version-chip font-mono">v{{ keyVersion }} Active</span>
+              <span class="version-chip font-mono">{{ keyVersion > 0 ? 'v' + keyVersion + ' Active' : 'Uninitialized' }}</span>
             </div>
             <div class="zt-card">
               <div class="card-row"><span class="row-label">Cipher Suite</span><span class="row-val font-mono text-cyan">AES-256-GCM</span></div>
@@ -228,7 +246,7 @@ async function downloadAttestation() {
           <div class="drawer-actions">
             <button class="btn-zt-action btn-rotate" :disabled="rotationStatus === 'rotating'" @click="rotateKey">
               <BaseIcon :name="rotationStatus === 'rotating' ? 'refresh' : 'key'" size="xs" />
-              <span>{{ rotationStatus === 'rotating' ? 'Rotating Enclave Key...' : rotationStatus === 'rotated' ? 'Rotated to v' + keyVersion + '!' : 'Rotate Key' }}</span>
+              <span>{{ rotationStatus === 'rotating' ? 'Rotating Enclave Key...' : rotationStatus === 'rotated' ? 'Rotated to v' + keyVersion + '!' : rotationStatus === 'error' ? 'Rotation Failed (Retry)' : 'Rotate Key' }}</span>
             </button>
             <button class="btn-zt-action btn-verify" :disabled="verificationStatus === 'verifying'" @click="verifyChecksum">
               <BaseIcon :name="verificationStatus === 'verifying' ? 'refresh' : 'check-circle'" size="xs" />
@@ -246,6 +264,7 @@ async function downloadAttestation() {
 </template>
 
 <style scoped>
+.zt-error-alert { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 6px; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: #fb7185; font-size: 11px; margin-bottom: 12px; }
 .zerotrust-drawer-root { position: fixed; inset: 0; z-index: 10000; display: flex; justify-content: flex-end; }
 .drawer-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: fadeIn 0.2s ease; }
 .zerotrust-drawer { position: relative; width: 440px; max-width: 100vw; height: 100vh; background: rgba(11, 15, 25, 0.98); border-left: 1px solid var(--border-medium, rgba(6, 182, 212, 0.3)); box-shadow: -8px 0 32px rgba(0, 0, 0, 0.75), 0 0 20px rgba(6, 182, 212, 0.15); display: flex; flex-direction: column; z-index: 10001; animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1); }

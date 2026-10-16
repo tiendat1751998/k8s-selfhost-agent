@@ -57,32 +57,6 @@
 .btn-icon-cmd:hover:not(:disabled) { background: rgba(51, 65, 85, 0.85); color: #fff; }
 .btn-icon-cmd:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* Mobile 20px Centered Micro-Telemetry Strip (<768px) */
-.settings-micro-telemetry {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 20px;
-  min-height: 20px;
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  gap: 6px;
-  user-select: none;
-  letter-spacing: -0.01em;
-  padding: 0 4px;
-  width: 100%;
-  box-sizing: border-box;
-}
-.settings-micro-telemetry .tel-item { display: inline-flex; align-items: center; line-height: 1; }
-.settings-micro-telemetry .tel-name { color: #38bdf8; }
-.settings-micro-telemetry .tel-sec { color: #34d399; }
-.settings-micro-telemetry .tel-alert { color: #fbbf24; }
-.settings-micro-telemetry .tel-tenancy { color: #c084fc; }
-.settings-micro-telemetry .tel-sep { color: rgba(148, 163, 184, 0.4); font-weight: 400; }
-
 /* Status Notification Banner */
 .status-banner {
   display: flex;
@@ -210,5 +184,4 @@
   .desktop-only { display: none !important; }
   .view-container, .settings-view-container { gap: 10px; }
   .settings-mobile-command-bar { display: flex; }
-  .settings-micro-telemetry { display: flex; }
 }

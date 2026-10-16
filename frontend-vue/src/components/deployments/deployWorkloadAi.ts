@@ -9,7 +9,7 @@ export interface NewAppForm extends DeploymentApp {
 
 export function createInitialForm(): NewAppForm {
   return {
-    name: '', team: 'platform-engineering', env: 'production', image: '', target: 'prod-us-east-1',
+    name: '', team: 'platform-engineering', env: 'production', image: '', target: 'default',
     namespace: 'default', type: 'kubernetes', replicas: 3, status: 'healthy', cpu: '250m', memory: '512Mi',
     port: 80, servicePort: 80, netType: 'ClusterIP', strategy: 'RollingUpdate', canaryWeight: 10,
     canaryVersion: '', blueGreenActive: 'blue', blueVersion: '', greenVersion: '', ingressHost: '',

@@ -61,10 +61,10 @@ CREATE INDEX IF NOT EXISTS idx_resource_tags_tenant_id ON resource_tags(tenant_i
 ALTER TABLE timeline_events ADD COLUMN IF NOT EXISTS tenant_id UUID;
 CREATE INDEX IF NOT EXISTS idx_timeline_events_tenant_id ON timeline_events(tenant_id);
 
--- projects: scoped by org_id — org_id -> tenant_id mapping needed
+-- projects: scoped by org_id â€” org_id -> tenant_id mapping needed
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS tenant_id UUID;
 CREATE INDEX IF NOT EXISTS idx_projects_tenant_id ON projects(tenant_id);
 
--- tenant_members: scoped by org_id — org_id -> tenant_id mapping needed
+-- tenant_members: scoped by org_id â€” org_id -> tenant_id mapping needed
 ALTER TABLE tenant_members ADD COLUMN IF NOT EXISTS tenant_id UUID;
 CREATE INDEX IF NOT EXISTS idx_tenant_members_tenant_id ON tenant_members(tenant_id);

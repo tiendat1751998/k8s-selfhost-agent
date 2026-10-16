@@ -307,4 +307,5 @@ watch(filteredTopologyNodes, (newNodes) => {
 <style>
 @import '../assets/styles/views/overview.css';
 @import '../assets/styles/views/overview-mobile.css';
+@import '../assets/styles/components/overview-hosts.css';
 </style>

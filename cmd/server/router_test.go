@@ -61,6 +61,8 @@ func setupTestRouter() http.Handler {
 		Telegram:  adapthttp.NewTelegramHandler(bot),
 		Admission: adapthttp.NewAdmissionHandler(admissionEnforcer),
 		Mesh:      adapthttp.NewMeshHandler(meshService),
+		Settings:  adapthttp.NewSettingsHandler(nil, nil),
+		Docker:    adapthttp.NewDockerHandler(nil),
 		SRE:       bootstrapSREHandlers(platformHandlerParams{log: zap.NewNop()}),
 	}
 	handlers.SRE.Mesh = handlers.Mesh
@@ -85,6 +87,12 @@ func TestRouter_MountedRoutes_UnauthorizedNotNotFound(t *testing.T) {
 		{http.MethodPost, "/api/v1/mesh/sidecar/inject-guard", "Mesh sidecar inject-guard route"},
 		{http.MethodPost, "/api/v1/mesh/waf/verify-regex", "Mesh WAF verify-regex route"},
 		{http.MethodPost, "/api/v1/mesh/tls/drain", "Mesh TLS drain route"},
+		// Settings & API Keys routes
+		{http.MethodGet, "/api/v1/settings", "Platform Settings route"},
+		{http.MethodGet, "/api/v1/settings/api-keys", "Platform Settings API Keys route"},
+		{http.MethodGet, "/api/v1/settings/keys", "Platform Settings Keys alias route"},
+		{http.MethodGet, "/api/v1/apikeys", "Direct API Keys alias route"},
+		{http.MethodGet, "/api/v1/hosts", "Compute Hosts route"},
 		// SRE Resilience routes
 		{http.MethodGet, "/api/v1/clusters/c1/storage/ceph/osds", "SRE Storage Resiliency"},
 		{http.MethodGet, "/api/v1/kernel/nodes/node-1/cgroup-events", "SRE CGroup v2"},
@@ -179,6 +187,7 @@ func TestPlatformHandlers_WiringFieldsParity(t *testing.T) {
 		IaC:       adapthttp.NewIaCHandler(tfRunner, ansibleRunner),
 		Telegram:  adapthttp.NewTelegramHandler(bot),
 		Admission: adapthttp.NewAdmissionHandler(usecasesec.NewAdmissionEnforcer()),
+		Settings:  adapthttp.NewSettingsHandler(nil, nil),
 	}
 
 	require.NotNil(t, handlers.Helm, "Helm handler must be initialized")
@@ -188,6 +197,7 @@ func TestPlatformHandlers_WiringFieldsParity(t *testing.T) {
 	require.NotNil(t, handlers.IaC, "IaC handler must be initialized")
 	require.NotNil(t, handlers.Telegram, "Telegram handler must be initialized")
 	require.NotNil(t, handlers.Admission, "Admission handler must be initialized")
+	require.NotNil(t, handlers.Settings, "Settings handler must be initialized")
 }
 
 func TestRouter_AdmissionWebhook_Mounted(t *testing.T) {

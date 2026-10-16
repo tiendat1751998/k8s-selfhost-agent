@@ -172,10 +172,6 @@ defineExpose({
         <span class="virtual-target-badge">{{ targetName }}</span>
         <span class="virtual-buffer-meta">({{ logs.length.toLocaleString() }} in buffer)</span>
       </div>
-      <div class="virtual-fps-badge">
-        <span class="fps-text-desktop">60 FPS Virtualized</span>
-        <span class="fps-text-mobile">60 FPS</span>
-      </div>
     </div>
 
     <!-- Virtual Viewport Container -->
@@ -268,7 +264,7 @@ defineExpose({
           {{ isConnected ? `Waiting for logs from [${targetName || 'cluster'}]...` : 'Disconnected from log stream. Reconnecting...' }}
         </p>
         <p class="virtual-empty-sub">
-          Live stream is active. Matching log events will appear in real-time as they are emitted.
+          {{ isConnected ? 'Live stream connected. Matching log events will appear in real-time.' : 'Attempting to establish WebSocket stream connection...' }}
         </p>
       </div>
     </div>

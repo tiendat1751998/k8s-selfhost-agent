@@ -72,6 +72,7 @@ type PlatformHandlers struct {
 	Mesh          *MeshHandler
 	MessagingSRE  *MessagingHandler
 	SRE           *SREResilienceHandlers
+	HostRemediation *HostRemediationHandler
 }
 
 // NewRouter creates a new chi router with standard middleware and health endpoints.
@@ -263,6 +264,9 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 							nodeSub.Post("/drain", platform.K8s.DrainNode)
 							nodeSub.Put("/taints", platform.K8s.UpdateNodeTaints)
 							nodeSub.Put("/labels", platform.K8s.UpdateNodeLabels)
+							if platform.HostRemediation != nil {
+								nodeSub.Post("/remediate", platform.HostRemediation.RemediateNode)
+							}
 						})
 					})
 				}

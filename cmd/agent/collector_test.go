@@ -107,14 +107,14 @@ tmpfs /run tmpfs rw 0 0
 		t.Fatalf("failed to write mounts fixture: %v", err)
 	}
 
-	mockDiskFn := func(mountPoint string) (int64, int64, error) {
+	mockDiskFn := func(mountPoint string) (int64, int64, int64, int64, error) {
 		switch mountPoint {
 		case "/":
-			return 100 * 1024 * 1024 * 1024, 40 * 1024 * 1024 * 1024, nil
+			return 100 * 1024 * 1024 * 1024, 40 * 1024 * 1024 * 1024, 1000000, 600000, nil
 		case "/data":
-			return 200 * 1024 * 1024 * 1024, 150 * 1024 * 1024 * 1024, nil
+			return 200 * 1024 * 1024 * 1024, 150 * 1024 * 1024 * 1024, 2000000, 500000, nil
 		default:
-			return 0, 0, nil
+			return 0, 0, 0, 0, nil
 		}
 	}
 
@@ -157,20 +157,20 @@ fuse.snapfuse /snap/bare/5 fuse.snapfuse ro 0 0
 		t.Fatalf("failed to write mounts fixture: %v", err)
 	}
 
-	mockDiskFn := func(mountPoint string) (int64, int64, error) {
+	mockDiskFn := func(mountPoint string) (int64, int64, int64, int64, error) {
 		switch mountPoint {
 		case "/":
-			return 102971269120, 31782694912, nil
+			return 102971269120, 31782694912, 1000000, 600000, nil
 		case "/mnt/bind_root":
-			return 102971269120, 31782694912, nil
+			return 102971269120, 31782694912, 1000000, 600000, nil
 		case "/boot":
-			return 2040373248, 204037324, nil
+			return 2040373248, 204037324, 100000, 90000, nil
 		case "/data":
-			return 200 * 1024 * 1024 * 1024, 50 * 1024 * 1024 * 1024, nil
+			return 200 * 1024 * 1024 * 1024, 50 * 1024 * 1024 * 1024, 2000000, 1500000, nil
 		case "/var/lib/docker/overlay2/abc/merged":
-			return 102971269120, 31782694912, nil
+			return 102971269120, 31782694912, 1000000, 600000, nil
 		default:
-			return 0, 0, nil
+			return 0, 0, 0, 0, nil
 		}
 	}
 

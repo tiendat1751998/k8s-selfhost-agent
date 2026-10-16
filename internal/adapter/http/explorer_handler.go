@@ -40,6 +40,9 @@ func (h *ExplorerHandler) SearchResources(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, "failed to search resources", err)
 		return
 	}
+	if items == nil {
+		items = make([]explorer.Resource, 0)
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
 }
 

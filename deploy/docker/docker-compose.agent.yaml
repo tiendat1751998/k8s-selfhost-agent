@@ -3,12 +3,14 @@ services:
     image: k8sselfhost/k8s-agent:latest
     container_name: k8s-control-agent
     restart: unless-stopped
+    mem_limit: 50m
     network_mode: host
     pid: host
     volumes:
       - /proc:/proc:ro
       - /sys:/sys:ro
       - /var/log:/var/log:ro
+      - /var/log/pods:/var/log/pods:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - agent_data:/var/lib/k8s-agent:rw
     ports:
@@ -17,6 +19,8 @@ services:
       - AGENT_PORT=9100
       - AGENT_LOG_DIR=/var/log
       - AGENT_ENGINE_DIR=/var/lib/k8s-agent/logengine
+      - AGENT_AUTH_TOKEN=${AGENT_AUTH_TOKEN}
+      - CONTROL_PLANE_URL=${CONTROL_PLANE_URL:-}
     command: ["--port", "9100", "--log-dir", "/var/log"]
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:9100/health || curl -f http://localhost:9100/health || exit 1"]

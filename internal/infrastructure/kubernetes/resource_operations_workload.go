@@ -106,7 +106,7 @@ func (r *ResourceRepo) RestartDaemonSet(ctx context.Context, clusterID, namespac
 	ds.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().UTC().Format(time.RFC3339)
 
 	if _, err := client.AppsV1().DaemonSets(namespace).Update(ctx, ds, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("restarting ddemonset %s: %w", name, err)
+		return fmt.Errorf("restarting daemonset %s: %w", name, err)
 	}
 	return nil
 }

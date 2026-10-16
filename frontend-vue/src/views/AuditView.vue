@@ -71,17 +71,6 @@
         </div>
       </div>
 
-      <!-- Mobile 20px Centered Micro-Telemetry Strip (<640px) -->
-      <div class="audit-micro-telemetry mobile-only font-mono" role="status" aria-label="Audit Micro Telemetry">
-        <span class="tel-item tel-events"><BaseIcon name="shield" size="xs" /> {{ filteredLogs.length }} evts</span>
-        <span class="tel-sep">·</span>
-        <span class="tel-item tel-signed"><BaseIcon name="zap" size="xs" /> {{ kpiMetrics.signedPercentage }}% signed</span>
-        <span class="tel-sep">·</span>
-        <span class="tel-item tel-viol"><BaseIcon name="alert-triangle" size="xs" /> {{ kpiMetrics.securityViolations }} viol</span>
-        <span class="tel-sep">·</span>
-        <span class="tel-item tel-trust"><BaseIcon name="lock" size="xs" /> Zero-Trust</span>
-      </div>
-
       <!-- 1. Filter & Query Toolbar -->
       <AuditFilterToolbar
         v-model:search-query="searchQuery"

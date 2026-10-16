@@ -1,12 +1,21 @@
 package main
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	adapthttp "github.com/datdt/k8sselfhost/internal/adapter/http"
+	mw "github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
+	docker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/config"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
+	"github.com/datdt/k8sselfhost/internal/pkg/health"
 	usecaseGitops "github.com/datdt/k8sselfhost/internal/usecase/gitops"
 )
 
@@ -125,6 +134,118 @@ func TestStandalone_AuxAndSREHandlersWired(t *testing.T) {
 	assert.NotNil(t, aux.SRE.Consensus)
 	assert.NotNil(t, aux.SRE.WorkloadGuard)
 	assert.NotNil(t, aux.SRE.Messaging)
+}
+
+func TestStandalone_SettingsWired(t *testing.T) {
+	settingsRepo := postgres.NewSettingsRepo(nil)
+	settingsHandler := adapthttp.NewSettingsHandler(settingsRepo, nil)
+	assert.NotNil(t, settingsHandler, "SettingsHandler must not be nil")
+
+	platform := &adapthttp.PlatformHandlers{
+		Settings: settingsHandler,
+	}
+	healthHandler := health.NewHandler(time.Second)
+	router := adapthttp.NewRouterWithPlatform(healthHandler, nil, platform)
+	assert.NotNil(t, router)
+
+	token, err := mw.GenerateToken("admin", "platform_admin", "default-tenant")
+	assert.NoError(t, err)
+
+	endpoints := []string{
+		"/api/v1/settings",
+		"/api/v1/settings/defaults",
+		"/api/v1/settings/api-keys",
+		"/api/v1/settings/keys",
+		"/api/v1/apikeys",
+	}
+
+	for _, ep := range endpoints {
+		req := httptest.NewRequest(http.MethodGet, ep, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		assert.NotEqual(t, http.StatusNotFound, rec.Code, "endpoint %s must be mounted", ep)
+	}
+}
+
+type standaloneMockHostRepo struct {
+	host docker.ComputeHost
+}
+
+func (m *standaloneMockHostRepo) Create(ctx context.Context, host *docker.ComputeHost) error { return nil }
+func (m *standaloneMockHostRepo) GetByID(ctx context.Context, id string) (*docker.ComputeHost, error) {
+	return &m.host, nil
+}
+func (m *standaloneMockHostRepo) List(ctx context.Context, tenantID string) ([]docker.ComputeHost, error) {
+	return []docker.ComputeHost{m.host}, nil
+}
+func (m *standaloneMockHostRepo) ListAll(ctx context.Context) ([]docker.ComputeHost, error) {
+	return []docker.ComputeHost{m.host}, nil
+}
+func (m *standaloneMockHostRepo) Update(ctx context.Context, host *docker.ComputeHost) error { return nil }
+func (m *standaloneMockHostRepo) Delete(ctx context.Context, id string) error               { return nil }
+func (m *standaloneMockHostRepo) UpdateStatus(ctx context.Context, id string, status string, lastHealthCheck time.Time) error {
+	return nil
+}
+
+func TestStandalone_RemediationEndpointsMounted(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/k8s/health":
+			_, _ = w.Write([]byte(`{"node_name":"test-node","kubelet_healthy":true,"containerd_healthy":true}`))
+		case "/remediate":
+			_, _ = w.Write([]byte(`{"success":true,"action":"restart_service","details":"done"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	mockRepo := &standaloneMockHostRepo{
+		host: docker.ComputeHost{
+			ID:       "host-1",
+			Name:     "node-1",
+			Endpoint: server.URL,
+		},
+	}
+
+	remHandler := adapthttp.NewHostRemediationHandler(mockRepo, nil, nil)
+	dockerHandler := adapthttp.NewDockerHandler(nil, mockRepo, remHandler)
+	platform := &adapthttp.PlatformHandlers{
+		Docker:          dockerHandler,
+		HostRemediation: remHandler,
+	}
+	healthHandler := health.NewHandler(time.Second)
+	router := adapthttp.NewRouterWithPlatform(healthHandler, nil, platform)
+	assert.NotNil(t, router)
+
+	token, err := mw.GenerateToken("admin", "platform_admin", "default-tenant")
+	assert.NoError(t, err)
+
+	endpoints := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{http.MethodGet, "/api/v1/hosts/host-1/k8s-health", ""},
+		{http.MethodPost, "/api/v1/hosts/host-1/remediate", `{"action":"restart_service","target":"kubelet"}`},
+		{http.MethodPost, "/api/v1/k8s/nodes/node-1/remediate", `{"action":"restart_service","target":"kubelet"}`},
+	}
+
+	for _, ep := range endpoints {
+		var req *http.Request
+		if ep.body != "" {
+			req = httptest.NewRequest(ep.method, ep.path, strings.NewReader(ep.body))
+			req.Header.Set("Content-Type", "application/json")
+		} else {
+			req = httptest.NewRequest(ep.method, ep.path, nil)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code, "endpoint %s %s must return 200 OK, got body: %s", ep.method, ep.path, rec.Body.String())
+	}
 }
 
 

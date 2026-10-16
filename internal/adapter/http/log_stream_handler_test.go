@@ -445,3 +445,80 @@ func TestLogStreamHandler_EmptyHistory_ServiceFilter_EmitsHandshake(t *testing.T
 	}
 }
 
+func TestLogStreamHandler_WebSocketSecWebSocketProtocolBearer(t *testing.T) {
+	aggregator := logging.NewLogAggregator(100)
+	logStreamHandler := NewLogStreamHandler(aggregator)
+	platform := &PlatformHandlers{
+		LogStream: logStreamHandler,
+	}
+
+	healthHandler := health.NewHandler(5 * time.Second)
+	router := NewRouterWithWS(healthHandler, nil, platform)
+
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	token, err := mw.GenerateJWT("test-user", "platform_admin", "default-tenant")
+	if err != nil {
+		t.Fatalf("failed to generate JWT token: %v", err)
+	}
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/v1/logs/stream?service=app"
+
+	dialer := &websocket.Dialer{
+		Subprotocols: []string{"bearer", token},
+	}
+	conn, resp, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		if resp != nil {
+			t.Fatalf("failed to dial websocket (status %d): %v", resp.StatusCode, err)
+		}
+		t.Fatalf("failed to dial websocket: %v", err)
+	}
+	defer conn.Close()
+
+	values := resp.Header.Values("Sec-WebSocket-Protocol")
+	if len(values) != 1 {
+		t.Fatalf("expected exactly 1 Sec-WebSocket-Protocol header, got %d: %v", len(values), values)
+	}
+	if values[0] != "bearer" {
+		t.Fatalf("expected Sec-WebSocket-Protocol 'bearer', got %q", values[0])
+	}
+}
+
+func TestLogStreamHandler_SecWebSocketProtocol_NoDuplicateWithPreexistingHeader(t *testing.T) {
+	aggregator := logging.NewLogAggregator(10)
+	handler := NewLogStreamHandler(aggregator)
+
+	// Wrap handler to simulate middleware (e.g. auth.go) setting Sec-WebSocket-Protocol: bearer beforehand
+	wrappedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Sec-WebSocket-Protocol", "bearer")
+		handler.ServeHTTP(w, r)
+	})
+
+	server := httptest.NewServer(wrappedHandler)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "?service=test"
+	dialer := &websocket.Dialer{
+		Subprotocols: []string{"bearer"},
+	}
+
+	conn, resp, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		if resp != nil {
+			t.Fatalf("failed to dial websocket (status %d): %v", resp.StatusCode, err)
+		}
+		t.Fatalf("failed to dial websocket: %v", err)
+	}
+	defer conn.Close()
+
+	values := resp.Header.Values("Sec-WebSocket-Protocol")
+	if len(values) != 1 {
+		t.Fatalf("expected strictly 1 Sec-WebSocket-Protocol header, got %d: %v", len(values), values)
+	}
+	if values[0] != "bearer" {
+		t.Fatalf("expected Sec-WebSocket-Protocol value 'bearer', got %q", values[0])
+	}
+}
+

@@ -1,7 +1,8 @@
-﻿package agent
+package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -132,5 +133,62 @@ func TestAgentLogClient_StreamLogs(t *testing.T) {
 		})
 
 		assert.Equal(t, "Bearer client-token-456", receivedAuth)
+	})
+
+	t.Run("falls back to /logs/search when /logs/tail returns 404 or 503 or service is empty", func(t *testing.T) {
+		ts, _ := time.Parse(time.RFC3339Nano, "2026-09-14T10:15:30Z")
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/logs/tail" {
+				http.Error(w, "docker unavailable or service empty", http.StatusServiceUnavailable)
+				return
+			}
+			if r.URL.Path == "/logs/search" {
+				w.Header().Set("Content-Type", "application/json")
+				results := []LogSearchResult{
+					{
+						Timestamp: ts,
+						Service:   "user@1000.service",
+						Level:     "info",
+						Message:   "Started Session 1",
+					},
+				}
+				_ = json.NewEncoder(w).Encode(results)
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		defer server.Close()
+
+		client := NewAgentLogClient()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		var (
+			mu       sync.Mutex
+			received []string
+		)
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_ = client.StreamLogs(ctx, server.URL, "", func(line string) {
+				mu.Lock()
+				received = append(received, line)
+				cancel()
+				mu.Unlock()
+			})
+		}()
+
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Fatal("timed out waiting for fallback stream")
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		require.NotEmpty(t, received)
+		assert.Contains(t, received[0], "user@1000.service")
+		assert.Contains(t, received[0], "Started Session 1")
 	})
 }

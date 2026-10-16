@@ -7,12 +7,14 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/datdt/k8sselfhost/internal/pkg/netguard"
 )
 
 // StreamLogs connects to GET /logs/tail on the remote agent and invokes onLine for each streamed line.
 // It uses a dedicated HTTP client with Timeout=0 to prevent premature termination of long-lived SSE connections.
+// If /logs/tail returns 404, 503, or 400 (or when service is empty), it falls back to polling SearchNodeLogs.
 func (c *AgentLogClient) StreamLogs(ctx context.Context, agentURL, service string, onLine func(line string)) error {
 	baseURL := NormalizeHostEndpoint(agentURL)
 	if baseURL == "" {
@@ -61,11 +63,17 @@ func (c *AgentLogClient) StreamLogs(ctx context.Context, agentURL, service strin
 		}
 		return fmt.Errorf("executing stream request to %s: %w", baseURL, err)
 	}
-	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusBadRequest || (service == "" && resp.StatusCode != http.StatusOK) {
+		_ = resp.Body.Close()
+		return c.pollLogsFallback(ctx, baseURL, service, onLine)
+	}
 
 	if resp.StatusCode != http.StatusOK {
+		_ = resp.Body.Close()
 		return fmt.Errorf("agent returned HTTP %d for tail stream", resp.StatusCode)
 	}
+	defer resp.Body.Close()
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 4096), 64*1024)
@@ -98,4 +106,77 @@ func (c *AgentLogClient) StreamLogs(ctx context.Context, agentURL, service strin
 	}
 
 	return ctx.Err()
+}
+
+func (c *AgentLogClient) pollLogsFallback(ctx context.Context, baseURL, service string, onLine func(line string)) error {
+	formatLine := func(r LogSearchResult) string {
+		if r.Raw != "" {
+			return r.Raw
+		}
+		lvl := r.Level
+		if lvl == "" {
+			lvl = "INFO"
+		}
+		return fmt.Sprintf("%s [%s] [%s] %s", r.Timestamp.UTC().Format(time.RFC3339Nano), r.Service, strings.ToUpper(lvl), r.Message)
+	}
+
+	initialResults, err := c.SearchNodeLogs(ctx, baseURL, "", SearchLogsRequest{App: service, Limit: 100})
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return err
+	}
+
+	var lastTimestamp time.Time
+	seenKeys := make(map[string]struct{})
+
+	emit := func(r LogSearchResult) {
+		key := fmt.Sprintf("%d_%s_%s", r.Timestamp.UnixNano(), r.Service, r.Message)
+		if _, seen := seenKeys[key]; seen {
+			return
+		}
+		seenKeys[key] = struct{}{}
+		if r.Timestamp.After(lastTimestamp) {
+			lastTimestamp = r.Timestamp
+		}
+		if onLine != nil {
+			onLine(formatLine(r))
+		}
+	}
+
+	for _, r := range initialResults {
+		emit(r)
+	}
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			req := SearchLogsRequest{
+				App:   service,
+				Limit: 100,
+			}
+			if !lastTimestamp.IsZero() {
+				req.Since = lastTimestamp.Add(1 * time.Nanosecond).UTC().Format(time.RFC3339Nano)
+			}
+			results, err := c.SearchNodeLogs(ctx, baseURL, "", req)
+			if err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				continue
+			}
+			for _, r := range results {
+				emit(r)
+			}
+			if len(seenKeys) > 10000 {
+				seenKeys = make(map[string]struct{})
+			}
+		}
+	}
 }

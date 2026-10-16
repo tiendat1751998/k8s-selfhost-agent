@@ -10,6 +10,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	docker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/agent"
 )
 
 // Classification constants for node health probing.
@@ -80,6 +83,22 @@ func NewNodeServiceRescueManager(prober HostProber, executor ServiceExecutor) *N
 		executor:     executor,
 		pollInterval: 100 * time.Millisecond,
 		pollTimeout:  3 * time.Second,
+	}
+}
+
+// Prober returns the underlying HostProber.
+func (m *NodeServiceRescueManager) Prober() HostProber { return m.prober }
+
+// Executor returns the underlying ServiceExecutor.
+func (m *NodeServiceRescueManager) Executor() ServiceExecutor { return m.executor }
+
+// SetComputeHostRepo configures the compute host repository on prober and executor if supported.
+func (m *NodeServiceRescueManager) SetComputeHostRepo(repo docker.ComputeHostRepository) {
+	if p, ok := m.prober.(*defaultHostProber); ok {
+		p.hostRepo = repo
+	}
+	if e, ok := m.executor.(*defaultServiceExecutor); ok {
+		e.hostRepo = repo
 	}
 }
 
@@ -216,8 +235,18 @@ func (m *NodeServiceRescueManager) ExecuteServiceRescue(ctx context.Context, cli
 	}, nil
 }
 
-// defaultHostProber checks TCP ports on node InternalIP.
-type defaultHostProber struct{}
+// defaultHostProber checks TCP ports on node InternalIP or queries k8s-agent /k8s/health.
+type defaultHostProber struct {
+	hostRepo docker.ComputeHostRepository
+	client   *agent.AgentRemediationClient
+}
+
+func (p *defaultHostProber) getClient() *agent.AgentRemediationClient {
+	if p.client != nil {
+		return p.client
+	}
+	return agent.NewAgentRemediationClient()
+}
 
 func getNodeIP(node *corev1.Node) string {
 	for _, addr := range node.Status.Addresses {
@@ -249,6 +278,28 @@ func (p *defaultHostProber) CheckHostConnectivity(ctx context.Context, node *cor
 }
 
 func (p *defaultHostProber) CheckKubeletHealth(ctx context.Context, node *corev1.Node) (bool, bool, error) {
+	cli := p.getClient()
+	target := node.Name
+	if target == "" {
+		target = getNodeIP(node)
+	}
+	if target != "" {
+		if host, token, err := cli.ResolveHostForNode(ctx, p.hostRepo, target); err == nil && host != nil {
+			resp, hErr := cli.GetNodeK8sHealth(ctx, host.Endpoint, token)
+			if hErr == nil && resp != nil {
+				leaseHealthy := true
+				if resp.LastLeaseRenewUnix > 0 {
+					leaseHealthy = time.Since(time.Unix(resp.LastLeaseRenewUnix, 0)) < 2*time.Minute
+				}
+				kubeletOk := resp.KubeletHealthy && leaseHealthy
+				if kubeletOk && resp.ContainerdHealthy {
+					return true, true, nil
+				}
+				return kubeletOk, resp.ContainerdHealthy, nil
+			}
+		}
+	}
+
 	ip := getNodeIP(node)
 	if ip == "" {
 		return false, false, nil
@@ -262,12 +313,61 @@ func (p *defaultHostProber) CheckKubeletHealth(ctx context.Context, node *corev1
 	return false, false, nil
 }
 
-// defaultServiceExecutor handles remote service execution.
-type defaultServiceExecutor struct{}
+// defaultServiceExecutor handles remote service execution via k8s-agent RPC.
+type defaultServiceExecutor struct {
+	hostRepo docker.ComputeHostRepository
+	client   *agent.AgentRemediationClient
+}
+
+func (e *defaultServiceExecutor) getClient() *agent.AgentRemediationClient {
+	if e.client != nil {
+		return e.client
+	}
+	return agent.NewAgentRemediationClient()
+}
 
 func (e *defaultServiceExecutor) RestartServices(ctx context.Context, node *corev1.Node, services []string) error {
-	// Production implementation executes systemctl via remote agent RPC or SSH
-	return fmt.Errorf("direct node agent communication unavailable for services: %s", strings.Join(services, ", "))
+	cli := e.getClient()
+	target := node.Name
+	if target == "" {
+		target = getNodeIP(node)
+	}
+	if target == "" {
+		return fmt.Errorf("direct node agent communication unavailable for services: %s", strings.Join(services, ", "))
+	}
+
+	host, token, err := cli.ResolveHostForNode(ctx, e.hostRepo, target)
+	if err != nil || host == nil {
+		if ip := getNodeIP(node); ip != "" && ip != target {
+			host, token, err = cli.ResolveHostForNode(ctx, e.hostRepo, ip)
+		}
+	}
+	if err != nil || host == nil {
+		return fmt.Errorf("direct node agent communication unavailable for services: %s", strings.Join(services, ", "))
+	}
+
+	for _, svc := range services {
+		res, err := cli.ExecuteRemediation(ctx, host.Endpoint, token, agent.RemediationRequest{
+			Action: "restart_service",
+			Target: svc,
+			Reason: "Control Plane SRE Soft-Death Service Rescue",
+		})
+		if err != nil {
+			return fmt.Errorf("restarting service %s on node %s (%s): %w", svc, node.Name, host.Endpoint, err)
+		}
+		if !res.Success {
+			return fmt.Errorf("restarting service %s failed on node %s: %s", svc, node.Name, res.Details)
+		}
+	}
+	return nil
+}
+
+// SetComputeHostRepo configures compute host repository for node remediation and service rescue.
+func (c *RemediationController) SetComputeHostRepo(repo docker.ComputeHostRepository) {
+	if c.rescueManager == nil {
+		c.rescueManager = NewNodeServiceRescueManager(nil, nil)
+	}
+	c.rescueManager.SetComputeHostRepo(repo)
 }
 
 // ExecuteRescue attempts graceful service restart for a node via RemediationController.

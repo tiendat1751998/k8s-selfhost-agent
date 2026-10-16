@@ -23,6 +23,7 @@ type DockerHandler struct {
 	tokenLimiter     *TokenViewLimiter
 	metricsCollector AgentMetricRemover
 	logClient        agent.LogClientInterface
+	remediationHandler *HostRemediationHandler
 }
 
 // NewDockerHandler creates a new Docker HTTP handler with optional dependencies.
@@ -57,9 +58,29 @@ func NewDockerHandler(repo docker.Repository, args ...interface{}) *DockerHandle
 			if v != nil {
 				h.logClient = v
 			}
+		case *HostRemediationHandler:
+			if v != nil {
+				h.remediationHandler = v
+			}
 		}
 	}
 	return h
+}
+
+// SetRemediationHandler configures the host remediation handler.
+func (h *DockerHandler) SetRemediationHandler(rem *HostRemediationHandler) {
+	h.remediationHandler = rem
+}
+
+func (h *DockerHandler) getRemediationHandler() *HostRemediationHandler {
+	if h.remediationHandler != nil {
+		return h.remediationHandler
+	}
+	if h.hostRepo != nil {
+		h.remediationHandler = NewHostRemediationHandler(h.hostRepo, nil, h.logger)
+		return h.remediationHandler
+	}
+	return nil
 }
 
 // RegisterRoutes registers Docker, Swarm, and Compute Host routes.

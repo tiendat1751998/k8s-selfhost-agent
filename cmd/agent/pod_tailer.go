@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"os"
@@ -46,11 +47,12 @@ type podFileState struct {
 
 // PodTailer tails Kubernetes CRI pod logs from /var/log/pods directly.
 type PodTailer struct {
-	baseDir      string
-	writer       *logengine.Writer
-	logger       *slog.Logger
-	pollInterval time.Duration
-	entryWriter  func(logengine.Entry) error // test hook
+	baseDir        string
+	checkpointPath string
+	writer         *logengine.Writer
+	logger         *slog.Logger
+	pollInterval   time.Duration
+	entryWriter    func(logengine.Entry) error // test hook
 
 	mu      sync.Mutex
 	files   map[string]*podFileState
@@ -59,20 +61,27 @@ type PodTailer struct {
 }
 
 // NewPodTailer initializes a PodTailer.
-func NewPodTailer(baseDir string, writer *logengine.Writer, logger *slog.Logger) *PodTailer {
+func NewPodTailer(baseDir string, writer *logengine.Writer, logger *slog.Logger, checkpointPath ...string) *PodTailer {
 	if baseDir == "" {
 		baseDir = defaultPodLogDir
 	}
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &PodTailer{
-		baseDir:      baseDir,
-		writer:       writer,
-		logger:       logger,
-		pollInterval: 1 * time.Second,
-		files:        make(map[string]*podFileState),
+	var cp string
+	if len(checkpointPath) > 0 {
+		cp = checkpointPath[0]
 	}
+	tailer := &PodTailer{
+		baseDir:        baseDir,
+		checkpointPath: cp,
+		writer:         writer,
+		logger:         logger,
+		pollInterval:   1 * time.Second,
+		files:          make(map[string]*podFileState),
+	}
+	tailer.loadCheckpoint()
+	return tailer
 }
 
 // Start initiates periodic discovery and tailing until ctx is canceled.
@@ -100,6 +109,7 @@ func (p *PodTailer) Stop() {
 	p.stopped = true
 	p.mu.Unlock()
 	p.wg.Wait()
+	p.saveCheckpoint()
 	p.logger.Info("Pod log tailer stopped")
 }
 
@@ -143,6 +153,8 @@ func (p *PodTailer) pollOnce(ctx context.Context) {
 		}
 	}
 	p.mu.Unlock()
+
+	p.saveCheckpoint()
 }
 
 func (p *PodTailer) tailFile(ctx context.Context, path string) {
@@ -367,3 +379,63 @@ func extractPodMetaFromPath(path string) PodMeta {
 		ServiceName:   svcName,
 	}
 }
+
+func (p *PodTailer) loadCheckpoint() {
+	if p.checkpointPath == "" {
+		return
+	}
+	data, err := os.ReadFile(p.checkpointPath)
+	if err != nil {
+		return
+	}
+	var offsets map[string]int64
+	if err := json.Unmarshal(data, &offsets); err != nil {
+		p.logger.Warn("Failed to unmarshal tail offsets checkpoint", slog.String("error", err.Error()))
+		return
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for path, offset := range offsets {
+		fi, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		if fi.Size() >= offset {
+			p.files[path] = &podFileState{offset: offset, lastSize: fi.Size()}
+		} else {
+			p.files[path] = &podFileState{offset: 0, lastSize: fi.Size()}
+		}
+	}
+}
+
+func (p *PodTailer) saveCheckpoint() {
+	if p.checkpointPath == "" {
+		return
+	}
+	p.mu.Lock()
+	offsets := make(map[string]int64, len(p.files))
+	for path, state := range p.files {
+		offsets[path] = state.offset
+	}
+	p.mu.Unlock()
+
+	data, err := json.MarshalIndent(offsets, "", "  ")
+	if err != nil {
+		return
+	}
+
+	dir := filepath.Dir(p.checkpointPath)
+	_ = os.MkdirAll(dir, 0755)
+
+	tmpFile := p.checkpointPath + ".tmp"
+	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+		p.logger.Debug("Failed to write checkpoint temp file", slog.String("error", err.Error()))
+		return
+	}
+	if err := os.Rename(tmpFile, p.checkpointPath); err != nil {
+		_ = os.Remove(tmpFile)
+		_ = os.WriteFile(p.checkpointPath, data, 0644)
+	}
+}
+

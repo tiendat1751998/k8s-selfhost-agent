@@ -39,7 +39,7 @@ export function useIncidents() {
   const prForm = ref<PRFormData>({
     title: '',
     description: '',
-    repoUrl: 'https://github.com/org/k8s-gitops-manifests',
+    repoUrl: '',
     branch: 'fix/incident-auto-remediation',
     baseBranch: 'main'
   })
@@ -47,7 +47,7 @@ export function useIncidents() {
   const createForm = ref<CreateIncidentPayload>({
     pod_name: '',
     namespace: 'default',
-    cluster_name: 'prod-us-east-1',
+    cluster_name: 'default',
     type: 'CrashLoopBackOff',
     severity: 'high',
     message: ''

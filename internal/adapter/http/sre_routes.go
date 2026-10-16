@@ -28,6 +28,7 @@ type SREResilienceHandlers struct {
 	K8sResilience     *K8sResilienceHandler
 	DBSafeguard       *DBSafeguardHandler
 	SecDefense        *SecDefenseHandler
+	Cloud             *CloudHandler
 	CloudResilience   *CloudResilienceHandler
 	ServiceMesh       *ServiceMeshHandler
 	Mesh              *MeshHandler
@@ -184,14 +185,23 @@ func RegisterSRERoutes(r chi.Router, handlers *SREResilienceHandlers) {
 		r.With(mutRoles).Route("/security", handlers.SecDefense.RegisterRoutes)
 	}
 
-	// 17. Cloud Burst Credit, Spot Interruption & Transit Network
-	if handlers.CloudResilience != nil || handlers.TransitNet != nil {
-		r.With(mutRoles).Route("/cloud", func(cr chi.Router) {
+	// 17. Cloud Accounts, Burst Credit, Spot Interruption & Transit Network
+	if handlers.Cloud != nil || handlers.CloudResilience != nil || handlers.TransitNet != nil {
+		r.Route("/cloud", func(cr chi.Router) {
+			if handlers.Cloud != nil {
+				cr.Group(func(ar chi.Router) {
+					ar.Use(adminOnly)
+					handlers.Cloud.RegisterRoutes(ar)
+				})
+			}
 			if handlers.CloudResilience != nil {
-				handlers.CloudResilience.RegisterRoutes(cr)
+				cr.Group(func(mr chi.Router) {
+					mr.Use(mutRoles)
+					handlers.CloudResilience.RegisterRoutes(mr)
+				})
 			}
 			if handlers.TransitNet != nil {
-				cr.Route("/network", handlers.TransitNet.RegisterRoutes)
+				cr.With(mutRoles).Route("/network", handlers.TransitNet.RegisterRoutes)
 			}
 		})
 	}

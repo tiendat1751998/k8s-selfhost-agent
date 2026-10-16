@@ -299,19 +299,13 @@ export function useInfraHosts() {
         }
       } else {
         const created = await hostsApi.create(payload)
-        const newHost: ComputeHost = (created && created.id) ? created : {
-          id: `host-${Date.now().toString(36)}`,
-          name: payload.name || hostForm.value.name.trim(),
-          host_type: payload.host_type || 'agent',
-          endpoint: payload.endpoint || hostForm.value.endpoint.trim(),
-          tls_enabled: payload.tls_enabled || false,
-          status: 'connected',
-          last_health_check: new Date().toISOString(),
-          labels: payload.labels || {},
-          created_at: new Date().toISOString()
+        if (created && created.id) {
+          hosts.value.unshift(created)
+          showToast(`Host "${created.name}" registered successfully!`)
+        } else {
+          await fetchHosts()
+          showToast(`Host "${payload.name}" registered successfully!`)
         }
-        hosts.value.unshift(newHost)
-        showToast(`Host "${newHost.name}" registered successfully!`)
       }
       showHostModal.value = false
     } catch (err: unknown) {
@@ -404,10 +398,9 @@ export function useInfraHosts() {
       if (selectedHost.value?.id === host.id) {
         showDetailDrawer.value = false
       }
-    } catch {
-      hosts.value = hosts.value.filter(h => h.id !== host.id)
-      showToast(`Host "${host.name}" removed.`)
-      showDeleteModal.value = false
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Deletion failed'
+      showToast(`Failed to delete host "${host.name}": ${msg}`, 'error')
     } finally {
       deletingHost.value = false
     }

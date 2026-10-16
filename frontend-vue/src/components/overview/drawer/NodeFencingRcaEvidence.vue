@@ -11,15 +11,15 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  fallbackCause: 'UNRESPONSIVE_KUBELET_HEARTBEAT',
+  fallbackCause: '',
   fallbackConfidence: 0,
-  fallbackRecommendation: 'Power isolate node (STONITH) and apply out-of-service taint to trigger volume release.'
+  fallbackRecommendation: ''
 })
 
 const showEvidenceList = ref(true)
 
 const primaryCause = computed(() => {
-  return props.dynamicRca?.primary_cause || props.fallbackCause
+  return props.dynamicRca?.primary_cause || props.fallbackCause || 'UNKNOWN'
 })
 
 const confidencePercent = computed(() => {
@@ -28,7 +28,7 @@ const confidencePercent = computed(() => {
 })
 
 const recommendation = computed(() => {
-  return props.dynamicRca?.action_plan || props.fallbackRecommendation
+  return props.dynamicRca?.action_plan || props.fallbackRecommendation || 'No automated action plan available.'
 })
 
 const allSignals = computed<IndicatorSignal[]>(() => {
@@ -51,7 +51,7 @@ const detectedSignals = computed(() => {
 })
 
 const totalSignalCount = computed(() => {
-  return allSignals.value.length || 6
+  return allSignals.value.length
 })
 
 function toggleEvidence() {

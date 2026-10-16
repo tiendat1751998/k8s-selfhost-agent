@@ -135,6 +135,10 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 	}
 	if platform.Docker != nil {
 		r.With(mutRoles).Route("/docker", platform.Docker.RegisterRoutes)
+		r.With(mutRoles).Route("/hosts", platform.Docker.RegisterHostRoutes)
+	}
+	if platform.HostRemediation != nil {
+		r.With(mutRoles).Post("/k8s/nodes/{node}/remediate", platform.HostRemediation.RemediateNode)
 	}
 	if platform.Overview != nil {
 		r.With(mutRoles).Route("/overview", platform.Overview.RegisterRoutes)
@@ -154,8 +158,17 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 	if platform.Backup != nil {
 		r.With(mutRoles).Route("/backup", platform.Backup.RegisterRoutes)
 	}
-	if platform.Agents != nil {
-		r.With(mutRoles).Route("/agents", platform.Agents.RegisterRoutes)
+	if platform.Agents != nil || platform.Docker != nil {
+		r.Route("/agents", func(ar chi.Router) {
+			if platform.Docker != nil {
+				ar.Post("/register", platform.Docker.RegisterAgent)
+			}
+			if platform.Agents != nil {
+				ar.With(mutRoles).Group(func(sub chi.Router) {
+					platform.Agents.RegisterRoutes(sub)
+				})
+			}
+		})
 	}
 	if platform.Tenancy != nil {
 		r.With(adminOnly).Route("/tenancy", platform.Tenancy.RegisterRoutes)
@@ -164,11 +177,16 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 		r.With(mutRoles).Route("/alerts", platform.Alert.RegisterRoutes)
 		r.With(mutRoles).Route("/alertmanager", platform.Alert.RegisterAlertmanagerRoutes)
 	}
-	if platform.Cloud != nil {
+	if platform.Cloud != nil && platform.SRE == nil {
 		r.With(adminOnly).Route("/cloud", platform.Cloud.RegisterRoutes)
 	}
 	if platform.Settings != nil {
 		r.With(adminOnly).Route("/settings", platform.Settings.RegisterRoutes)
+		r.With(adminOnly).Route("/apikeys", func(ar chi.Router) {
+			ar.Get("/", platform.Settings.ListAPIKeys)
+			ar.Post("/", platform.Settings.CreateAPIKey)
+			ar.Delete("/{id}", platform.Settings.DeleteAPIKey)
+		})
 	}
 	if platform.Catalog != nil {
 		r.With(mutRoles).Route("/catalog", platform.Catalog.RegisterRoutes)
@@ -212,6 +230,9 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 		}
 		if platform.MessagingSRE != nil && platform.SRE.Messaging == nil {
 			platform.SRE.Messaging = platform.MessagingSRE
+		}
+		if platform.Cloud != nil && platform.SRE.Cloud == nil {
+			platform.SRE.Cloud = platform.Cloud
 		}
 		RegisterSRERoutes(r, platform.SRE)
 	}

@@ -3,7 +3,7 @@ import BaseIcon from '../ui/BaseIcon.vue'
 import type { ComputeHost } from '../../api/compute'
 import type { HostTypeDefinition } from '../../types/hosts'
 
-defineProps<{
+const props = defineProps<{
   filteredHostsCount: number
   loading: boolean
   showMobileSearch: boolean
@@ -29,15 +29,22 @@ const emit = defineEmits<{
   (e: 'refresh'): void
   (e: 'openFencing', nodeName: string, clusterId: string): void
 }>()
+
+function handleFirstFencing() {
+  const first = props.hosts.find(h => h.status !== 'connected')
+  if (first) {
+    emit('openFencing', first.name, first.tenant_id || 'default')
+  }
+}
 </script>
 
 <template>
   <div class="infra-hosts-header-bar-wrapper">
-    <!-- 44px Mobile Command Bar (< 640px) -->
+    <!-- 40px Mobile Command Bar (< 640px) -->
     <div class="hosts-mobile-command-bar mobile-only">
       <div class="command-bar-left">
-        <BaseIcon name="server" size="sm" />
-        <span class="command-bar-title font-bold">Compute Hosts ({{ filteredHostsCount }})</span>
+        <span class="command-bar-title">Compute Hosts</span>
+        <span class="command-bar-count-pill font-mono">{{ filteredHostsCount }}</span>
       </div>
       <div class="command-bar-actions">
         <button
@@ -50,34 +57,36 @@ const emit = defineEmits<{
         >
           <BaseIcon name="activity" size="xs" />
         </button>
-        <button class="btn-icon-cmd" title="Add Host" @click="emit('addHost')">
-          <span class="font-bold text-sm">+</span>
-        </button>
-        <button class="btn-icon-cmd" title="Refresh" :disabled="loading" @click="emit('refresh')">
-          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
-        </button>
         <button
+          type="button"
           class="btn-icon-cmd"
           :class="{ active: showMobileSearch }"
           title="Search"
+          aria-label="Search"
           @click="emit('update:showMobileSearch', !showMobileSearch)"
         >
           <BaseIcon name="search" size="xs" />
         </button>
+        <button
+          type="button"
+          class="btn-icon-cmd"
+          title="Refresh"
+          aria-label="Refresh"
+          :disabled="loading"
+          @click="emit('refresh')"
+        >
+          <BaseIcon name="refresh" size="xs" :class="{ 'animate-spin': loading }" />
+        </button>
+        <button
+          type="button"
+          class="btn-cmd-add"
+          title="Add Host"
+          aria-label="Add Host"
+          @click="emit('addHost')"
+        >
+          + Add
+        </button>
       </div>
-    </div>
-
-    <!-- 20px Mobile Micro-Telemetry Strip (< 640px) -->
-    <div class="hosts-micro-telemetry mobile-only">
-      <span class="tel-item"><BaseIcon name="server" size="xs" /> {{ hosts.length }} hosts</span>
-      <span>·</span>
-      <span class="tel-item tel-online"><BaseIcon name="shield" size="xs" /> {{ onlineHostsCount }} online</span>
-      <span>·</span>
-      <span class="tel-item tel-offline"><BaseIcon name="alert-triangle" size="xs" /> {{ offlineHostsCount }} offline</span>
-      <template v-if="onlineHostsCount > 0 && avgLatency > 0">
-        <span>·</span>
-        <span class="tel-item tel-latency"><BaseIcon name="zap" size="xs" /> avg {{ avgLatency }}ms</span>
-      </template>
     </div>
 
     <!-- Mobile Search Expandable Input & Filter Controls -->
@@ -135,28 +144,22 @@ const emit = defineEmits<{
 
 
     <!-- SRE Storage Fencing Alert Banner (When Unready/Offline Nodes Exist) -->
-    <div v-if="offlineHostsCount > 0" class="fencing-alert-strip glass-panel animate-fade-in">
+    <div v-if="offlineHostsCount > 0" class="fencing-alert-strip animate-fade-in">
       <div class="fencing-alert-info">
-        <span class="fencing-alert-icon-box"><BaseIcon name="alert-triangle" size="sm" /></span>
+        <span class="fencing-alert-dot" aria-hidden="true"></span>
         <div class="fencing-alert-texts">
-          <span class="fencing-alert-title font-bold text-amber">
-            {{ offlineHostsCount }} Unready / Offline Host(s) Detected
-          </span>
-          <span class="fencing-alert-sub text-muted">
-            Workloads with RWO CSI volumes risk split-brain corruption without STONITH fencing.
-          </span>
+          <span class="fencing-alert-title font-medium">{{ offlineHostsCount }} unreachable host(s)</span>
+          <span class="fencing-alert-sub text-muted">— RWO volumes may require fencing</span>
         </div>
       </div>
       <div class="fencing-alert-actions">
         <button
-          v-for="unreadyHost in hosts.filter(h => h.status !== 'connected')"
-          :key="unreadyHost.id"
           type="button"
-          class="btn btn-warning-sm btn-action-fence font-mono"
-          @click="emit('openFencing', unreadyHost.name, unreadyHost.tenant_id || 'default')"
+          class="btn btn-action-fence font-mono"
+          @click="handleFirstFencing"
         >
           <BaseIcon name="shield" size="xs" />
-          <span>Safe Remediation / Fence: {{ unreadyHost.name }}</span>
+          <span>Fence Host...</span>
         </button>
       </div>
     </div>
@@ -164,56 +167,237 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-.fencing-alert-strip {
+.hosts-mobile-command-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
-  margin-bottom: 12px;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: 8px;
-  gap: 12px;
-  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--bg-surface, #0f1012);
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  gap: 8px;
 }
-.fencing-alert-info { display: flex; align-items: center; gap: 10px; }
-.fencing-alert-icon-box { color: #f59e0b; flex-shrink: 0; }
-.fencing-alert-texts { display: flex; flex-direction: column; font-size: 12px; line-height: 1.3; }
-.fencing-alert-title { font-size: 12px; }
-.fencing-alert-sub { font-size: 11px; }
-.fencing-alert-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.btn-action-fence {
-  display: inline-flex;
+.command-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.command-bar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #f3f4f6);
+  letter-spacing: -0.01em;
+}
+.command-bar-count-pill {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-secondary, #9ca3af);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 6px;
+  border-radius: 9999px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+.command-bar-actions {
+  display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+}
+.btn-icon-cmd {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 6px;
+  background: var(--bg-card, #141516);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, #9ca3af);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-icon-cmd:hover {
+  background: var(--bg-elevated, #1a1b1e);
+  color: var(--text-primary, #f3f4f6);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.btn-cmd-add {
+  height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #f3f4f6 !important;
+  color: #08090a !important;
+  border: 1px solid #ffffff !important;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.btn-cmd-add:hover {
+  opacity: 0.9;
+}
+.hosts-micro-telemetry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
   font-size: 11px;
-  font-weight: 700;
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--text-muted, #6b7280);
+  background: var(--bg-canvas, #08090a);
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+}
+.tel-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tel-sep {
+  color: var(--text-muted, #6b7280);
+  opacity: 0.5;
+}
+.micro-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot-emerald {
+  background: #10b981;
+}
+.dot-rose {
+  background: #ef4444;
+}
+.dot-slate {
+  background: #6b7280;
+}
+.mobile-search-box {
+  padding: 8px 12px;
+  background: var(--bg-card, #141516);
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mobile-filter-pills-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.m-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.m-filter-pill {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, #9ca3af);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.m-filter-pill.active {
+  background: var(--bg-elevated, #1a1b1e);
+  color: var(--text-primary, #f3f4f6);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.m-filter-select {
+  font-size: 11px;
+  background: var(--bg-surface, #0f1012);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, #9ca3af);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.fencing-alert-strip {
+  min-height: 36px;
+  padding: 6px 12px;
+  margin-bottom: 10px;
+  background: var(--bg-card, #141516);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-left: 2px solid #f59e0b;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+.fencing-alert-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+.fencing-alert-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  flex-shrink: 0;
+}
+.fencing-alert-texts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fencing-alert-title {
+  color: var(--text-primary, #f3f4f6);
+  font-weight: 500;
+}
+.fencing-alert-sub {
+  color: var(--text-muted, #6b7280);
+}
+.fencing-alert-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.btn-action-fence {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--bg-elevated, #1a1b1e);
+  color: var(--text-primary, #f3f4f6);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .btn-action-fence:hover {
-  background: #f59e0b;
-  color: #0f172a;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
 }
 @media (max-width: 640px) {
   .fencing-alert-strip {
-    padding: 8px 10px;
-    margin-bottom: 10px;
-    gap: 8px;
-  }
-  .fencing-alert-title {
-    font-size: 11px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    gap: 6px;
   }
   .fencing-alert-sub {
     display: none;
   }
   .btn-action-fence {
-    padding: 4px 8px;
+    height: 24px;
+    padding: 0 8px;
     font-size: 10.5px;
   }
 }

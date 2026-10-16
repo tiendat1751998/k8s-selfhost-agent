@@ -127,19 +127,13 @@ function handleActionSelect(actionId: string, host: ComputeHost) {
         <span class="topbar-title">Compute Fleet Registry</span>
         <span class="topbar-badge">Showing {{ startIndex + 1 }}–{{ endIndex }} of {{ sortedHosts.length }} hosts</span>
       </div>
-      <div v-if="sortedHosts.length > pageSize" class="topbar-pagination font-mono" style="display: flex; gap: 8px; align-items: center; margin-left: auto; margin-right: 12px;">
+      <div v-if="sortedHosts.length > pageSize" class="topbar-pagination font-mono" style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
         <button type="button" class="btn btn-secondary btn-xs" :disabled="currentPage <= 1" @click="prevPage">
           Prev
         </button>
         <span class="text-xs">{{ currentPage }} / {{ totalPages }}</span>
         <button type="button" class="btn btn-secondary btn-xs" :disabled="currentPage >= totalPages" @click="nextPage">
           Next
-        </button>
-      </div>
-      <div class="topbar-right">
-        <button type="button" class="btn btn-primary btn-sm add-host-btn" @click="emit('add-host')">
-          <BaseIcon name="plus" size="xs" />
-          <span>Add Host</span>
         </button>
       </div>
     </div>
@@ -202,7 +196,7 @@ function handleActionSelect(actionId: string, host: ComputeHost) {
 
           <td class="col-endpoint font-mono">
             <div class="endpoint-copy-wrap">
-              <span class="text-cyan">{{ host.endpoint }}</span>
+              <span class="endpoint-text font-mono">{{ host.endpoint }}</span>
               <button
                 type="button"
                 class="btn-copy-mini"
@@ -278,11 +272,24 @@ function handleActionSelect(actionId: string, host: ComputeHost) {
 </template>
 
 <style scoped>
+.hosts-table-container {
+  background: var(--bg-card, #141516);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  box-shadow: none;
+}
+.hosts-table-topbar {
+  background: var(--bg-surface, #0f1012);
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+.topbar-icon {
+  color: var(--text-secondary, #9ca3af);
+}
 .sortable-th { cursor: pointer; user-select: none; transition: color 0.15s ease; }
 .sortable-th:hover { color: var(--text-primary, #fff); }
 .th-sort-wrap { display: inline-flex; align-items: center; gap: 6px; }
 .sort-icon { font-size: 10px; opacity: 0.4; }
-.sort-icon.active { opacity: 1; color: var(--color-cyan, #06b6d4); font-weight: bold; }
+.sort-icon.active { opacity: 1; color: var(--text-primary, #f3f4f6); font-weight: bold; }
 .type-badge {
   white-space: nowrap;
   display: inline-flex;
@@ -290,5 +297,9 @@ function handleActionSelect(actionId: string, host: ComputeHost) {
 }
 .col-lastseen {
   white-space: nowrap;
+}
+.col-endpoint, .endpoint-text {
+  font-family: var(--font-mono);
+  color: var(--text-secondary, #9ca3af);
 }
 </style>

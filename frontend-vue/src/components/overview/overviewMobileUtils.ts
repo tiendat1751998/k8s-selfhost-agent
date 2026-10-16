@@ -27,12 +27,21 @@ export function isControlPlane(node: NodeMetrics): boolean {
 }
 
 export function getNodeRole(node: NodeMetrics): string {
-  return isControlPlane(node) ? 'control-plane' : 'worker'
+  const role = (node.role || '').toLowerCase().trim()
+  if (role === 'standalone') return 'standalone'
+  if (isControlPlane(node)) return 'control-plane'
+  if (role === 'worker') return 'worker'
+  return role || 'worker'
 }
 
 export function getNodeIdentifier(node: NodeMetrics): string {
   const n = node as unknown as Record<string, unknown>
-  return (n.ip as string) || (n.ip_address as string) || (n.internal_ip as string) || (typeof n.endpoint === 'string' ? n.endpoint.replace(/^https?:\/\//, '').split(':')[0] : '') || node.node_id || '--'
+  const ip = (n.ip as string) || (n.ip_address as string) || (n.internal_ip as string) || (typeof n.endpoint === 'string' ? n.endpoint.replace(/^https?:\/\//, '').split(':')[0] : '')
+  if (ip) return ip
+  if (node.node_id) {
+    return node.node_id.length > 8 ? node.node_id.slice(0, 8) : node.node_id
+  }
+  return '--'
 }
 
 export function getCpuColorClass(cpu?: number): string {

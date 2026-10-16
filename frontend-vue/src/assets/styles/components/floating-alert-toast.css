@@ -199,26 +199,10 @@
   .badge-amber-bg { background: #f59e0b; color: #0f172a; box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); }
   .badge-muted-bg { background: #64748b; color: #fff; }
 
-  .header-alert-toast {
-    position: fixed; top: calc(var(--mobile-hud-height, 48px) + 6px); right: 8px; left: 8px;
-    width: auto; max-width: none; padding: 6px 10px; max-height: 48px; border-radius: 8px; gap: 4px;
-    flex-direction: row; align-items: center; justify-content: space-between;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.85), 0 0 1px rgba(255, 255, 255, 0.2); z-index: 9999;
+  /* Hide intrusive floating/dropdown toast on mobile <=640px (bell badge indicates alerts) */
+  .header-alert-toast,
+  .floating-alert-toast,
+  .docked-alert-badge {
+    display: none !important;
   }
-  .toast-header { display: contents; }
-  .toast-title-group { order: 1; display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
-  .toast-beacon { font-size: 14px; }
-  .toast-title-text { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; overflow: hidden; }
-  .toast-title { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .btn-toast-close { order: 3; min-width: 28px; min-height: 28px; font-size: 14px; padding: 2px; margin: 0; flex-shrink: 0; }
-  .toast-body { display: none !important; }
-  .toast-actions { order: 2; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-  .toast-actions .btn-toast-failover, .toast-actions .btn-toast-mute, .toast-actions .btn-toast-dismiss { display: none !important; }
-  .toast-actions .btn-toast-details { padding: 4px 8px; font-size: 10.5px; min-height: 28px; white-space: nowrap; }
-  .floating-alert-toast {
-    right: 12px; left: 12px; width: auto; max-width: none;
-    top: calc(var(--mobile-hud-height, 48px) + 8px); z-index: 99999;
-  }
-  .docked-alert-badge { right: 12px; top: calc(var(--mobile-hud-height, 48px) + 8px); }
-
 }
