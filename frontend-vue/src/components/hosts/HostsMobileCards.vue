@@ -285,6 +285,29 @@ function handleMobileAction(action: string, host: ComputeHost) {
   flex-shrink: 0;
   white-space: nowrap;
   text-transform: uppercase;
+  color: var(--color-badge-agent-text, #38bdf8);
+  background: var(--color-badge-agent-bg, rgba(56, 189, 248, 0.15));
+  border: 1px solid var(--color-badge-agent-border, rgba(56, 189, 248, 0.40));
+}
+.m-type-chip.badge-k8s {
+  color: var(--color-badge-k8s-text, #58a6ff);
+  background: var(--color-badge-k8s-bg, rgba(50, 108, 229, 0.15));
+  border-color: var(--color-badge-k8s-border, rgba(50, 108, 229, 0.40));
+}
+.m-type-chip.badge-agent {
+  color: var(--color-badge-agent-text, #38bdf8);
+  background: var(--color-badge-agent-bg, rgba(56, 189, 248, 0.15));
+  border-color: var(--color-badge-agent-border, rgba(56, 189, 248, 0.40));
+}
+.m-type-chip.badge-docker {
+  color: var(--color-badge-docker-text, #60a5fa);
+  background: var(--color-badge-docker-bg, rgba(36, 150, 237, 0.15));
+  border-color: var(--color-badge-docker-border, rgba(36, 150, 237, 0.40));
+}
+.m-type-chip.badge-purple {
+  color: var(--color-badge-metrics-text, #c084fc);
+  background: var(--color-badge-metrics-bg, rgba(168, 85, 247, 0.15));
+  border-color: var(--color-badge-metrics-border, rgba(168, 85, 247, 0.40));
 }
 .m-card-header-right {
   display: flex;

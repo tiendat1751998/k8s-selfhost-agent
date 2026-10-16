@@ -133,5 +133,31 @@ describe('Zero-Neon Redesign & Hosts Architecture Verification', () => {
     )
     expect(cardCss).toContain('var(--color-endpoint-syntax')
   })
+
+  it('verifies light mode toolbar inputs and mobile brand title use tokens without hardcoded white/gray', () => {
+    const controlsBar = readFileSync(
+      resolve(__dirname, '../../components/hosts/HostControlsBar.vue'),
+      'utf-8'
+    )
+    expect(controlsBar).not.toContain('.toolbar-add-btn')
+
+    const appShellCss = readFileSync(
+      resolve(__dirname, '../../assets/styles/layout/app-shell.css'),
+      'utf-8'
+    )
+    expect(appShellCss).toContain('.hud-mobile-brand-title { font-size: 13px; font-weight: 800; letter-spacing: 0.04em; color: var(--text-primary);')
+
+    const baseCss = readFileSync(
+      resolve(__dirname, '../../assets/css/base.css'),
+      'utf-8'
+    )
+    expect(baseCss).toContain('background: var(--bg-surface, #111827) !important;')
+
+    const controlsCss = readFileSync(
+      resolve(__dirname, '../../assets/styles/views/infra-hosts-controls.css'),
+      'utf-8'
+    )
+    expect(controlsCss).toContain('background: var(--bg-surface, #111827);')
+  })
 })
 
