@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    Enterprise Tenancy & RBAC Drawers, Modals & Quota Stylesheet (< 350 lines)
    ========================================================================== */
 
@@ -18,32 +18,32 @@
 
 .modal-card {
   width: 100%; max-width: 620px;
-  background: var(--bg-sidebar, #0f172a);
-  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.15));
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 16px; overflow: hidden;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  box-shadow: var(--shadow-xl);
   display: flex; flex-direction: column;
 }
 
 .modal-header {
   padding: 18px 22px; display: flex;
   justify-content: space-between; align-items: flex-start;
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-  background: rgba(11, 15, 25, 0.5);
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
 }
 
 .modal-title-group { display: flex; flex-direction: column; gap: 4px; }
-.modal-title { font-size: 17px; font-weight: 700; color: #fff; margin: 0; }
-.modal-subtitle { font-size: 12px; color: var(--text-muted, #94a3b8); margin: 0; }
+.modal-title { font-size: 17px; font-weight: 700; color: var(--text-primary); margin: 0; }
+.modal-subtitle { font-size: 12px; color: var(--text-muted); margin: 0; }
 
 .modal-close {
-  background: none; border: none; color: var(--text-muted, #94a3b8);
+  background: none; border: none; color: var(--text-muted);
   font-size: 18px; cursor: pointer; padding: 4px; border-radius: 6px;
   transition: color 0.15s ease, background 0.15s ease;
   min-width: 32px; min-height: 32px; display: inline-flex;
   align-items: center; justify-content: center;
 }
-.modal-close:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.modal-close:hover { color: var(--text-primary); background: var(--bg-card-hover); }
 
 .modal-body {
   padding: 18px 22px; display: flex; flex-direction: column;
@@ -51,9 +51,9 @@
 }
 
 .modal-footer {
-  padding: 14px 22px; background: rgba(0, 0, 0, 0.25);
+  padding: 14px 22px; background: var(--color-surface-inset);
   display: flex; justify-content: flex-end; gap: 10px;
-  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 /* --- Slide-out Member Drawer (TenantMemberDrawer.vue) --- */
@@ -61,20 +61,20 @@
 
 .invite-section {
   padding: 16px; border-radius: 10px;
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   display: flex; flex-direction: column; gap: 14px;
 }
 
-.section-title { font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 2px; }
+.section-title { font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px; }
 .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .members-list-section { display: flex; flex-direction: column; gap: 10px; }
 .member-items { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
 
 .member-item {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 14px; border-radius: 8px; background: rgba(15, 23, 42, 0.45);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  padding: 10px 14px; border-radius: 8px; background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .member-item-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -86,13 +86,13 @@
 }
 .member-details { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .member-email {
-  font-size: 12.5px; font-weight: 600; color: #fff;
+  font-size: 12.5px; font-weight: 600; color: var(--text-primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .member-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .scope-tag {
   font-size: 10px; padding: 1px 6px; border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06); color: var(--text-secondary, #94a3b8);
+  background: var(--bg-card-hover); color: var(--text-secondary);
 }
 .revoke-btn { padding: 4px 10px; font-size: 11px; min-height: 28px; flex-shrink: 0; }
 
@@ -103,11 +103,11 @@
   display: flex; justify-content: space-between; align-items: center;
   gap: 12px; flex-wrap: wrap;
 }
-.matrix-info { font-size: 12px; color: var(--text-secondary, #94a3b8); }
+.matrix-info { font-size: 12px; color: var(--text-secondary); }
 
 .matrix-scroll-wrap {
   overflow-x: auto; scrollbar-width: thin;
-  border-radius: 8px; border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px; border: 1px solid var(--color-border-subtle);
   max-height: 55vh;
 }
 
@@ -131,7 +131,7 @@
   padding: 12px 16px; text-align: center;
   cursor: pointer; user-select: none; transition: background 0.15s ease;
 }
-.td-perm:hover { background: rgba(255, 255, 255, 0.04); }
+.td-perm:hover { background: var(--bg-card-hover); }
 
 .perm-badge {
   display: inline-flex; align-items: center; justify-content: center;
@@ -147,8 +147,8 @@
   background: rgba(16, 185, 129, 0.25); box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
 }
 .perm-denied {
-  background: rgba(255, 255, 255, 0.04); color: var(--text-muted, #64748b);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--color-surface-inset); color: var(--text-muted);
+  border: 1px solid var(--color-border-subtle);
 }
 .perm-denied:hover {
   background: rgba(244, 63, 94, 0.15); color: #fb7185;
@@ -160,8 +160,8 @@
 
 .quota-info-banner {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 14px; background: rgba(15, 23, 42, 0.55);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  padding: 10px 14px; background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px; font-size: 12px;
 }
 
@@ -176,11 +176,11 @@
 .quota-bar-header {
   display: flex; justify-content: space-between; align-items: center; font-size: 12px;
 }
-.quota-metric-name { font-weight: 600; color: var(--text-primary, #e2e8f0); }
-.quota-metric-values { font-size: 11px; color: var(--text-secondary, #94a3b8); }
+.quota-metric-name { font-weight: 600; color: var(--text-primary); }
+.quota-metric-values { font-size: 11px; color: var(--text-secondary); }
 
 .quota-track {
-  height: 8px; width: 100%; background: rgba(255, 255, 255, 0.06);
+  height: 8px; width: 100%; background: var(--color-surface-inset);
   border-radius: 9999px; overflow: hidden;
 }
 .quota-fill { height: 100%; border-radius: 9999px; transition: width 0.3s ease; }

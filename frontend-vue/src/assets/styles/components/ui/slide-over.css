@@ -16,9 +16,9 @@
   max-width: 100vw;
   height: 100vh;
   min-height: 100dvh;
-  background: rgba(11, 16, 28, 0.98);
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: -12px 0 36px -4px rgba(0, 0, 0, 0.7);
+  background: var(--bg-card);
+  border-left: 1px solid var(--color-border-subtle);
+  box-shadow: -12px 0 36px -4px rgba(0, 0, 0, 0.3);
   display: flex;
   flex-direction: column;
   outline: none;
@@ -33,27 +33,27 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: rgba(15, 23, 42, 0.75);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-inset);
+  border-bottom: 1px solid var(--color-border-subtle);
   flex-shrink: 0;
 }
 .header-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
 .entity-icon { color: #38bdf8; flex-shrink: 0; }
 .header-meta { display: flex; flex-direction: column; justify-content: center; min-width: 0; gap: 1px; }
 .header-title {
-  margin: 0; font-size: 14px; font-weight: 700; color: #f8fafc; line-height: 1.2;
+  margin: 0; font-size: 14px; font-weight: 700; color: var(--text-primary); line-height: 1.2;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .header-subtitle {
-  font-size: 11px; color: #94a3b8; line-height: 1.2;
+  font-size: 11px; color: var(--text-muted); line-height: 1.2;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .header-status { flex-shrink: 0; }
 .header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .close-button {
-  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-elevated); border: 1px solid var(--color-border-subtle);
   border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center;
-  justify-content: center; color: #94a3b8; cursor: pointer; padding: 0; transition: all 0.15s ease;
+  justify-content: center; color: var(--text-muted); cursor: pointer; padding: 0; transition: all 0.15s ease;
 }
 .close-button:hover {
   background: rgba(244, 63, 94, 0.15); border-color: rgba(244, 63, 94, 0.4); color: #fb7185;
@@ -61,29 +61,29 @@
 .close-icon { flex-shrink: 0; }
 .inspector-tabs {
   display: flex; align-items: center; gap: 2px; padding: 0 12px; height: 38px;
-  background: rgba(13, 19, 33, 0.95); border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-inset); border-bottom: 1px solid var(--color-border-subtle);
   overflow-x: auto; flex-shrink: 0; scrollbar-width: none;
 }
 .inspector-tabs::-webkit-scrollbar { display: none; }
 .tab-btn {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; height: 28px;
-  border: 1px solid transparent; border-radius: 6px; background: transparent; color: #94a3b8;
+  border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text-muted);
   font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: all 0.15s ease;
 }
-.tab-btn:hover { color: #e2e8f0; background: rgba(255, 255, 255, 0.04); }
+.tab-btn:hover { color: var(--text-primary); background: var(--bg-elevated); }
 .tab-btn.is-active {
   color: #38bdf8; background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.25); font-weight: 600;
 }
 .tab-icon { flex-shrink: 0; }
 .tab-badge {
   display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; height: 16px;
-  font-size: 10px; font-weight: 600; border-radius: 9999px; background: rgba(255, 255, 255, 0.1); color: #cbd5e1;
+  font-size: 10px; font-weight: 600; border-radius: 9999px; background: var(--bg-elevated); color: var(--text-secondary);
 }
 .tab-btn.is-active .tab-badge { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
 .inspector-body { flex: 1; padding: 16px; overflow-y: auto; min-height: 0; }
 .inspector-footer {
-  padding: 12px 16px; border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(15, 23, 42, 0.5); display: flex; align-items: center;
+  padding: 12px 16px; border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset); display: flex; align-items: center;
   justify-content: flex-end; gap: 10px; flex-shrink: 0;
 }
 .inspector-fade-enter-active, .inspector-fade-leave-active { transition: opacity 0.22s ease; }

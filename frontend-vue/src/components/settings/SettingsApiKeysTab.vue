@@ -152,7 +152,7 @@ async function handleRevokeKey(id: string) {
     <div
       v-if="showCreateForm"
       class="create-key-panel glass-panel animate-fade-in"
-      style="padding: 16px; margin-bottom: 20px; border-radius: 12px; background: rgba(0,0,0,0.25);"
+      style="padding: 16px; margin-bottom: 20px; border-radius: 12px; background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle);"
     >
       <h3 class="subsection-title" style="margin-bottom: 12px;">Generate New Machine-to-Machine Token</h3>
       <div
@@ -236,7 +236,7 @@ async function handleRevokeKey(id: string) {
               </td>
               <td>
                 <div style="display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--text-muted);">
-                  <span>Created: <strong class="text-white">{{ k.created_at }}</strong></span>
+                  <span>Created: <strong style="color: var(--text-primary);">{{ k.created_at }}</strong></span>
                   <span>Used: {{ k.last_used }}</span>
                 </div>
               </td>

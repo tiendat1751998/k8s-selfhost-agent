@@ -43,8 +43,8 @@
   text-align: center;
   font-size: 13px;
   color: var(--text-muted, #64748b);
-  background: rgba(11, 15, 25, 0.5);
-  border: 1px dashed var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--color-surface-inset);
+  border: 1px dashed var(--color-border-subtle);
   border-radius: 10px;
 }
 
@@ -68,14 +68,14 @@
   gap: 8px;
   padding: 10px 12px;
   border-radius: 10px;
-  background: rgba(11, 15, 25, 0.65);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .mobile-stream-item:active,
 .mobile-stream-item:hover {
-  background: rgba(15, 23, 42, 0.85);
+  background: var(--bg-card-hover);
   border-color: rgba(6, 182, 212, 0.4);
 }
 
@@ -120,7 +120,7 @@
 .mobile-service-name {
   font-size: 13px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -149,8 +149,8 @@
 .mobile-window-tag {
   padding: 1px 5px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-muted, #64748b);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
   font-size: 9.5px;
   white-space: nowrap;
 }
@@ -177,7 +177,7 @@
 }
 
 .mobile-slash {
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted);
   font-size: 9px;
 }
 
@@ -188,7 +188,7 @@
 .mobile-mini-gauge {
   width: 100%;
   height: 4px;
-  background: #0b0f19;
+  background: var(--color-surface-inset);
   border-radius: 9999px;
   overflow: hidden;
 }
@@ -222,18 +222,18 @@
   align-items: center;
   justify-content: center;
   font-size: 13px;
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: var(--bg-elevated);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
-  color: #e2e8f0;
+  color: var(--text-secondary);
   cursor: pointer;
   touch-action: manipulation;
   transition: all 0.15s ease;
 }
 
 .mobile-action-btn:hover:not(:disabled) {
-  background: rgba(51, 65, 85, 0.85);
-  color: #fff;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
 }
 
 .mobile-btn-inspect:hover {

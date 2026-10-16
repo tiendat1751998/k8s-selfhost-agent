@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    TOTP 2FA Setup Drawers, Stepper & Security Widgets Stylesheet (< 350 lines)
    frontend-vue/src/assets/styles/components/totp-drawers.css
    RFC 6238 Time-based One-Time Password Architecture
@@ -36,14 +36,14 @@
   min-width: 32px;
   min-height: 32px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.15));
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
   font-weight: 700;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
   flex-shrink: 0;
   transition: all 0.2s ease;
 }
@@ -57,7 +57,7 @@
 .step-title {
   font-size: 12px;
   font-weight: 700;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -65,7 +65,7 @@
 
 .step-desc {
   font-size: 10px;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -74,7 +74,7 @@
 .step-line {
   flex: 1;
   height: 2px;
-  background: var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--color-border-subtle);
   margin: 0 10px;
   min-width: 12px;
 }
@@ -92,7 +92,7 @@
   border-color: var(--accent-emerald, #10b981);
   color: var(--accent-emerald, #10b981);
 }
-.step-item.step-completed .step-title { color: var(--text-primary, #f8fafc); }
+.step-item.step-completed .step-title { color: var(--text-primary); }
 .step-item.step-completed .step-line { background: rgba(16, 185, 129, 0.4); }
 .step-item.step-disabled { opacity: 0.5; }
 
@@ -163,15 +163,15 @@
   box-sizing: border-box;
   text-align: center;
 }
-.manual-label { font-size: 12px; color: var(--text-secondary, #94a3b8); line-height: 1.4; }
+.manual-label { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
 
 .secret-display-pill {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.15));
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   padding: 8px 14px;
   border-radius: 12px;
   backdrop-filter: blur(8px);
@@ -205,7 +205,7 @@
   touch-action: manipulation;
 }
 
-.secret-hint { font-size: 11px; color: var(--text-muted, #94a3b8); word-break: break-word; }
+.secret-hint { font-size: 11px; color: var(--text-muted); word-break: break-word; }
 
 /* --------------------------------------------------------------------------
    3. Recovery Codes Card, Actions & Print (RecoveryCodesCard.vue)
@@ -248,19 +248,19 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 10px;
   position: relative;
   transition: border-color 0.2s, background 0.2s;
   box-sizing: border-box;
 }
 .recovery-code-card:hover {
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--bg-card-hover);
   border-color: rgba(245, 158, 11, 0.35);
 }
 
-.code-number { font-size: 11px; color: var(--text-muted, #94a3b8); font-weight: 600; }
+.code-number { font-size: 11px; color: var(--text-muted); font-weight: 600; }
 .code-value {
   font-size: 14px;
   font-weight: 700;
@@ -296,8 +296,8 @@
 .acknowledgement-group {
   margin-top: 4px;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px dashed var(--border-medium, rgba(255, 255, 255, 0.15));
+  background: var(--color-surface-inset);
+  border: 1px dashed var(--color-border-subtle);
   border-radius: 12px;
   box-sizing: border-box;
 }
@@ -318,7 +318,7 @@
 }
 .checkbox-text {
   font-size: 13px;
-  color: var(--text-primary, #f8fafc);
+  color: var(--text-primary);
   font-weight: 500;
   line-height: 1.4;
 }

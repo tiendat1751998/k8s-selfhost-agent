@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    SLO Drawers & Modals Stylesheet (Create/Inspect Modals)
    Strict Enterprise Modularity - Target < 350 lines
    ========================================================================== */
@@ -18,10 +18,10 @@
 .modal-card {
   width: 100%;
   max-width: 620px;
-  background: #161f30;
-  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.15));
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-strong);
   border-radius: 12px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
   overflow: hidden;
 }
 
@@ -34,7 +34,7 @@
 
 .modal-header {
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-bottom: 1px solid var(--color-border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -54,19 +54,19 @@
 .modal-title {
   font-size: 15px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .modal-subtitle {
   font-size: 11px;
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted);
 }
 
 .modal-close-btn {
   background: none;
   border: none;
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 16px;
   display: inline-flex;
@@ -78,7 +78,7 @@
 }
 
 .modal-close-btn:hover {
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .modal-body {
@@ -133,17 +133,17 @@
 .btn-preset {
   padding: 2px 6px;
   font-size: 10px;
-  background: #0b0f19;
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 4px;
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .btn-preset:hover {
   border-color: #3b82f6;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .query-textarea {
@@ -156,7 +156,7 @@
 
 .field-hint {
   font-size: 11px;
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted);
 }
 
 .modal-footer {
@@ -164,8 +164,8 @@
   justify-content: flex-end;
   gap: 10px;
   padding: 14px 20px;
-  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-  background: rgba(11, 15, 25, 0.3);
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
 }
 
 /* Inspect Modal Specific Telemetry */
@@ -182,8 +182,8 @@
 }
 
 .inspect-stat-card {
-  background: #0b0f19;
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   padding: 10px 12px;
   display: flex;
@@ -193,7 +193,7 @@
 
 .stat-lbl {
   font-size: 10px;
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -212,20 +212,20 @@
 .section-tag-label {
   font-size: 11px;
   font-weight: 700;
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .promql-box,
 .formula-box {
-  background: #0b0f19;
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   padding: 10px 14px;
   font-size: 11px;
   font-family: var(--font-mono, monospace);
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .formula-box {
@@ -245,7 +245,7 @@
 }
 
 .formula-calc {
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary);
 }
 
 .inspect-table {
@@ -258,7 +258,7 @@
 .inspect-table td {
   padding: 8px 10px;
   text-align: left;
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .inspect-table th {

@@ -15,14 +15,14 @@
 /* 2. Mobile 44px Command Bar (<768px) */
 .mobile-command-bar, .automation-mobile-command-bar {
   height: 44px; min-height: 44px; display: flex; align-items: center; justify-content: space-between;
-  padding: 0 12px; background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 0 12px; background: var(--bg-card); border: 1px solid var(--color-border-subtle);
   border-radius: 10px; backdrop-filter: blur(8px); width: 100%; box-sizing: border-box;
 }
 .mobile-command-bar .command-bar-left, .automation-mobile-command-bar .command-bar-left {
   display: flex; align-items: center; gap: 6px; min-width: 0;
 }
 .mobile-command-bar .command-bar-title, .automation-mobile-command-bar .command-bar-title {
-  font-size: 13.5px; font-weight: 700; color: #fff; letter-spacing: -0.01em; white-space: nowrap;
+  font-size: 13.5px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; white-space: nowrap;
 }
 .mobile-command-bar .command-bar-actions, .automation-mobile-command-bar .command-bar-actions {
   display: flex; align-items: center; gap: 6px;
@@ -32,11 +32,11 @@
 .btn-icon-cmd {
   width: 32px; height: 32px; min-width: 32px; min-height: 32px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center; font-size: 13px;
-  background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 8px; color: #e2e8f0; cursor: pointer; touch-action: manipulation;
+  background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle);
+  border-radius: 8px; color: var(--text-primary); cursor: pointer; touch-action: manipulation;
   transition: all 0.15s ease; box-sizing: border-box;
 }
-.btn-icon-cmd:hover:not(:disabled) { background: rgba(51, 65, 85, 0.85); color: #fff; }
+.btn-icon-cmd:hover:not(:disabled) { background: var(--bg-card-hover); color: var(--text-primary); }
 .btn-icon-cmd:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* 3. Mobile 20px Centered Micro-Telemetry Strip (<768px) */
@@ -54,15 +54,15 @@
 
 /* 4. Segmented Control & Mobile Tab Switcher */
 .segmented-control {
-  display: inline-flex; align-items: center; background: rgba(15, 23, 42, 0.7);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08)); border-radius: 8px; padding: 3px; gap: 2px;
+  display: inline-flex; align-items: center; background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle); border-radius: 8px; padding: 3px; gap: 2px;
 }
 .segmented-btn {
-  background: transparent; border: none; color: var(--text-secondary, #94a3b8);
+  background: transparent; border: none; color: var(--text-secondary);
   padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
   display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease; white-space: nowrap;
 }
-.segmented-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.segmented-btn:hover { color: var(--text-primary); background: var(--bg-card-hover); }
 .segmented-btn.active {
   background: rgba(59, 130, 246, 0.15); color: #60a5fa;
   border: 1px solid rgba(59, 130, 246, 0.35); box-shadow: none;
@@ -100,8 +100,8 @@
   gap: 8px;
   padding: 0 10px;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
   backdrop-filter: blur(12px);
   width: 100%;
   overflow: hidden;
@@ -120,7 +120,7 @@
   position: absolute;
   left: 8px;
   font-size: 11px;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
   pointer-events: none;
 }
 
@@ -130,9 +130,9 @@
   padding: 0 24px 0 26px;
   font-size: 12px;
   border-radius: 6px;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.2));
-  color: #fff;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--text-primary);
   box-sizing: border-box;
   transition: border-color 0.15s ease;
 }
@@ -154,13 +154,13 @@
   justify-content: center;
   background: none;
   border: none;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
   cursor: pointer;
   padding: 0;
 }
 
 .automation-toolbar-sleek .clear-input-btn:hover {
-  color: #fff;
+  color: var(--text-primary);
 }
 
 /* Trigger Filter Pills / Tabs */
@@ -179,9 +179,9 @@
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-secondary, #94a3b8);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-inset);
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -191,8 +191,8 @@
 }
 
 .automation-toolbar-sleek .toolbar-pill-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
 }
 
 .automation-toolbar-sleek .toolbar-pill-btn.active {
@@ -260,14 +260,14 @@
 }
 
 .automation-toolbar-sleek .toolbar-btn.btn-secondary {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.2));
-  color: #e2e8f0;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--text-primary);
 }
 
 .automation-toolbar-sleek .toolbar-btn.btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
 }
 
 .automation-toolbar-sleek .toolbar-btn:disabled {
@@ -278,8 +278,8 @@
 /* 8. Section Panels */
 .section-card { display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: 14px; box-sizing: border-box; }
 .section-top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
-.section-title { font-size: 16px; font-weight: 700; color: #fff; }
-.section-subtitle { font-size: 12px; color: var(--text-muted, #64748b); margin-top: 2px; }
+.section-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.section-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
 /* 9. Toggle Switch */
 .toggle-switch { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
@@ -304,8 +304,8 @@ input:checked + .slider:before { transform: translateX(16px); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .rule-name-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }
-.rule-name { font-weight: 700; color: #fff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rule-id { font-size: 10px; color: var(--text-muted, #64748b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rule-name { font-weight: 700; color: var(--text-primary); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rule-id { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trigger-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow: hidden; }
 .trigger-main { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #fbbf24; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trigger-condition-badge {
@@ -322,7 +322,7 @@ input:checked + .slider:before { transform: translateX(16px); }
 }
 .actions-cell { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .btn-trigger-action:hover:not(:disabled) { background: rgba(6, 182, 212, 0.2) !important; border-color: #06b6d4 !important; color: #fff !important; }
-.btn-edit-action:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1) !important; border-color: rgba(255, 255, 255, 0.3) !important; }
+.btn-edit-action:hover:not(:disabled) { background: var(--bg-card-hover) !important; border-color: var(--color-border-strong) !important; }
 .btn-crimson-delete {
   background: rgba(244, 63, 94, 0.12) !important; border: 1px solid rgba(244, 63, 94, 0.35) !important;
   color: #f43f5e !important; transition: all 0.2s ease-in-out;
@@ -332,32 +332,32 @@ input:checked + .slider:before { transform: translateX(16px); }
   color: #fff !important; box-shadow: 0 0 10px rgba(244, 63, 94, 0.35);
 }
 .duration-badge {
-  display: inline-flex; align-items: center; padding: 2px 7px; background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 4px; font-size: 11px; color: #e2e8f0;
+  display: inline-flex; align-items: padding: 2px 7px; background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle); border-radius: 4px; font-size: 11px; color: var(--text-primary);
 }
 
 /* 11. Mobile Containers & Cards Stream */
 .automation-mobile-container { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 100%; box-sizing: border-box; }
 .automation-mobile-cards { display: flex; flex-direction: column; gap: 8px; width: 100%; box-sizing: border-box; }
-.stream-status, .stream-empty { padding: 20px 16px; text-align: center; font-size: 12px; color: var(--text-muted, #64748b); }
+.stream-status, .stream-empty { padding: 20px 16px; text-align: center; font-size: 12px; color: var(--text-muted); }
 .cards-list, .mobile-rules-cards { display: flex; flex-direction: column; gap: 8px; width: 100%; box-sizing: border-box; }
 .auto-card {
-  padding: 10px 12px; border-radius: 10px; background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.08); display: flex; flex-direction: column; gap: 6px; box-sizing: border-box;
+  padding: 10px 12px; border-radius: 10px; background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle); display: flex; flex-direction: column; gap: 6px; box-sizing: border-box;
 }
 .auto-card:hover { border-color: rgba(6, 182, 212, 0.3); }
 .card-header-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.rule-title { font-size: 13px; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.rule-title { font-size: 13px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .status-pill { font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 4px; letter-spacing: 0.04em; flex-shrink: 0; }
 .pill-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
 .pill-running { background: rgba(6, 182, 212, 0.15); color: #38bdf8; border: 1px solid rgba(6, 182, 212, 0.3); }
 .pill-failed { background: rgba(244, 63, 94, 0.15); color: #f87171; border: 1px solid rgba(244, 63, 94, 0.3); }
 .card-details-grid {
   display: flex; flex-direction: column; gap: 3px; font-size: 11px;
-  background: rgba(0, 0, 0, 0.2); padding: 6px 8px; border-radius: 6px; box-sizing: border-box;
+  background: var(--color-surface-inset); padding: 6px 8px; border-radius: 6px; box-sizing: border-box;
 }
 .detail-row { display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.detail-k { color: var(--text-muted, #64748b); min-width: 48px; font-size: 10px; }
+.detail-k { color: var(--text-muted); min-width: 48px; font-size: 10px; }
 .detail-v { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .card-footer-row { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; padding-top: 2px; }
 .meta-duration { font-weight: 600; }
@@ -366,14 +366,14 @@ input:checked + .slider:before { transform: translateX(16px); }
 /* High-Density Mobile Rule Cards (~65px/item) */
 .mobile-rule-card {
   display: flex; align-items: center; justify-content: space-between; height: 65px; min-height: 65px; max-height: 65px;
-  padding: 0 12px; background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  padding: 0 12px; background: var(--bg-card); border: 1px solid var(--color-border-subtle);
   border-radius: 10px; overflow: hidden; gap: 10px; box-sizing: border-box; width: 100%;
 }
-.mobile-rule-card:hover { background: rgba(15, 23, 42, 0.85); border-color: rgba(6, 182, 212, 0.3); }
+.mobile-rule-card:hover { background: var(--bg-card-hover); border-color: rgba(6, 182, 212, 0.3); }
 .mobile-rule-left { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .mobile-rule-center { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; overflow: hidden; cursor: pointer; }
-.mobile-rule-name { font-size: 12.5px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mobile-rule-sub { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-muted, #64748b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mobile-rule-name { font-size: 12.5px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mobile-rule-sub { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mobile-rule-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
 /* 12. Spin Utilities */

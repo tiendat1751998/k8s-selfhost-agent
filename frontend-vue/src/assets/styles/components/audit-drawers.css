@@ -36,7 +36,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-inset);
 }
 
 .drawer-title-group {
@@ -48,7 +48,7 @@
 .drawer-title {
   font-size: 17px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .drawer-subtitle {
@@ -80,8 +80,8 @@
 }
 
 .drawer-close-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
 }
 
 .drawer-body {
@@ -104,7 +104,7 @@
   flex-direction: column;
   gap: 4px;
   padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-surface-inset);
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
 }
@@ -143,14 +143,14 @@
 }
 
 .payload-pre {
-  background: #06090e;
+  background: var(--color-surface-inset);
   border: 1px solid var(--border-medium);
   border-radius: 10px;
   padding: 14px;
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.45;
-  color: #38bdf8;
+  color: var(--accent-cyan, #38bdf8);
   overflow-x: auto;
   max-height: 380px;
   white-space: pre-wrap;
@@ -160,7 +160,7 @@
 .drawer-footer {
   padding: 14px 20px;
   border-top: 1px solid var(--border-subtle);
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--color-surface-inset);
   display: flex;
   justify-content: flex-end;
   gap: 10px;
