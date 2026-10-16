@@ -49,9 +49,10 @@
   transition: all 0.15s ease;
 }
 
-.wiz-nav-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+.wiz-nav-btn:hover,
+.preset-chip:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-badge-k8s-text);
 }
 
 .wiz-nav-btn.wiz-nav-active {

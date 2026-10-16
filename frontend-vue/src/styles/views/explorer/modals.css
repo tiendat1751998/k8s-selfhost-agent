@@ -30,7 +30,7 @@
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #fff;
+  color: var(--text-primary);
   font-size: 1.2rem;
   cursor: pointer;
   display: inline-flex;
@@ -42,6 +42,7 @@
 .btn-stepper:hover:not(:disabled) {
   background: rgba(6, 182, 212, 0.2);
   border-color: #06b6d4;
+  color: var(--text-primary);
 }
 
 .btn-stepper:disabled {

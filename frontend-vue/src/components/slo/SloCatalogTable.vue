@@ -4,6 +4,7 @@ import BaseIcon from '../ui/BaseIcon.vue'
 import DataTable, { type Column } from '../ui/DataTable.vue'
 import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 import type { SLODefinition, SLOSnapshot } from '../../api/compute'
+import '../../assets/styles/components/slo-table.css'
 
 interface EnrichedSLORow extends SLODefinition {
   targetNum: number
@@ -81,15 +82,15 @@ const enrichedRows = computed<EnrichedSLORow[]>(() => {
 })
 
 const sloColumns: Column<EnrichedSLORow>[] = [
-  { key: 'service', label: 'Service / Workload', width: '140px', sortable: true },
-  { key: 'indicator_type', label: 'SLI Type', width: '85px', sortable: true },
-  { key: 'targetNum', label: 'Target', width: '75px', sortable: true },
-  { key: 'error_budget', label: 'Error Budget', width: '110px', sortable: true },
-  { key: 'burn_rate', label: 'Burn Velocity', width: '95px', sortable: true },
-  { key: 'window', label: 'Window', width: '65px', sortable: true },
-  { key: 'query', label: 'SLI Query (PromQL)', width: '240px' },
-  { key: 'alert_threshold', label: 'Threshold', width: '95px', sortable: true },
-  { key: 'actions', label: 'Actions', width: '115px', align: 'right' },
+  { key: 'service', label: 'Service / Workload', width: '175px', sortable: true },
+  { key: 'indicator_type', label: 'SLI Type', width: '100px', sortable: true },
+  { key: 'targetNum', label: 'Target', width: '85px', sortable: true },
+  { key: 'error_budget', label: 'Error Budget', width: '130px', sortable: true },
+  { key: 'burn_rate', label: 'Burn Velocity', width: '120px', sortable: true },
+  { key: 'window', label: 'Window', width: '85px', sortable: true },
+  { key: 'query', label: 'SLI Query (PromQL)', width: '220px' },
+  { key: 'alert_threshold', label: 'Threshold', width: '100px', sortable: true },
+  { key: 'actions', label: 'Actions', width: '120px', align: 'right' },
 ]
 
 function formatPercent(val?: unknown): string {
@@ -233,13 +234,10 @@ function handleRowAction(actionId: string, row: EnrichedSLORow) {
 </template>
 
 <style scoped>
-@import '../../assets/styles/components/slo-table.css';
-
 :deep(.slo-table-container table),
 :deep(.slo-table-container .data-table),
 :deep(.data-table) {
   table-layout: fixed !important;
   width: 100% !important;
-  max-width: 1080px !important;
 }
 </style>

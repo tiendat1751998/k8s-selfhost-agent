@@ -213,7 +213,7 @@
 
 .btn-reset-order:hover {
   background: rgba(56, 189, 248, 0.2);
-  color: #fff;
+  color: var(--text-primary);
   border-color: rgba(56, 189, 248, 0.4);
 }
 

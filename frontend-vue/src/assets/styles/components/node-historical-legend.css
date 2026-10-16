@@ -136,7 +136,7 @@
 .btn-pit-sync:hover {
   background: rgba(56, 189, 248, 0.3);
   border-color: #38bdf8;
-  color: #ffffff;
+  color: var(--text-primary);
   transform: translateY(-1px);
 }
 

@@ -248,8 +248,8 @@
 }
 
 .btn-m-edit:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: var(--color-surface-hover);
+  color: var(--text-primary);
 }
 
 .btn-m-delete {
@@ -286,7 +286,7 @@
 .card-title-group { display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1; min-width: 0; }
 .card-type-icon { font-size: 20px; }
 .card-name-wrap { display: flex; flex-direction: column; min-width: 0; }
-.card-host-name { font-size: 14px; font-weight: 700; color: #fff; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-host-name { font-size: 14px; font-weight: 700; color: var(--text-primary); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-host-id { font-size: 10.5px; }
 .card-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .type-badge { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }

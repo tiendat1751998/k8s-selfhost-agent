@@ -115,8 +115,9 @@
   background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.3);
   color: #fb7185; transition: all 0.15s ease;
 }
-.btn-card-action.btn-danger:hover:not(:disabled) {
-  background: rgba(244, 63, 94, 0.25); border-color: #f43f5e; color: #fff;
+.btn-card-action.btn-danger:hover:not(:disabled),
+.btn-icon-action:hover {
+  background: rgba(244, 63, 94, 0.25); border-color: #f43f5e; color: var(--text-primary);
 }
 
 /* Mobile Responsive Overrides */

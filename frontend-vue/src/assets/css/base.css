@@ -6,7 +6,7 @@
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--color-border-strong) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -19,14 +19,14 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--color-border-strong);
   border-radius: 9999px;
   border: 1px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.32);
+  background: var(--color-border-strong);
   border-radius: 9999px;
 }
 
@@ -129,7 +129,7 @@ th,
 .view-title {
   font-size: var(--text-title-fluid, 24px);
   font-weight: 800;
-  color: var(--color-on-dark, #ffffff);
+  color: var(--text-primary);
   letter-spacing: -0.025em;
   line-height: 1.25;
 }
@@ -405,6 +405,6 @@ th,
 .toolbar-search-wrap .clear-input-btn:hover,
 .toolbar-search-wrap .toolbar-search-clear:hover,
 .search-box-wrap .search-clear-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  background: var(--color-surface-hover);
 }

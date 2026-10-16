@@ -154,7 +154,7 @@ function handleAction(action: string, cluster: Cluster) {
 .cluster-name-link {
   font-family: var(--font-sans);
   font-weight: 600;
-  color: #f8fafc;
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -164,7 +164,7 @@ function handleAction(action: string, cluster: Cluster) {
 
 .version-text {
   font-family: var(--font-mono);
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 11.5px;
 }
 
@@ -182,15 +182,15 @@ function handleAction(action: string, cluster: Cluster) {
 }
 
 .badge-k8s {
-  background: rgba(6, 182, 212, 0.12);
-  color: #38bdf8;
-  border: 1px solid rgba(6, 182, 212, 0.3);
+  background: var(--color-badge-k8s-bg);
+  color: var(--color-badge-k8s-text);
+  border: 1px solid var(--color-badge-k8s-border);
 }
 
 .badge-swarm {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.35);
+  background: var(--color-badge-docker-bg);
+  color: var(--color-badge-docker-text);
+  border: 1px solid var(--color-badge-docker-border);
 }
 
 .kebab-cell {
