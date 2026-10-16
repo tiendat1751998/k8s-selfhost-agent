@@ -8,14 +8,12 @@ import HostsMobileCards from '../components/hosts/HostsMobileCards.vue'
 import HostAddEditModal from '../components/hosts/HostAddEditModal.vue'
 import HostDetailDrawer from '../components/hosts/HostDetailDrawer.vue'
 import HostDeleteModal from '../components/hosts/HostDeleteModal.vue'
-import HostFleetTelemetryPanel from '../components/hosts/HostFleetTelemetryPanel.vue'
 import InfraHostsHeaderBar from '../components/hosts/InfraHostsHeaderBar.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import NodeStorageFencingModal from '../components/overview/drawer/NodeStorageFencingModal.vue'
 import type { FencingExecutionReport } from '../api/dr'
 
 const showMobileSearch = ref(false)
-const showTelemetry = ref(false)
 const showFencingModal = ref(false)
 const fencingTargetNode = ref('')
 const fencingTargetCluster = ref('default')
@@ -57,7 +55,6 @@ const {
     <InfraHostsHeaderBar
       v-model:show-mobile-search="showMobileSearch"
       v-model:search-query="searchQuery"
-      v-model:show-telemetry="showTelemetry"
       v-model:selected-type-filter="selectedTypeFilter"
       v-model:selected-status-filter="selectedStatusFilter"
       :filtered-hosts-count="filteredHosts.length"
@@ -82,7 +79,6 @@ const {
         v-model:selected-status-filter="selectedStatusFilter"
         v-model:selected-label-filter="selectedLabelFilter"
         v-model:view-mode="viewMode"
-        v-model:show-telemetry="showTelemetry"
         :total-hosts="totalHosts"
         :connected-hosts="connectedHosts"
         :disconnected-hosts="disconnectedHosts"
@@ -95,18 +91,6 @@ const {
         @add-host="openAddHostModal"
       />
     </div>
-
-    <!-- Fleet Live Telemetry (Collapsible, Defaulted to Collapsed) -->
-    <HostFleetTelemetryPanel
-      :show-telemetry="showTelemetry"
-      :total-hosts="totalHosts"
-      :connected-hosts="connectedHosts"
-      :disconnected-hosts="disconnectedHosts"
-      :error-hosts="errorHosts"
-      :type-counts="typeCounts"
-      :online-hosts-count="onlineHostsCount"
-      :avg-latency="avgLatency"
-    />
 
     <!-- Loading State -->
     <div v-if="loading && hosts.length === 0" class="loading-state glass-panel">

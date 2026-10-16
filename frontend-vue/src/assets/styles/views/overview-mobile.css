@@ -12,10 +12,11 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 10px;
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 10px;
-  backdrop-filter: blur(12px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   width: 100%;
   box-sizing: border-box;
 }
@@ -31,7 +32,7 @@
 .mobile-command-bar .command-bar-title {
   font-size: 12.5px;
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--text-primary);
   letter-spacing: -0.01em;
   white-space: nowrap;
   flex-shrink: 0;
@@ -52,9 +53,9 @@
   padding: 0 8px;
   font-size: 11px;
   font-weight: 600;
-  color: #cbd5e1;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
   cursor: pointer;
   white-space: nowrap;
@@ -63,9 +64,9 @@
 }
 
 .mobile-cmd-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  border-color: rgba(56, 189, 248, 0.4);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--color-border-strong);
 }
 
 .mobile-cmd-btn:disabled {
@@ -97,8 +98,8 @@
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   min-height: 34px;
   box-sizing: border-box;
@@ -177,9 +178,9 @@
   max-height: 64px;
   height: 60px;
   padding: 8px 12px;
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
   cursor: pointer;
   box-sizing: border-box;
   transition: background 0.15s ease, border-color 0.15s ease;
@@ -188,8 +189,8 @@
 }
 
 .mobile-node-chip:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(56, 189, 248, 0.3);
+  background: var(--bg-elevated);
+  border-color: var(--color-border-strong);
 }
 
 .mobile-node-chip.chip-down {
@@ -229,24 +230,24 @@
 }
 
 .dot-green {
-  background: #10b981;
-  box-shadow: 0 0 6px #10b981;
+  background: var(--color-status-online, #10b981);
+  box-shadow: none;
 }
 
 .dot-amber {
-  background: #f59e0b;
-  box-shadow: 0 0 6px #f59e0b;
+  background: var(--color-status-warning, #f59e0b);
+  box-shadow: none;
 }
 
 .dot-red {
-  background: #ef4444;
+  background: var(--color-status-offline, #ef4444);
   box-shadow: none;
 }
 
 .node-chip-name {
   font-size: 13px;
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -335,9 +336,9 @@
   display: flex;
   flex-direction: column;
   padding: 8px 12px 6px;
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
   cursor: pointer;
   box-sizing: border-box;
   width: 100%;
@@ -348,8 +349,8 @@
 }
 
 .mobile-saturation-chart-card:hover {
-  background: rgba(15, 23, 42, 0.85);
-  border-color: rgba(56, 189, 248, 0.35);
+  background: var(--bg-elevated);
+  border-color: var(--color-border-strong);
 }
 
 .chart-card-header {
@@ -369,7 +370,7 @@
 .chart-badge {
   font-size: 10.5px;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--text-primary);
   letter-spacing: 0.04em;
   white-space: nowrap;
   flex-shrink: 0;

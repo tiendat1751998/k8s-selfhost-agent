@@ -187,11 +187,11 @@ const {
             </defs>
 
             <!-- 5 Horizontal Grid Lines -->
-            <line x1="0" y1="10" x2="1000" y2="10" stroke="rgba(255,255,255,0.06)" stroke-dasharray="4 4" />
-            <line x1="0" y1="56" x2="1000" y2="56" stroke="rgba(255,255,255,0.04)" stroke-dasharray="4 4" />
-            <line x1="0" y1="102" x2="1000" y2="102" stroke="rgba(255,255,255,0.06)" stroke-dasharray="4 4" />
-            <line x1="0" y1="148" x2="1000" y2="148" stroke="rgba(255,255,255,0.04)" stroke-dasharray="4 4" />
-            <line x1="0" y1="194" x2="1000" y2="194" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
+            <line x1="0" y1="10" x2="1000" y2="10" stroke="var(--color-border-subtle)" stroke-dasharray="4 4" />
+            <line x1="0" y1="56" x2="1000" y2="56" stroke="var(--color-border-subtle)" stroke-dasharray="4 4" />
+            <line x1="0" y1="102" x2="1000" y2="102" stroke="var(--color-border-subtle)" stroke-dasharray="4 4" />
+            <line x1="0" y1="148" x2="1000" y2="148" stroke="var(--color-border-subtle)" stroke-dasharray="4 4" />
+            <line x1="0" y1="194" x2="1000" y2="194" stroke="var(--color-border-subtle)" stroke-width="1" />
 
             <!-- Series 1: CPU Area & Line (Enterprise Sapphire Blue #3b82f6) -->
             <path v-if="trendChartCpuArea" :d="trendChartCpuArea" fill="url(#trendCpuGrad)" />

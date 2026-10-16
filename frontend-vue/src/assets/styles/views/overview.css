@@ -6,7 +6,7 @@
 
 
 .overview-dashboard {
-  padding: 16px 32px 48px;
+  padding: 6px 0 32px;
   max-width: 1680px;
   margin: 0 auto;
   display: flex;
@@ -14,11 +14,11 @@
   gap: 12px;
 }
 
-/* Sleek Unified 38px Enterprise Toolbar */
+/* Sleek Unified 42px Enterprise Toolbar */
 .overview-toolbar-sleek {
-  height: 38px;
-  min-height: 38px;
-  max-height: 38px;
+  height: 42px;
+  min-height: 42px;
+  max-height: 42px;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -26,10 +26,10 @@
   gap: 12px;
   padding: 0 12px;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
@@ -81,23 +81,23 @@
   font-family: inherit;
   font-size: 12px;
   font-weight: 500;
-  color: #e2e8f0;
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: var(--text-primary);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-default);
   border-radius: 6px;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
 }
 
 .btn-telemetry-action:hover:not(:disabled),
 .overview-toolbar-sleek .btn-toolbar:hover:not(:disabled) {
-  background: rgba(51, 65, 85, 0.85);
-  border-color: rgba(148, 163, 184, 0.35);
-  color: #ffffff;
+  background: var(--bg-elevated);
+  border-color: var(--border-medium);
+  color: var(--text-primary);
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
 }
 
 .btn-telemetry-action:active,
@@ -113,22 +113,22 @@
   width: 30px;
   height: 30px;
   padding: 0;
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-default);
   border-radius: 6px;
-  color: #94a3b8;
+  color: var(--text-muted);
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-telemetry-refresh:hover:not(:disabled),
 .overview-toolbar-sleek .btn-toolbar.btn-toolbar-icon:hover:not(:disabled) {
-  background: rgba(51, 65, 85, 0.85);
-  border-color: rgba(148, 163, 184, 0.35);
-  color: #f8fafc;
+  background: var(--bg-elevated);
+  border-color: var(--border-medium);
+  color: var(--text-primary);
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
 }
 
 .btn-telemetry-refresh:active,
@@ -308,11 +308,11 @@
     padding: 0 10px;
     gap: 8px;
     width: 100%;
-    background: rgba(15, 23, 42, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--bg-card);
+    border: 1px solid var(--color-border-subtle);
     border-radius: 10px;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   .mobile-stream-section {

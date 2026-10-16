@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { useOverviewDashboard } from '../composables/useOverviewDashboard'
 
 import OverviewHud from '../components/overview/hud/OverviewHud.vue'
-import RequestFlowBar from '../components/overview/hud/RequestFlowBar.vue'
 import OverviewSaturationTrends from '../components/overview/hud/OverviewSaturationTrends.vue'
 import OverviewMobileStream from '../components/overview/OverviewMobileStream.vue'
 import OverviewTopologySection from '../components/overview/OverviewTopologySection.vue'
@@ -227,15 +226,7 @@ watch(filteredTopologyNodes, (newNodes) => {
         :trendHistory="trendHistory"
       />
 
-      <!-- 2. ANIMATED REQUEST FLOW BAR -->
-      <RequestFlowBar
-        :isLiveWs="isLiveWs"
-        :effectiveHttpRps="effectiveHttpRps"
-        :httpQueuedReqs="httpQueuedReqs"
-        :httpErrorRate="httpErrorRate"
-      />
-
-      <!-- 3. 5-MIN SATURATION TRENDS CHART -->
+      <!-- 2. 5-MIN SATURATION TRENDS CHART -->
       <OverviewSaturationTrends
         :trendHistory="trendHistory"
         :effectiveHttpRps="effectiveHttpRps"
