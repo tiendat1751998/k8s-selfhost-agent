@@ -149,16 +149,16 @@
 .node-table th,
 .hosts-table th { padding: 10px 12px; background: var(--color-surface-inset); color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--color-border-subtle); white-space: nowrap; }
 
-/* Column Width Calibration */
-.col-status { width: 80px; min-width: 75px; }
-.col-name { min-width: 140px; }
-.col-ip { width: 115px; min-width: 105px; }
-.col-cpu { width: 85px; min-width: 80px; }
-.col-ram { width: 125px; min-width: 115px; }
-.col-disk { width: 125px; min-width: 115px; }
-.col-workloads { width: 80px; min-width: 75px; }
-.col-probe { width: 90px; min-width: 80px; }
-.col-actions { width: 56px; min-width: 50px; text-align: center; white-space: nowrap; }
+/* Column Width Calibration (100% proportional distribution) */
+.col-status { width: 8%; min-width: 80px; }
+.col-name { width: 17%; min-width: 160px; }
+.col-ip { width: 14%; min-width: 135px; }
+.col-cpu { width: 10%; min-width: 95px; }
+.col-ram { width: 14%; min-width: 130px; }
+.col-disk { width: 14%; min-width: 130px; }
+.col-workloads { width: 9%; min-width: 95px; }
+.col-probe { width: 10%; min-width: 105px; }
+.col-actions { width: 4%; min-width: 48px; text-align: center; white-space: nowrap; }
 
 .node-row { height: 42px; border-bottom: 1px solid var(--color-border-subtle); transition: background 0.15s ease; cursor: pointer; }
 .node-row:hover { background: var(--bg-elevated); }
@@ -172,7 +172,7 @@
 .status-offline { color: #fb7185; }
 .status-degraded { color: #fcd34d; }
 .name-role-cell { display: flex; align-items: center; gap: 6px; }
-.node-name-text { color: var(--text-primary, #f8fafc); max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-name-text { color: var(--text-primary, #f8fafc); max-width: 145px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .role-badge { font-size: 9.5px; font-weight: 700; padding: 1px 4px; border-radius: 3px; }
 .badge-control { color: #c084fc; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.25); }
 .badge-worker { color: #38bdf8; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.25); }
