@@ -121,14 +121,33 @@
 }
 .btn-toast-details { background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle); color: var(--text-primary); }
 .btn-toast-details:hover { background: var(--bg-card-hover); border-color: var(--color-border-strong); color: var(--text-primary); }
-.btn-toast-mute { background: var(--color-status-offline-bg, rgba(239, 68, 68, 0.12)); border: 1px solid var(--color-status-offline-border, rgba(239, 68, 68, 0.25)); color: var(--color-status-offline, #fca5a5); }
-.btn-toast-mute:hover { background: var(--color-status-offline-bg, rgba(239, 68, 68, 0.22)); border-color: var(--color-status-offline-border, rgba(239, 68, 68, 0.45)); color: var(--color-status-offline, #fca5a5); }
+.btn-toast-mute {
+  background: var(--color-status-offline-bg, rgba(239, 68, 68, 0.12));
+  border: 1px solid var(--color-status-offline-border, rgba(239, 68, 68, 0.25));
+  color: var(--color-status-offline, #ef4444);
+  font-weight: 600;
+  border-radius: 6px;
+}
+.btn-toast-mute:hover {
+  background: var(--color-status-offline-bg, rgba(239, 68, 68, 0.22));
+  border-color: var(--color-status-offline-border, rgba(239, 68, 68, 0.45));
+  color: var(--color-status-offline, #ef4444);
+}
 .btn-toast-failover {
-  background: rgba(239, 68, 68, 0.14) !important; color: #fca5a5 !important;
-  border: 1px solid rgba(239, 68, 68, 0.35) !important; font-weight: 700 !important;
+  background: var(--color-status-offline-bg, rgba(239, 68, 68, 0.14)) !important;
+  color: var(--color-status-offline, #ef4444) !important;
+  border: 1px solid var(--color-status-offline-border, rgba(239, 68, 68, 0.35)) !important;
+  font-weight: 600 !important;
+  border-radius: 6px !important;
   box-shadow: none !important;
 }
-.btn-toast-failover:hover { background: rgba(239, 68, 68, 0.25) !important; transform: translateY(-1px); box-shadow: none !important; }
+.btn-toast-failover:hover {
+  background: var(--color-status-offline-bg, rgba(239, 68, 68, 0.25)) !important;
+  border-color: var(--color-status-offline-border, rgba(239, 68, 68, 0.5)) !important;
+  color: var(--color-status-offline, #ef4444) !important;
+  transform: translateY(-1px);
+  box-shadow: none !important;
+}
 .btn-toast-dismiss { background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle); color: var(--text-secondary); }
 .btn-toast-dismiss:hover { background: var(--bg-card-hover); border-color: var(--color-border-strong); color: var(--text-primary); }
 

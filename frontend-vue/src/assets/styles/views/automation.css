@@ -54,27 +54,55 @@
 
 /* 4. Segmented Control & Mobile Tab Switcher */
 .segmented-control {
-  display: inline-flex; align-items: center; background: var(--color-surface-inset);
-  border: 1px solid var(--color-border-subtle); border-radius: 8px; padding: 3px; gap: 2px;
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 7px;
+  padding: 3px;
+  gap: 2px;
+  height: 32px;
+  box-sizing: border-box;
 }
 .segmented-btn {
-  background: transparent; border: none; color: var(--text-secondary);
-  padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease; white-space: nowrap;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  height: 24px;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 5px;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
 }
-.segmented-btn:hover { color: var(--text-primary); background: var(--bg-card-hover); }
+.segmented-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+}
 .segmented-btn.active {
-  background: rgba(59, 130, 246, 0.15); color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.35); box-shadow: none;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-weight: 600;
+  border: 1px solid var(--color-border-subtle);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
-.mobile-segmented-control { width: 100%; display: flex; box-sizing: border-box; }
-.mobile-segmented-control .segmented-btn { flex: 1; justify-content: center; text-align: center; padding: 7px 10px; }
+.mobile-segmented-control { width: 100%; display: flex; box-sizing: border-box; height: 36px; border-radius: 8px; }
+.mobile-segmented-control .segmented-btn { flex: 1; justify-content: center; text-align: center; height: 28px; min-height: 28px; }
 
 /* 5. View Container Layout (Elevated ~65-75px directly below Top HUD) */
 .view-container {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  padding: 0;
+  margin: 0;
+  gap: 16px;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -88,23 +116,23 @@
 .banner-text { flex: 1; font-weight: 500; }
 .banner-close { background: none; border: none; color: inherit; font-size: 14px; cursor: pointer; padding: 0; }
 
-/* 7. Sleek Unified 38px Enterprise Toolbar */
+/* 7. Sleek Unified 48px Enterprise Toolbar */
 .automation-toolbar-sleek {
-  height: 38px;
-  min-height: 38px;
-  max-height: 38px;
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
   box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 0 10px;
+  gap: 10px;
+  padding: 0 12px;
   border-radius: 8px;
   background: var(--bg-card);
   border: 1px solid var(--color-border-subtle);
   backdrop-filter: blur(12px);
   width: 100%;
-  overflow: hidden;
+  margin-bottom: 0;
 }
 
 .automation-toolbar-sleek .toolbar-search-wrap {
@@ -113,22 +141,23 @@
   align-items: center;
   flex: 0 1 240px;
   min-width: 130px;
-  height: 28px;
+  height: 32px;
 }
 
 .automation-toolbar-sleek .search-icon {
   position: absolute;
-  left: 8px;
-  font-size: 11px;
+  left: 10px;
+  font-size: 12px;
   color: var(--text-muted);
   pointer-events: none;
 }
 
 .automation-toolbar-sleek .toolbar-search-input {
   width: 100%;
-  height: 28px;
-  padding: 0 24px 0 26px;
-  font-size: 12px;
+  height: 32px;
+  padding: 0 28px 0 30px;
+  font-size: 13px;
+  font-family: var(--font-sans);
   border-radius: 6px;
   background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
@@ -144,7 +173,7 @@
 
 .automation-toolbar-sleek .clear-input-btn {
   position: absolute;
-  right: 4px;
+  right: 6px;
   top: 50%;
   transform: translateY(-50%);
   width: 20px;
@@ -163,24 +192,31 @@
   color: var(--text-primary);
 }
 
-/* Trigger Filter Pills / Tabs */
+/* Trigger Filter Pills / Tabs (Segmented Control Track) */
 .automation-toolbar-sleek .toolbar-trigger-pills {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 7px;
+  padding: 3px;
+  gap: 2px;
+  height: 32px;
+  box-sizing: border-box;
   flex-shrink: 0;
 }
 
 .automation-toolbar-sleek .toolbar-pill-btn {
-  height: 26px;
-  min-height: 26px;
-  padding: 0 9px;
-  border-radius: 6px;
-  font-size: 11.5px;
-  font-weight: 600;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-sans);
   cursor: pointer;
-  border: 1px solid var(--color-border-subtle);
-  background: var(--color-surface-inset);
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
@@ -196,10 +232,11 @@
 }
 
 .automation-toolbar-sleek .toolbar-pill-btn.active {
-  background: rgba(6, 182, 212, 0.2);
-  border-color: rgba(6, 182, 212, 0.5);
-  color: #38bdf8;
-  box-shadow: none;
+  background: var(--bg-card);
+  border-color: var(--color-border-subtle);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 /* Inline Compact Execution Badge Strip */
@@ -212,7 +249,7 @@
 }
 
 .automation-toolbar-sleek .kpi-badge {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--accent-cyan, #38bdf8);
   background: rgba(56, 189, 248, 0.1);
@@ -226,36 +263,36 @@
 .automation-toolbar-sleek .toolbar-actions-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin-left: auto;
   flex-shrink: 0;
 }
 
 .automation-toolbar-sleek .toolbar-btn {
-  height: 28px;
-  min-height: 28px;
-  padding: 0 10px;
-  font-size: 11.5px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 12.5px;
   font-weight: 600;
   border-radius: 6px;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   white-space: nowrap;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .automation-toolbar-sleek .toolbar-btn.btn-primary {
-  background: #2563eb;
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  border: 1px solid transparent;
   font-weight: 600;
 }
 
 .automation-toolbar-sleek .toolbar-btn.btn-primary:hover {
-  background: #1d4ed8;
-  color: #fff;
+  background: var(--color-primary-hover, #1d4ed8);
+  color: var(--color-primary-fg);
   box-shadow: none;
 }
 
@@ -304,18 +341,18 @@ input:checked + .slider:before { transform: translateX(16px); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .rule-name-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow: hidden; }
-.rule-name { font-weight: 700; color: var(--text-primary); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rule-id { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rule-name { font-weight: 600; color: var(--text-primary); font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rule-id { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trigger-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow: hidden; }
-.trigger-main { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #fbbf24; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trigger-main { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #fbbf24; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trigger-condition-badge {
-  display: inline-block; font-size: 10px; padding: 2px 6px; background: rgba(251, 191, 36, 0.1);
+  display: inline-block; font-size: 11px; padding: 2px 6px; background: rgba(251, 191, 36, 0.1);
   border: 1px solid rgba(251, 191, 36, 0.25); border-radius: 4px; color: #fde68a;
   max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box;
 }
 .action-cell { min-width: 0; overflow: hidden; }
 .action-tag {
-  display: inline-block; font-size: 10px; font-weight: 700; padding: 3px 8px;
+  display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px;
   background: rgba(6, 182, 212, 0.12); border: 1px solid rgba(6, 182, 212, 0.25);
   border-radius: 6px; color: var(--accent-sky, #38bdf8); max-width: 100%;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box;

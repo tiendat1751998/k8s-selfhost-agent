@@ -3,22 +3,21 @@
    Scope: Tab panels, form controls, tables, toggles, badges & policies
    ========================================================================== */
 
-/* Elevated Desktop Settings Tabs Header & 38px Toolbar (>=768px) */
+/* Elevated Desktop Settings Tabs Header & 48px Toolbar (>=768px) */
 .settings-tabs-header {
-  height: 38px;
-  min-height: 38px;
-  max-height: 42px;
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 0 6px 0 8px;
+  gap: 10px;
+  padding: 0 12px;
   background: var(--bg-card);
   border: 1px solid var(--color-border-subtle);
-  border-radius: 10px;
+  border-radius: 8px;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  box-shadow: var(--shadow-sm);
   width: 100%;
   box-sizing: border-box;
   position: sticky;
@@ -27,13 +26,19 @@
 }
 
 .settings-tabs-nav {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 7px;
+  padding: 3px;
+  gap: 2px;
+  height: 32px;
+  box-sizing: border-box;
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
 }
 .settings-tabs-nav::-webkit-scrollbar { display: none; }
@@ -43,48 +48,35 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 7px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 5px;
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 500;
+  font-family: var(--font-sans);
   color: var(--text-secondary);
   background: transparent;
   border: 1px solid transparent;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
-  position: relative;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.15s ease;
   user-select: none;
 }
 .settings-tab-btn:hover,
 .tab-btn:hover {
   color: var(--text-primary);
   background: var(--bg-card-hover);
-  border-color: var(--color-border-subtle);
 }
 .settings-tab-btn.active,
 .settings-tab-btn.tab-btn-active,
 .tab-btn-active {
   color: var(--text-primary);
-  background: var(--color-badge-k8s-bg, rgba(50, 108, 229, 0.15));
-  border-color: var(--color-badge-k8s-border, rgba(50, 108, 229, 0.35));
-  box-shadow: none;
-}
-.settings-tab-btn.active::after,
-.tab-btn-active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 10px;
-  right: 10px;
-  height: 2px;
-  background: var(--color-primary, #326ce5);
-  border-radius: 2px;
-  box-shadow: none;
-  transition: all 0.25s ease;
+  background: var(--bg-card);
+  font-weight: 600;
+  border: 1px solid var(--color-border-subtle);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .tab-badge {
@@ -92,13 +84,13 @@
   align-items: center;
   justify-content: center;
   padding: 1px 6px;
-  border-radius: 9999px;
-  font-size: 10.5px;
-  font-weight: 700;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
   font-family: var(--font-mono, monospace);
-  background: rgba(6, 182, 212, 0.22);
-  color: #38bdf8;
-  border: 1px solid rgba(6, 182, 212, 0.35);
+  background: var(--color-surface-inset);
+  color: var(--text-secondary);
+  border: 1px solid var(--color-border-subtle);
   line-height: 1;
 }
 
@@ -107,7 +99,6 @@
   height: 6px;
   border-radius: 50%;
   background: var(--color-status-warning, #f59e0b);
-  box-shadow: none;
   display: inline-block;
 }
 
@@ -120,15 +111,15 @@
 }
 
 .btn-settings-sync {
-  height: 28px;
-  min-height: 28px;
+  height: 32px;
+  min-height: 32px;
   padding: 0 10px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
@@ -140,45 +131,41 @@
 .btn-settings-sync:hover:not(:disabled) {
   background: var(--bg-card-hover);
   color: var(--text-primary);
-  border-color: rgba(6, 182, 212, 0.4);
 }
 .btn-settings-sync:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-settings-save {
-  height: 28px;
-  min-height: 28px;
+  height: 32px;
+  min-height: 32px;
   padding: 0 12px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: #ffffff;
-  background: var(--color-primary, #326ce5);
-  border: 1px solid var(--color-primary, #326ce5);
+  color: var(--color-primary-fg, #ffffff);
+  background: var(--color-primary);
+  border: 1px solid transparent;
   border-radius: 6px;
   cursor: pointer;
   white-space: nowrap;
-  box-shadow: none;
   transition: all 0.15s ease;
   touch-action: manipulation;
 }
 .btn-settings-save:hover:not(:disabled) {
   background: var(--color-primary-hover, #2557c7);
-  border-color: var(--color-primary-hover, #2557c7);
-  color: #ffffff;
-  box-shadow: none;
+  color: var(--color-primary-fg, #ffffff);
 }
 .btn-settings-save:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Enterprise 2-Column Setting Row Pattern & Content Wrapper */
 .settings-content-wrapper {
-  max-width: 1040px;
+  max-width: 100%;
   width: 100%;
-  margin: 0 auto;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .setting-row {
