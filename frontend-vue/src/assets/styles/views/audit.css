@@ -93,9 +93,9 @@
    ========================================================================== */
 .audit-toolbar-sleek {
   display: flex !important; align-items: center; justify-content: space-between;
-  height: 48px; min-height: 48px; max-height: 48px; gap: 10px; border-radius: 8px;
+  height: 48px; min-height: 48px; max-height: 48px; gap: 6px; border-radius: 8px;
   background: var(--bg-card); backdrop-filter: blur(12px);
-  border: 1px solid var(--border-subtle); padding: 0 12px; box-sizing: border-box; width: 100%;
+  border: 1px solid var(--border-subtle); padding: 0 10px; box-sizing: border-box; width: 100%;
   margin-bottom: 0;
 }
 
@@ -106,8 +106,9 @@
   display: flex; align-items: center; flex-shrink: 0;
 }
 
+.audit-toolbar-sleek .toolbar-search-wrap,
 .sleek-search-wrap {
-  position: relative; height: 32px; width: 180px; min-width: 130px; max-width: 220px; flex: 0 1 180px;
+  position: relative; height: 32px; width: 145px; min-width: 120px; max-width: 160px; flex: 0 1 145px; flex-shrink: 1;
 }
 .sleek-search-icon {
   position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
@@ -134,10 +135,11 @@
   border: 1px solid var(--color-border-subtle); border-radius: 7px; padding: 3px; gap: 2px;
   height: 32px; box-sizing: border-box; flex-shrink: 0;
 }
+.audit-toolbar-sleek .pill-btn,
 .sleek-pill-btn,
 .sleek-pill {
-  height: 24px; min-height: 24px; padding: 0 10px; border-radius: 5px;
-  font-size: 12.5px; font-weight: 500; font-family: var(--font-sans); display: inline-flex; align-items: center;
+  height: 24px; min-height: 24px; padding: 0 8px !important; border-radius: 5px;
+  font-size: 12px !important; font-weight: 500; font-family: var(--font-sans); display: inline-flex; align-items: center;
   gap: 4px; cursor: pointer; background: transparent;
   border: 1px solid transparent; color: var(--text-secondary);
   transition: all 0.15s ease; white-space: nowrap; box-shadow: none;
@@ -152,20 +154,22 @@
 .sleek-pill-count { font-size: 10px; opacity: 0.8; }
 
 .sleek-select-group { gap: 6px; }
+.audit-toolbar-sleek .cyber-select-sleek,
 .sleek-select {
-  height: 32px; min-height: 32px; padding: 0 8px; font-size: 12.5px; font-weight: 500;
-  max-width: 140px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+  height: 32px; min-height: 32px; min-width: 110px; max-width: 130px; padding: 0 24px 0 8px; font-size: 12px; font-weight: 500;
+  text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
   border-radius: 6px; background: var(--color-surface-inset); border: 1px solid var(--border-subtle);
   color: var(--text-primary); outline: none; cursor: pointer; transition: border-color 0.15s ease;
 }
 .sleek-select:focus { border-color: rgba(56, 189, 248, 0.4); }
 .sleek-select-severity {
-  max-width: 120px;
+  min-width: 110px; max-width: 120px;
 }
 
 .sleek-actions-group { gap: 6px; }
+.audit-toolbar-sleek .action-pill-btn,
 .sleek-btn {
-  height: 32px; min-height: 32px; padding: 0 10px; border-radius: 6px; font-size: 12.5px;
+  height: 32px; min-height: 32px; padding: 0 8px; border-radius: 6px; font-size: 12px;
   font-weight: 500; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
   background: var(--color-surface-inset); border: 1px solid var(--border-subtle);
   color: var(--text-primary); white-space: nowrap; transition: all 0.15s ease;
