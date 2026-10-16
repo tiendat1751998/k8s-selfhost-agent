@@ -110,6 +110,24 @@ func (w *SelfHealingWatchdog) RecordLogLine(line string) {
 	w.pendingAnomalies[code] = w.now()
 }
 
+// HookPodTailer connects watchdog anomaly detection to live PodTailer log ingestion.
+func (w *SelfHealingWatchdog) HookPodTailer(pt *PodTailer) {
+	if w == nil || pt == nil {
+		return
+	}
+	originalWriter := pt.writer
+	pt.entryWriter = func(entry logengine.Entry) error {
+		w.RecordLogLine(entry.Message)
+		if entry.Raw != "" && entry.Raw != entry.Message {
+			w.RecordLogLine(entry.Raw)
+		}
+		if originalWriter != nil {
+			return originalWriter.Write(entry)
+		}
+		return nil
+	}
+}
+
 // Start begins the background monitoring loop.
 func (w *SelfHealingWatchdog) Start(ctx context.Context) {
 	ticker := time.NewTicker(w.interval)

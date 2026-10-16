@@ -421,6 +421,7 @@ func main() {
 			logWriter = engineSrc.Writer()
 		}
 		watchdog := NewSelfHealingWatchdog(healthChecker, remediator, WithWatchdogLogWriter(logWriter))
+		watchdog.HookPodTailer(podTailer)
 		go watchdog.Start(ctx)
 		logger.Info("Autonomous self-healing watchdog started")
 	}

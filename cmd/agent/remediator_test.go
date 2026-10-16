@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
 )
 
 type mockRuntimeProber struct {
@@ -27,10 +29,7 @@ func (m *mockRuntimeProber) ProbeKubelet(ctx context.Context) (bool, float64, bo
 }
 
 func (m *mockRuntimeProber) ProbeSocket(sockPath string, timeout time.Duration) bool {
-	if m.socketStatus == nil {
-		return false
-	}
-	return m.socketStatus[sockPath]
+	return m.socketStatus != nil && m.socketStatus[sockPath]
 }
 
 type mockCommandRunner struct {
@@ -257,6 +256,27 @@ func TestRemediator_ServiceAllowlistAndDenylist(t *testing.T) {
 			t.Errorf("service %s should NOT be allowed after AddAllowedServices", forbidden)
 		}
 	}
+
+	// 4. Case-insensitive denylist checks (Sshd, DBUS)
+	for _, deniedCase := range []string{"Sshd", "SSHD", "DBUS", "Dbus"} {
+		if remediator.IsServiceAllowed(deniedCase) {
+			t.Errorf("case-variant denylisted service %s should NOT be allowed", deniedCase)
+		}
+	}
+	remediator.AddAllowedServices([]string{"Sshd", "DBUS"})
+	if remediator.IsServiceAllowed("Sshd") || remediator.IsServiceAllowed("DBUS") {
+		t.Errorf("case-variant denylisted services should NOT be allowed after AddAllowedServices")
+	}
+
+	// 5. Populate res.Status verification
+	resOK, errOK := remediator.Execute(context.Background(), RemediationRequest{Action: "restart_container", Target: "my-app-backend"})
+	if errOK != nil || resOK.Status != "success" {
+		t.Errorf("expected resOK.Status='success', got %q (err=%v)", resOK.Status, errOK)
+	}
+	resFail, errFail := remediator.Execute(context.Background(), RemediationRequest{Action: "restart_service", Target: "Sshd"})
+	if errFail == nil || resFail.Status != "failed" {
+		t.Errorf("expected resFail.Status='failed', got %q", resFail.Status)
+	}
 }
 
 func TestRemediator_RestartContainer(t *testing.T) {
@@ -376,14 +396,15 @@ func TestRemediator_CNIIPAMCleanup(t *testing.T) {
 
 func TestRemediator_ReapZombies(t *testing.T) {
 	tempProcDir := t.TempDir()
-	_ = os.MkdirAll(filepath.Join(tempProcDir, "1001"), 0755)
-	_ = os.WriteFile(filepath.Join(tempProcDir, "1001", "stat"), []byte("1001 (containerd-shim) Z 500 1001 1001 0 -1 4194304\n"), 0644)
-	_ = os.MkdirAll(filepath.Join(tempProcDir, "1002"), 0755)
-	_ = os.WriteFile(filepath.Join(tempProcDir, "1002", "stat"), []byte("1002 (containerd-shim) Z 500 1002 1002 0 -1 4194304\n"), 0644)
-	_ = os.MkdirAll(filepath.Join(tempProcDir, "1003"), 0755)
-	_ = os.WriteFile(filepath.Join(tempProcDir, "1003", "stat"), []byte("1003 (containerd-shim) Z 1 1003 1003 0 -1 4194304\n"), 0644)
-	_ = os.MkdirAll(filepath.Join(tempProcDir, "1004"), 0755)
-	_ = os.WriteFile(filepath.Join(tempProcDir, "1004", "stat"), []byte("1004 (containerd-shim) S 500 1004 1004 0 -1 4194304\n"), 0644)
+	for _, f := range []struct{ pid, stat string }{
+		{"1001", "1001 (containerd-shim) Z 500 1001 1001 0 -1 4194304\n"},
+		{"1002", "1002 (containerd-shim) Z 500 1002 1002 0 -1 4194304\n"},
+		{"1003", "1003 (containerd-shim) Z 1 1003 1003 0 -1 4194304\n"},
+		{"1004", "1004 (containerd-shim) S 500 1004 1004 0 -1 4194304\n"},
+	} {
+		_ = os.MkdirAll(filepath.Join(tempProcDir, f.pid), 0755)
+		_ = os.WriteFile(filepath.Join(tempProcDir, f.pid, "stat"), []byte(f.stat), 0644)
+	}
 
 	runner := newMockCommandRunner()
 	remediator := NewNodeRemediator(WithCommandRunner(runner), WithRemediatorProcPath(tempProcDir))
@@ -447,5 +468,27 @@ func TestRemediator_HTTPAndHistory(t *testing.T) {
 	var history []RemediationActionResult
 	if err := json.Unmarshal(recHist.Body.Bytes(), &history); err != nil || len(history) != 1 {
 		t.Fatalf("unexpected history: %v, err=%v", history, err)
+	}
+}
+
+func TestWatchdog_HookPodTailer(t *testing.T) {
+	runner := newMockCommandRunner()
+	remediator := NewNodeRemediator(WithCommandRunner(runner))
+	collector := NewSystemCollector("", "", nil)
+	checker := NewK8sHealthChecker(collector)
+	watchdog := NewSelfHealingWatchdog(checker, remediator)
+
+	podTailer := &PodTailer{baseDir: t.TempDir()}
+	watchdog.HookPodTailer(podTailer)
+	if podTailer.entryWriter == nil {
+		t.Fatalf("expected podTailer.entryWriter to be non-nil after HookPodTailer")
+	}
+
+	// Trigger entryWriter with a CNI anomaly log line
+	_ = podTailer.entryWriter(logengine.Entry{
+		Message: "kubelet: FailedCreatePodSandBox: network setup failed",
+	})
+	if _, exists := watchdog.pendingAnomalies["CNI_SANDBOX_FAILURE"]; !exists {
+		t.Fatalf("expected CNI_SANDBOX_FAILURE recorded via hooked pod tailer")
 	}
 }

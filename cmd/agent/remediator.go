@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -136,6 +135,7 @@ func (nr *NodeRemediator) Execute(ctx context.Context, req RemediationRequest) (
 	if err := nr.validateRequest(req); err != nil {
 		res.DurationMs = time.Since(start).Milliseconds()
 		res.Success = false
+		res.Status = "failed"
 		res.Details = err.Error()
 		return res, err
 	}
@@ -156,10 +156,15 @@ func (nr *NodeRemediator) Execute(ctx context.Context, req RemediationRequest) (
 
 	res.DurationMs = time.Since(start).Milliseconds()
 	res.Success = (err == nil)
-	if err != nil {
-		if res.Details == "" {
-			res.Details = err.Error()
+	if res.Status == "" {
+		if res.Success {
+			res.Status = "success"
+		} else {
+			res.Status = "failed"
 		}
+	}
+	if err != nil && res.Details == "" {
+		res.Details = err.Error()
 	}
 
 	nr.recordHistory(res)
@@ -348,74 +353,6 @@ func (nr *NodeRemediator) executeCNICleanup(ctx context.Context, res *Remediatio
 
 	res.InodesFreed = inodesFreed
 	res.Details = fmt.Sprintf("CNI IPAM cleaned %d stale locks and allocated IP entries", inodesFreed)
-	return nil
-}
-
-func parseZombiePPID(statStr string) (ppid int, isZombie bool) {
-	lastParen := strings.LastIndex(statStr, ")")
-	if lastParen == -1 || lastParen+3 >= len(statStr) {
-		return 0, false
-	}
-	rem := strings.TrimSpace(statStr[lastParen+1:])
-	if len(rem) < 1 || rem[0] != 'Z' {
-		return 0, false
-	}
-	rem = strings.TrimSpace(rem[1:])
-	fields := strings.Fields(rem)
-	if len(fields) == 0 {
-		return 0, true
-	}
-	parsed, err := strconv.Atoi(fields[0])
-	if err != nil {
-		return 0, true
-	}
-	return parsed, true
-}
-
-func (nr *NodeRemediator) executeReapZombies(ctx context.Context, res *RemediationActionResult) error {
-	reaped := 0
-	entries, err := os.ReadDir(nr.procPath)
-	if err != nil {
-		res.Details = "No processes scanned"
-		return nil
-	}
-
-	uniquePPIDs := make(map[int]bool)
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		pid := entry.Name()
-		if len(pid) == 0 || pid[0] < '0' || pid[0] > '9' {
-			continue
-		}
-		statBytes, err := os.ReadFile(filepath.Join(nr.procPath, pid, "stat"))
-		if err != nil {
-			continue
-		}
-		statStr := string(statBytes)
-		if strings.Contains(statStr, "shim") || strings.Contains(statStr, "containerd") {
-			ppid, isZombie := parseZombiePPID(statStr)
-			if isZombie {
-				if ppid > 1 {
-					uniquePPIDs[ppid] = true
-				} else {
-					// Fallback to kill -9 <pid> when ppid <= 1
-					_, _ = nr.runner.Run(ctx, "kill", "-9", pid)
-					reaped++
-				}
-			}
-		}
-	}
-
-	// Wake each unique parent with SIGCHLD to reap zombie children
-	for ppid := range uniquePPIDs {
-		_, _ = nr.runner.Run(ctx, "kill", "-s", "CHLD", strconv.Itoa(ppid))
-		reaped++
-	}
-
-	res.Details = fmt.Sprintf("Scanned for orphaned container shims; terminated %d processes", reaped)
 	return nil
 }
 

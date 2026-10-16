@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -35,7 +38,7 @@ var criticalServiceDenylist = map[string]bool{
 	"ssh":              true,
 	"networking":       true,
 	"systemd-networkd": true,
-	"NetworkManager":   true,
+	"networkmanager":   true,
 	"dbus":             true,
 	"udev":             true,
 	"init":             true,
@@ -70,7 +73,7 @@ func (nr *NodeRemediator) AddAllowedServices(services []string) {
 			if !validServiceNamePattern.MatchString(name) {
 				continue
 			}
-			if criticalServiceDenylist[name] {
+			if criticalServiceDenylist[strings.ToLower(name)] {
 				continue
 			}
 			nr.allowedServices[name] = true
@@ -87,7 +90,7 @@ func (nr *NodeRemediator) IsServiceAllowed(service string) bool {
 	if service == "" || len(service) > 64 || strings.HasPrefix(service, "-") {
 		return false
 	}
-	if criticalServiceDenylist[service] {
+	if criticalServiceDenylist[strings.ToLower(service)] {
 		return false
 	}
 	if !validServiceNamePattern.MatchString(service) {
@@ -232,4 +235,72 @@ func detectUnhealthyContainers(ctx context.Context, runner CommandRunner) []Unhe
 	}
 
 	return results
+}
+
+func parseZombiePPID(statStr string) (ppid int, isZombie bool) {
+	lastParen := strings.LastIndex(statStr, ")")
+	if lastParen == -1 || lastParen+3 >= len(statStr) {
+		return 0, false
+	}
+	rem := strings.TrimSpace(statStr[lastParen+1:])
+	if len(rem) < 1 || rem[0] != 'Z' {
+		return 0, false
+	}
+	rem = strings.TrimSpace(rem[1:])
+	fields := strings.Fields(rem)
+	if len(fields) == 0 {
+		return 0, true
+	}
+	parsed, err := strconv.Atoi(fields[0])
+	if err != nil {
+		return 0, true
+	}
+	return parsed, true
+}
+
+func (nr *NodeRemediator) executeReapZombies(ctx context.Context, res *RemediationActionResult) error {
+	reaped := 0
+	entries, err := os.ReadDir(nr.procPath)
+	if err != nil {
+		res.Details = "No processes scanned"
+		return nil
+	}
+
+	uniquePPIDs := make(map[int]bool)
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		pid := entry.Name()
+		if len(pid) == 0 || pid[0] < '0' || pid[0] > '9' {
+			continue
+		}
+		statBytes, err := os.ReadFile(filepath.Join(nr.procPath, pid, "stat"))
+		if err != nil {
+			continue
+		}
+		statStr := string(statBytes)
+		if strings.Contains(statStr, "shim") || strings.Contains(statStr, "containerd") {
+			ppid, isZombie := parseZombiePPID(statStr)
+			if isZombie {
+				if ppid > 1 {
+					uniquePPIDs[ppid] = true
+				} else {
+					// Fallback to kill -9 <pid> when ppid <= 1
+					_, _ = nr.runner.Run(ctx, "kill", "-9", pid)
+					reaped++
+				}
+			}
+		}
+	}
+
+	// Wake each unique parent with SIGCHLD to reap zombie children
+	for ppid := range uniquePPIDs {
+		_, _ = nr.runner.Run(ctx, "kill", "-s", "CHLD", strconv.Itoa(ppid))
+		reaped++
+	}
+
+	res.Details = fmt.Sprintf("Scanned for orphaned container shims; terminated %d processes", reaped)
+	return nil
 }
