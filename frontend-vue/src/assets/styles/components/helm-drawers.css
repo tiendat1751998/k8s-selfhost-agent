@@ -39,8 +39,8 @@
 .cyber-textarea {
   width: 100%;
   padding: 10px 12px;
-  background: #090c10;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   color: var(--text-primary);
   font-family: var(--font-mono);
@@ -96,7 +96,7 @@
   gap: 10px;
   margin-top: 10px;
   padding-top: 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 /* Repository Presets Chips */
@@ -112,8 +112,8 @@
   border-radius: 6px;
   font-size: 11px;
   font-weight: 500;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-subtle);
   color: var(--text-secondary);
   cursor: pointer;
   display: inline-flex;
@@ -142,9 +142,9 @@
   justify-content: center;
   gap: 12px;
   padding: 12px 16px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--color-surface-card);
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .step-badge {
@@ -164,7 +164,7 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-surface-elevated);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -180,7 +180,7 @@
 .step-connector {
   width: 32px;
   height: 2px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-border-subtle);
 }
 
 .step-connector.active {
@@ -208,8 +208,8 @@
 .summary-card {
   padding: 16px;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -257,8 +257,8 @@
 .release-header-card {
   padding: 16px;
   border-radius: 12px;
-  background: rgba(18, 24, 38, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -325,7 +325,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--color-border-subtle);
   padding-bottom: 8px;
 }
 
@@ -342,7 +342,7 @@
 }
 
 .subtab-btn:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-surface-elevated);
   color: var(--text-primary);
 }
 
@@ -379,13 +379,13 @@
 .cyber-code-block {
   padding: 14px;
   border-radius: 8px;
-  background: #080b11;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   overflow-x: auto;
   font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.5;
-  color: #e2e8f0;
+  color: var(--color-body);
   max-height: 500px;
 }
 

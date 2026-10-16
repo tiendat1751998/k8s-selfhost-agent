@@ -159,8 +159,8 @@ function formatDate(d?: string): string {
   width: 100%;
   border-radius: 14px;
   overflow-x: auto;
-  background: rgba(11, 15, 25, 0.65);
-  border: 1px solid var(--border-subtle);
+  background: var(--color-surface-card, rgba(11, 15, 25, 0.65));
+  border: 1px solid var(--color-border-subtle, var(--border-subtle));
 }
 
 table,
@@ -172,24 +172,24 @@ table,
 }
 
 .services-table th {
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--color-surface-inset, rgba(0, 0, 0, 0.4));
   padding: 12px 16px;
   font-size: 10px;
   font-weight: 700;
   color: var(--text-muted);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--color-border-subtle, var(--border-subtle));
 }
 
 .services-table td {
   padding: 12px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--color-border-subtle, var(--border-subtle));
   vertical-align: middle;
 }
 
 .services-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-surface-hover, rgba(255, 255, 255, 0.02));
 }
 
 .svc-table-name-cell {
@@ -210,7 +210,7 @@ table,
 
 .svc-table-name {
   font-weight: 700;
-  color: var(--color-text-main, #f8fafc);
+  color: var(--color-heading, #f8fafc);
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -233,7 +233,7 @@ table,
 }
 
 .port-tag {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-surface-elevated, rgba(255, 255, 255, 0.06));
   padding: 2px 6px;
   border-radius: 4px;
   color: var(--accent-cyan);
@@ -268,11 +268,11 @@ table,
 .btn-logs {
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-subtle);
+  background: var(--color-surface-elevated, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--color-border-subtle, var(--border-subtle));
   color: var(--text-secondary);
 }
-.btn-logs:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.btn-logs:hover { background: var(--color-surface-hover, rgba(255, 255, 255, 0.12)); color: var(--color-heading, #fff); }
 
 .btn-remove {
   cursor: pointer;

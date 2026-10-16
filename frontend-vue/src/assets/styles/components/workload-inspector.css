@@ -16,7 +16,7 @@
 .insp-tab {
   padding: 6px 12px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-surface-elevated);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   font-size: 11px;
@@ -26,8 +26,8 @@
 }
 
 .insp-tab:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--color-surface-inset);
+  color: var(--color-body);
 }
 
 .insp-tab.insp-tab-active {
@@ -47,10 +47,10 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--color-surface-card);
   padding: 14px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .spec-row {
@@ -59,7 +59,7 @@
   align-items: center;
   font-size: 11px;
   padding-bottom: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .spec-row:last-child {
@@ -72,7 +72,7 @@
 }
 
 .spec-val {
-  color: #fff;
+  color: var(--color-body);
   font-weight: 500;
 }
 
@@ -109,10 +109,10 @@
   width: 100%;
   padding-left: 26px;
   font-size: 11px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
-  color: #fff;
+  color: var(--color-body);
 }
 
 .logs-search-clear {
@@ -144,8 +144,8 @@
 .logs-terminal-window {
   border-radius: 10px;
   overflow: hidden;
-  background: #090d16;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0b0f17;
+  border: 1px solid var(--color-border-subtle);
 }
 
 .logs-terminal-titlebar {
@@ -153,8 +153,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: #0f172a;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--color-surface-card);
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .terminal-dots {
@@ -202,7 +202,7 @@
 .terminal-log-row {
   display: flex;
   gap: 10px;
-  color: #cbd5e1;
+  color: #f8fafc;
 }
 
 .log-row-num {
@@ -244,10 +244,10 @@
 }
 
 .yaml-viewer {
-  background: #090d16;
+  background: var(--color-surface-inset);
   padding: 12px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--color-border-subtle);
   font-size: 11px;
   color: #38bdf8;
   max-height: 380px;

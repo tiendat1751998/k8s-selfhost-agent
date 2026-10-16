@@ -196,8 +196,8 @@ onUnmounted(() => {
   position: relative;
   width: 100%;
   padding: 12px;
-  background: rgba(15, 23, 42, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--color-surface-inset, rgba(15, 23, 42, 0.4));
+  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.06));
   border-radius: 8px;
   box-sizing: border-box;
 }
@@ -212,7 +212,7 @@ onUnmounted(() => {
   position: fixed;
   z-index: 9999;
   pointer-events: none;
-  background: rgba(15, 23, 42, 0.95);
+  background: var(--color-surface-card, rgba(15, 23, 42, 0.95));
   border: 1px solid rgba(56, 189, 248, 0.3);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   border-radius: 6px;
@@ -220,7 +220,7 @@ onUnmounted(() => {
   min-width: 160px;
   font-size: 0.75rem;
 }
-.tooltip-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-weight: 600; color: #f8fafc; }
+.tooltip-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-weight: 600; color: var(--color-heading, #f8fafc); }
 .status-dot { width: 6px; height: 6px; border-radius: 9999px; background: #10b981; }
 .status-dot.offline, .status-dot.down, .status-dot.critical { background: #f43f5e; }
 .status-dot.warning { background: #f59e0b; }
@@ -228,7 +228,7 @@ onUnmounted(() => {
 .tooltip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
 .tooltip-item { display: flex; justify-content: space-between; }
 .tooltip-item.full { grid-column: span 2; }
-.label { color: #94a3b8; font-size: 0.6875rem; font-weight: 600; }
-.val { color: #e2e8f0; font-weight: 700; }
+.label { color: var(--color-muted, #94a3b8); font-size: 0.6875rem; font-weight: 600; }
+.val { color: var(--color-body, #e2e8f0); font-weight: 700; }
 .tabular-nums { font-variant-numeric: tabular-nums; }
 </style>

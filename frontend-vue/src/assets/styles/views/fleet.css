@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    Fleet View Page Shell & Layout
    frontend-vue/src/assets/styles/views/fleet.css
    ========================================================================== */
@@ -45,7 +45,7 @@
     justify-content: space-between;
     height: 44px;
     padding: 0 12px;
-    background: rgba(15, 23, 42, 0.85);
+    background: var(--color-surface-card);
     border: 1px solid var(--border-subtle);
     border-radius: 10px;
     backdrop-filter: blur(12px);
@@ -58,7 +58,7 @@
     gap: 6px;
     font-size: 13px;
     font-weight: 700;
-    color: #fff;
+    color: var(--color-body);
   }
   .mobile-badge-pill {
     font-size: 11px;

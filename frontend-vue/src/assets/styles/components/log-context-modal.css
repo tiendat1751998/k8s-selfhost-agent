@@ -15,8 +15,8 @@
   max-width: 96vw;
   height: 80vh;
   max-height: 800px;
-  background: #080c16;
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: var(--color-surface-card, #080c16);
+  border: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.25));
   border-radius: 10px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9);
   display: flex;
@@ -27,8 +27,8 @@
 .context-modal-header {
   height: 44px;
   padding: 0 16px;
-  background: rgba(15, 23, 42, 0.95);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+  background: var(--color-surface-elevated, rgba(15, 23, 42, 0.95));
+  border-bottom: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.15));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -44,7 +44,7 @@
 .context-modal-title {
   font-size: 13px;
   font-weight: 700;
-  color: #f8fafc;
+  color: var(--color-heading, #f8fafc);
 }
 
 .context-service-pill {
@@ -66,9 +66,9 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: rgba(30, 41, 59, 0.8);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  color: #94a3b8;
+  background: var(--color-surface-elevated, rgba(30, 41, 59, 0.8));
+  border: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.2));
+  color: var(--color-muted, #94a3b8);
   font-size: 11px;
   padding: 4px 10px;
   border-radius: 4px;
@@ -85,15 +85,15 @@
 .context-btn-close {
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--color-muted, #94a3b8);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
 }
 
 .context-btn-close:hover {
-  color: #f8fafc;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-heading, #f8fafc);
+  background: var(--color-surface-hover, rgba(255, 255, 255, 0.1));
 }
 
 .context-target-meta {
@@ -117,11 +117,11 @@
 }
 
 .meta-timestamp {
-  color: #94a3b8;
+  color: var(--color-muted, #94a3b8);
 }
 
 .meta-preview {
-  color: #f1f5f9;
+  color: var(--color-body, #f1f5f9);
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -130,7 +130,7 @@
   flex: 1;
   overflow-y: auto;
   padding: 8px 12px;
-  background: #080c16;
+  background: var(--color-surface-inset, #080c16);
 }
 
 .context-log-row {
@@ -145,7 +145,7 @@
 }
 
 .context-log-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-surface-hover, rgba(255, 255, 255, 0.04));
 }
 
 .context-target-line {
@@ -203,7 +203,7 @@
 }
 
 .context-msg {
-  color: #e2e8f0;
+  color: var(--color-body, #e2e8f0);
   flex: 1;
   word-break: break-word;
   white-space: pre-wrap;
@@ -222,8 +222,8 @@
 .context-modal-footer {
   height: 40px;
   padding: 0 16px;
-  background: rgba(15, 23, 42, 0.85);
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  background: var(--color-surface-elevated, rgba(15, 23, 42, 0.85));
+  border-top: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.12));
   display: flex;
   align-items: center;
   justify-content: space-between;

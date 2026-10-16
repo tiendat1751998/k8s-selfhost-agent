@@ -4,8 +4,8 @@
 .log-target-tree {
   display: flex;
   flex-direction: column;
-  background: #0f172a;
-  border: 1px solid #1e293b;
+  background: var(--color-surface-card, #0f172a);
+  border: 1px solid var(--color-border-subtle, #1e293b);
   border-radius: 8px;
   overflow: hidden;
   height: 100%;
@@ -18,8 +18,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  background: #131b2e;
-  border-bottom: 1px solid #1e293b;
+  background: var(--color-surface-elevated, #131b2e);
+  border-bottom: 1px solid var(--color-border-subtle, #1e293b);
 }
 
 .tree-title {
@@ -30,7 +30,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #94a3b8;
+  color: var(--color-muted, #94a3b8);
 }
 
 .tree-badge {
@@ -47,8 +47,8 @@
   display: flex;
   align-items: center;
   padding: 6px 8px;
-  background: #0b0f19;
-  border-bottom: 1px solid #1e293b;
+  background: var(--color-surface-inset, #0b0f19);
+  border-bottom: 1px solid var(--color-border-subtle, #1e293b);
 }
 
 .tree-search-ico {
@@ -65,10 +65,10 @@
   padding-left: 32px;
   padding-right: 22px;
   font-size: 11px;
-  background: #131b2e;
-  border: 1px solid #1e293b;
+  background: var(--color-surface-inset, #131b2e);
+  border: 1px solid var(--color-border-subtle, #1e293b);
   border-radius: 6px;
-  color: #f8fafc;
+  color: var(--color-body, #f8fafc);
   outline: none;
   transition: border-color 0.15s ease;
 }
@@ -89,7 +89,7 @@
 }
 
 .tree-search-clear:hover {
-  color: #f8fafc;
+  color: var(--color-heading, #f8fafc);
 }
 
 .tree-content {
@@ -110,15 +110,15 @@
   background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
-  color: #94a3b8;
+  color: var(--color-muted, #94a3b8);
   text-align: left;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .tree-item:hover {
-  background: #1e293b;
-  color: #f8fafc;
+  background: var(--color-surface-hover, #1e293b);
+  color: var(--color-heading, #f8fafc);
 }
 
 .tree-item.active {
@@ -128,7 +128,7 @@
 }
 
 .tree-item.active .item-name {
-  color: #f8fafc;
+  color: var(--color-heading, #f8fafc);
   font-weight: 700;
 }
 
@@ -182,16 +182,16 @@
 .item-count {
   font-size: 10px;
   padding: 1px 6px;
-  background: #131b2e;
-  border: 1px solid #1e293b;
+  background: var(--color-surface-inset, #131b2e);
+  border: 1px solid var(--color-border-subtle, #1e293b);
   border-radius: 4px;
   color: #64748b;
 }
 
 .item-count.has-logs {
-  color: #94a3b8;
-  background: #1e293b;
-  border-color: #334155;
+  color: var(--color-heading, #94a3b8);
+  background: var(--color-surface-elevated, #1e293b);
+  border-color: var(--color-border-strong, #334155);
 }
 
 .tree-item.active .item-count {
@@ -222,7 +222,7 @@
 }
 
 .section-toggle:hover {
-  color: #cbd5e1;
+  color: var(--color-heading, #cbd5e1);
 }
 
 .section-caret {
@@ -241,8 +241,8 @@
 
 .section-count {
   font-size: 9px;
-  background: #131b2e;
-  border: 1px solid #1e293b;
+  background: var(--color-surface-inset, #131b2e);
+  border: 1px solid var(--color-border-subtle, #1e293b);
   padding: 0 4px;
   border-radius: 3px;
 }

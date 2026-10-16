@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    Fleet Clusters Table, Grid & Mobile Stream Styles
    frontend-vue/src/assets/styles/components/fleet-table.css
    ========================================================================== */
@@ -12,7 +12,7 @@
 }
 .table-box { padding: 0; overflow: hidden; }
 .box-header { display: flex; align-items: center; justify-content: space-between; }
-.box-title { font-size: 16px; font-weight: 700; color: #fff; }
+.box-title { font-size: 16px; font-weight: 700; color: var(--color-body); }
 .box-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
 /* Ensure FleetClustersTable fits 100% of viewport width without horizontal scrollbar on 1440px desktop */
@@ -29,8 +29,8 @@
   font-weight: 600;
   font-size: 10px;
   padding: 3px 8px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 4px;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -56,25 +56,25 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  background: rgba(11, 15, 25, 0.6);
+  background: var(--color-surface-card);
   border: 1px solid var(--border-subtle);
 }
 .card-top { display: flex; align-items: flex-start; justify-content: space-between; }
 .cluster-brand { display: flex; align-items: center; gap: 10px; }
 .cluster-icon { font-size: 24px; color: var(--accent-cyan); }
-.cluster-title { font-size: 15px; font-weight: 700; color: #fff; }
+.cluster-title { font-size: 15px; font-weight: 700; color: var(--color-body); }
 .cluster-group { font-size: 11px; color: var(--text-muted); }
 .card-body-meta {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--color-surface-inset);
   padding: 10px 12px;
   border-radius: 10px;
 }
 .meta-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
 .meta-lbl { color: var(--text-muted); }
-.meta-val { font-weight: 600; }
+.meta-val { font-weight: 600; color: var(--color-body); }
 .card-actions { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
 .btn-remove:hover {
   background: rgba(244, 63, 94, 0.2);
@@ -102,7 +102,7 @@
   justify-content: center;
 }
 .empty-icon { font-size: 32px; color: var(--accent-cyan); }
-.empty-title { font-size: 18px; font-weight: 700; color: #fff; }
+.empty-title { font-size: 18px; font-weight: 700; color: var(--color-body); }
 .empty-desc {
   font-size: 13px;
   color: var(--text-secondary);
@@ -123,12 +123,12 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: rgba(11, 15, 25, 0.6);
+  background: var(--color-surface-card);
   border: 1px solid var(--border-subtle);
 }
 .feature-header { display: flex; align-items: center; gap: 8px; }
 .feature-badge-icon { font-size: 18px; }
-.feature-heading { font-size: 13px; font-weight: 700; color: #fff; }
+.feature-heading { font-size: 13px; font-weight: 700; color: var(--color-body); }
 .feature-text { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
 .empty-actions { margin-top: 12px; }
 .btn-lg { padding: 10px 24px; font-size: 14px; font-weight: 700; }
@@ -148,7 +148,7 @@
   box-sizing: border-box;
   padding: 10px 12px;
   border-radius: 10px;
-  background: rgba(11, 15, 25, 0.65);
+  background: var(--color-surface-card);
   border: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
@@ -159,12 +159,12 @@
   overflow-x: hidden;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
-.mobile-stream-item:hover { border-color: rgba(6, 182, 212, 0.4); background: rgba(15, 23, 42, 0.85); }
+.mobile-stream-item:hover { border-color: rgba(6, 182, 212, 0.4); background: var(--color-surface-elevated); }
 .mobile-stream-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
 .mobile-stream-header { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .cluster-icon-mini { font-size: 14px; color: var(--accent-cyan); flex-shrink: 0; }
 .mobile-stream-name {
-  font-size: 13px; font-weight: 700; color: #fff;
+  font-size: 13px; font-weight: 700; color: var(--color-body);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
 }
 .mobile-stream-sub {

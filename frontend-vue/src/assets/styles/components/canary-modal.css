@@ -16,7 +16,7 @@
   flex: 1;
   padding: 8px 12px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-surface-elevated);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   font-size: 12px;
@@ -27,8 +27,8 @@
 }
 
 .strat-tab-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--color-surface-inset);
+  color: var(--color-body);
 }
 
 .strat-tab-btn.strat-active {
@@ -57,7 +57,7 @@
 .strat-title {
   font-size: 14px;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-body);
   margin: 0;
 }
 
@@ -83,8 +83,8 @@
   border-radius: 6px;
   overflow: hidden;
   margin-bottom: 12px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   font-size: 10px;
   font-weight: 600;
 }
@@ -127,8 +127,8 @@
 
 .preset-pill {
   padding: 4px 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
   color: var(--text-secondary);
   font-size: 11px;
@@ -136,8 +136,8 @@
 }
 
 .preset-pill:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--color-surface-inset);
+  color: var(--color-body);
 }
 
 .tracks-comparison-grid {
@@ -150,8 +150,8 @@
 .track-card {
   padding: 10px;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -165,7 +165,7 @@
 }
 
 .track-image {
-  color: #fff;
+  color: var(--color-body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -199,8 +199,8 @@
 .bg-track-box {
   padding: 12px;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -229,7 +229,7 @@
 .bg-env-name {
   font-size: 11px;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-body);
   flex: 1;
 }
 
@@ -244,7 +244,7 @@
 
 .standby-pill {
   font-size: 9px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-elevated);
   color: var(--text-muted);
   padding: 1px 5px;
   border-radius: 4px;
@@ -268,7 +268,7 @@
 .rev-title {
   font-size: 12px;
   font-weight: 600;
-  color: #fff;
+  color: var(--color-body);
 }
 
 .revisions-btns {
@@ -290,8 +290,8 @@
   gap: 8px;
   padding: 6px 10px;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .rev-item.is-current {
@@ -299,7 +299,7 @@
 }
 
 .rev-num {
-  color: #fff;
+  color: var(--color-body);
 }
 
 .rev-img {
