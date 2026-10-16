@@ -101,6 +101,9 @@ spec:
                 secretKeyRef:
                   name: k8s-control-agent-auth
                   key: token
+            # Optional central Control Plane URL for agent auto-registration
+            - name: CONTROL_PLANE_URL
+              value: ""
           ports:
             - name: metrics
               containerPort: 9100
@@ -108,11 +111,11 @@ spec:
               protocol: TCP
           resources:
             requests:
-              cpu: 50m
-              memory: 64Mi
+              cpu: 25m
+              memory: 25Mi
             limits:
-              cpu: 250m
-              memory: 128Mi
+              cpu: 150m
+              memory: 50Mi
           livenessProbe:
             httpGet:
               path: /health
