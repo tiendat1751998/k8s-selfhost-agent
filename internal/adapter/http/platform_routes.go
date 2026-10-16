@@ -137,6 +137,9 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 		r.With(mutRoles).Route("/docker", platform.Docker.RegisterRoutes)
 		r.With(mutRoles).Route("/hosts", platform.Docker.RegisterHostRoutes)
 	}
+	if platform.HostRemediation != nil {
+		r.With(mutRoles).Post("/k8s/nodes/{node}/remediate", platform.HostRemediation.RemediateNode)
+	}
 	if platform.Overview != nil {
 		r.With(mutRoles).Route("/overview", platform.Overview.RegisterRoutes)
 		r.With(mutRoles).Route("/metrics", func(mr chi.Router) {
