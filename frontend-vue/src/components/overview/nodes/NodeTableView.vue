@@ -276,7 +276,7 @@ function getNodePing(node: NodeMetrics): number {
 </template>
 
 <style scoped>
-.node-table { table-layout: fixed !important; width: 100% !important; max-width: 1030px !important; }
+.node-table { table-layout: fixed !important; width: 100% !important; }
 .node-table th { padding: 6px 8px !important; }
 .node-table td { padding: 2px 8px !important; }
 .col-actions { width: 44px !important; min-width: 40px !important; max-width: 48px !important; text-align: center !important; }

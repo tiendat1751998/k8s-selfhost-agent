@@ -280,7 +280,7 @@
 
 
 /* === HostCard.vue === */
-.host-card { padding: 14px; border-radius: 12px; display: flex; flex-direction: column; gap: 10px; background: rgba(11, 15, 25, 0.7); border: 1px solid var(--border-subtle); transition: all 0.2s ease; }
+.host-card { padding: 14px; border-radius: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-card); border: 1px solid var(--border-subtle); transition: all 0.2s ease; }
 .host-card:hover { border-color: var(--border-medium); }
 .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .card-title-group { display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1; min-width: 0; }

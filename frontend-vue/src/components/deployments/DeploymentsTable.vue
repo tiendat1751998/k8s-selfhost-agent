@@ -216,7 +216,6 @@ function handleActionSelect(actionId: string, app: DeploymentApp) {
 :deep(table) {
   table-layout: fixed !important;
   width: 100% !important;
-  max-width: 1070px !important;
 }
 
 :deep(th),
