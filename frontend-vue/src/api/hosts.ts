@@ -183,17 +183,28 @@ export interface UnhealthyContainer {
 
 export interface NodeK8sHealthReport {
   node_name: string
-  timestamp: string
+  timestamp?: string
+  checked_at?: string
   kubelet_healthy: boolean
-  kubelet_status: string
-  container_runtime: string
-  runtime_healthy: boolean
-  runtime_socket_path: string
-  d_state_count: number
+  kubelet_status?: string
+  container_runtime?: string
+  runtime_healthy?: boolean
+  containerd_healthy?: boolean
+  docker_healthy?: boolean
+  crio_healthy?: boolean
+  runtime_socket_path?: string
+  cri_socket_path?: string
+  d_state_count?: number
+  d_state_processes?: number
   zombie_count: number
-  stuck_shim_count: number
-  anomalies: string[]
+  stuck_shim_count?: number
+  anomalies?: string[]
+  detected_anomalies?: string[]
   unhealthy_containers?: UnhealthyContainer[]
+  disk_pressure?: boolean
+  inode_pressure?: boolean
+  memory_pressure?: boolean
+  pid_pressure?: boolean
 }
 
 export interface RemediationRequest {
@@ -205,10 +216,14 @@ export interface RemediationRequest {
 export interface RemediationResult {
   action: string
   target?: string
-  status: string
-  output: string
+  success?: boolean
+  status?: string
+  details?: string
+  output?: string
   bytes_freed?: number
-  executed_at: string
+  inodes_freed?: number
+  executed_at?: string
+  timestamp?: string
   duration_ms: number
 }
 
