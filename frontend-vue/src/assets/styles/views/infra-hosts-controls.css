@@ -273,8 +273,8 @@
 }
 
 .mode-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  background: var(--color-surface-hover);
 }
 
 .mode-btn-active {
@@ -307,9 +307,9 @@
 }
 
 .toolbar-btn-refresh:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.25);
+  background: var(--color-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--color-border-strong);
 }
 
 /* CNCF Kubernetes Blue Primary Add Host Button */

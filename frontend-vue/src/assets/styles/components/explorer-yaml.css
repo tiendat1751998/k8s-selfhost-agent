@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    Explorer - YAML/Manifest Viewer & Editor Stylesheet
    Decomposed sub-sheet - Target < 350 lines
    De-neonized: clean 1px borders, zero glowing drop-shadows
@@ -14,7 +14,7 @@
 .btn-yaml:hover {
   border-color: #6366f1;
   background: rgba(99, 102, 241, 0.15);
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .yaml-actions-row,

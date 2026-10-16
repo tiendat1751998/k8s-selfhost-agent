@@ -79,7 +79,18 @@ a.btn-cyber {
 .btn-outline-cyan:hover {
   background: rgba(56, 189, 248, 0.15);
   border-color: #38bdf8;
-  color: #fff;
+  color: var(--text-primary);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  color: var(--text-primary);
 }
 
 /* btn-xs: still 32px minimum, just less padding */

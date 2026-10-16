@@ -14,7 +14,7 @@
 .meta-label { color: var(--color-muted, #707a8a); }
 .text-cyan { color: #00f0ff; }
 .text-violet { color: #b794f4; }
-.text-white { color: #ffffff; }
+.text-white { color: var(--text-primary); }
 
 .action-card {
   padding: 12px;

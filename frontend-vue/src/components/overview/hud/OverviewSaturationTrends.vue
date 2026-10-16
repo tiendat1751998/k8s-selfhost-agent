@@ -217,13 +217,13 @@ const {
                 stroke-dasharray="3 3"
               />
               <g>
-                <circle :cx="hoverCoords.x" :cy="hoverCoords.yCpu" r="5" fill="#161f30" stroke="#3b82f6" stroke-width="2" />
+                <circle :cx="hoverCoords.x" :cy="hoverCoords.yCpu" r="5" fill="var(--bg-card)" stroke="#3b82f6" stroke-width="2" />
               </g>
               <g>
-                <circle :cx="hoverCoords.x" :cy="hoverCoords.yMem" r="5" fill="#161f30" stroke="#0284c7" stroke-width="2" />
+                <circle :cx="hoverCoords.x" :cy="hoverCoords.yMem" r="5" fill="var(--bg-card)" stroke="#0284c7" stroke-width="2" />
               </g>
               <g>
-                <circle :cx="hoverCoords.x" :cy="hoverCoords.yReq" r="5" fill="#161f30" stroke="#10b981" stroke-width="2" />
+                <circle :cx="hoverCoords.x" :cy="hoverCoords.yReq" r="5" fill="var(--bg-card)" stroke="#10b981" stroke-width="2" />
               </g>
             </g>
           </svg>

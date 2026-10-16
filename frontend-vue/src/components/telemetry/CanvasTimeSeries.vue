@@ -187,7 +187,7 @@ function draw() {
     for (const it of items) {
       if (it.value !== null) {
         ctx.beginPath(); ctx.arc(pixelX, it.y, 4, 0, Math.PI * 2); ctx.fillStyle = it.color; ctx.fill()
-        ctx.lineWidth = 2; ctx.strokeStyle = '#0f172a'; ctx.stroke()
+        ctx.lineWidth = 2; ctx.strokeStyle = 'var(--bg-card)'; ctx.stroke()
       }
     }
     ctx.restore()
@@ -278,7 +278,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.canvas-timeseries-container { position: relative; width: 100%; user-select: none; overflow: hidden; border-radius: 6px; background: var(--color-surface-inset, rgba(15, 23, 42, 0.45)); }
+.canvas-timeseries-container { position: relative; width: 100%; user-select: none; overflow: hidden; border-radius: 6px; background: var(--color-surface-inset); }
 .canvas-timeseries { display: block; width: 100%; }
 .crosshair-tooltip-pill {
   position: absolute; pointer-events: none; transform: translateX(-50%);

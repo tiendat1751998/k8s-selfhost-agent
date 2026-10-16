@@ -112,7 +112,7 @@ html, body {
 /* Custom Scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--color-border-strong) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -125,14 +125,14 @@ html, body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--color-border-strong);
   border-radius: 9999px;
   border: 1px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.32);
+  background: var(--color-border-strong);
   border-radius: 9999px;
 }
 
@@ -350,8 +350,9 @@ textarea:focus-visible {
 }
 
 .btn-secondary:hover {
-  background: #334155;
+  background: var(--color-surface-hover, var(--bg-elevated));
   border-color: var(--border-accent);
+  color: var(--text-primary);
 }
 
 .btn-danger {

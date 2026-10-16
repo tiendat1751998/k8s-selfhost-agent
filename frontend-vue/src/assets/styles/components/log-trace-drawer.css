@@ -152,7 +152,11 @@
 
 .trace-jump-btn:hover {
   background: rgba(244, 63, 94, 0.3);
-  color: #ffffff;
+  color: var(--text-primary);
+}
+
+.span-row:hover .span-op-name {
+  color: var(--text-primary);
 }
 
 /* Timeline / Waterfall logs container */

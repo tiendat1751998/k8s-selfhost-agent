@@ -12,6 +12,7 @@ import LogContextModal from '../components/logs/LogContextModal.vue'
 import LogStreamToolbar from '../components/logs/LogStreamToolbar.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { LogFilterParams } from '../api/logging'
+import '../assets/styles/views/logstream.css'
 
 const { activeClusterId } = useGlobalContext()
 
@@ -330,8 +331,6 @@ function handleExport() {
 </template>
 
 <style scoped>
-@import '../assets/styles/views/logstream.css';
-
 :deep(.virtual-fps-badge) {
   white-space: nowrap !important;
   flex-shrink: 0 !important;

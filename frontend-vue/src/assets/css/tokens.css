@@ -16,11 +16,18 @@
   /* Visible Crisp Borders */
   --color-border-subtle: #243147;
   --color-border-strong: #384b6e;
+  --color-border-default: var(--color-border-subtle);
   --color-hairline: #243147;
   --border-subtle: 1px solid var(--color-border-subtle);
 
+  /* Semantic Surface Aliases */
+  --color-surface-hover: var(--color-surface-elevated);
+  --bg-canvas: var(--color-canvas-dark);
+  --color-ring: rgba(50, 108, 229, 0.25);
+
   /* High-Contrast WCAG AAA/AA Text & Syntax Colors */
   --color-body: #f8fafc;
+  --color-heading: var(--color-body);
   --color-muted-strong: #cbd5e1;
   --color-muted: #94a3b8;
   --color-on-dark: #ffffff;
@@ -124,17 +131,22 @@
   --color-canvas-dark: #f8fafc;
   --color-surface-inset: #f1f5f9;
   --color-surface-card: #ffffff;
-  --color-surface-elevated: #ffffff;
+  --color-surface-elevated: #f8fafc;
+  --color-surface-hover: #e2e8f0;
+  --bg-canvas: var(--color-canvas-dark);
+  --color-ring: rgba(29, 78, 216, 0.2);
 
   /* Borders */
   --color-border-subtle: #e2e8f0;
   --color-border-strong: #cbd5e1;
+  --color-border-default: var(--color-border-subtle);
   --color-hairline: #e2e8f0;
   --border-subtle: 1px solid var(--color-border-subtle);
 
   /* High-Contrast WCAG AAA/AA Text */
   --color-ink: #ffffff;
   --color-body: #0f172a;
+  --color-heading: var(--color-body);
   --color-muted-strong: #334155;
   --color-muted: #64748b;
   --color-on-dark: #0f172a;

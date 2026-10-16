@@ -252,7 +252,7 @@ function handleFirstFencing() {
   padding: 4px 12px;
   font-size: 11px;
   color: var(--text-muted, #6b7280);
-  background: var(--bg-canvas, #08090a);
+  background: var(--bg-app);
   border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
 }
 .tel-item {
