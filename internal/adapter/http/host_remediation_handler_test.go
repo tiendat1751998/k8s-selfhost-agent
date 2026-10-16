@@ -27,6 +27,8 @@ type mockRemediationClient struct {
 	resolvedHost    *docker.ComputeHost
 	resolvedToken   string
 	resolveErr      error
+	historyResp     []agent.RemediationResultDTO
+	historyErr      error
 }
 
 func (m *mockRemediationClient) GetNodeK8sHealth(ctx context.Context, hostEndpoint, authToken string) (*agent.NodeK8sHealthResponse, error) {
@@ -34,6 +36,13 @@ func (m *mockRemediationClient) GetNodeK8sHealth(ctx context.Context, hostEndpoi
 		return nil, m.healthErr
 	}
 	return m.healthResp, nil
+}
+
+func (m *mockRemediationClient) GetRemediationHistory(ctx context.Context, hostEndpoint, authToken string) ([]agent.RemediationResultDTO, error) {
+	if m.historyErr != nil {
+		return nil, m.historyErr
+	}
+	return m.historyResp, nil
 }
 
 func (m *mockRemediationClient) ExecuteRemediation(ctx context.Context, hostEndpoint, authToken string, req agent.RemediationRequest) (*agent.RemediationActionResult, error) {
@@ -71,6 +80,7 @@ func setupRemediationTestRouter(handler *adapthttp.HostRemediationHandler) chi.R
 		handler.RegisterRoutes(sub)
 	})
 	r.Post("/api/v1/k8s/nodes/{node}/remediate", handler.RemediateNode)
+	r.Get("/api/v1/k8s/nodes/{node}/remediate/history", handler.GetNodeRemediationHistory)
 	return r
 }
 
@@ -264,5 +274,131 @@ func TestHostRemediationHandler_RemediateNode_BadRequestReturns400(t *testing.T)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 Bad Request, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHostRemediationHandler_RemediateHost_RestartContainer_Success(t *testing.T) {
+	client := &mockRemediationClient{
+		actionResult: &agent.RemediationActionResult{
+			Success:    true,
+			Action:     "restart_container",
+			Target:     "calico-node-123",
+			DurationMs: 400,
+			Details:    "container calico-node-123 restarted",
+		},
+	}
+	handler := adapthttp.NewHostRemediationHandler(nil, client, nil)
+	router := setupRemediationTestRouter(handler)
+
+	payload := `{"action":"restart_container","target":"calico-node-123","reason":"pod recovery"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/hosts/worker-01/remediate", bytes.NewBufferString(payload))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	if client.lastAction.Action != "restart_container" || client.lastAction.Target != "calico-node-123" {
+		t.Errorf("unexpected action dispatched: %+v", client.lastAction)
+	}
+}
+
+func TestHostRemediationHandler_RemediateHost_RestartContainer_MissingTarget(t *testing.T) {
+	client := &mockRemediationClient{}
+	handler := adapthttp.NewHostRemediationHandler(nil, client, nil)
+	router := setupRemediationTestRouter(handler)
+
+	payload := `{"action":"restart_container","target":"","reason":"test missing target"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/hosts/worker-01/remediate", bytes.NewBufferString(payload))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request for missing target, got %d", rec.Code)
+	}
+}
+
+func TestHostRemediationHandler_GetHostRemediationHistory_Success(t *testing.T) {
+	client := &mockRemediationClient{
+		historyResp: []agent.RemediationResultDTO{
+			{
+				Success:    true,
+				Action:     "restart_container",
+				Target:     "coredns-test",
+				Status:     "success",
+				DurationMs: 150,
+				Details:    "restarted container",
+				Timestamp:  "2026-10-16T12:00:00Z",
+			},
+		},
+	}
+	handler := adapthttp.NewHostRemediationHandler(nil, client, nil)
+	router := setupRemediationTestRouter(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/hosts/worker-01/remediate/history", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Status string                      `json:"status"`
+		Data   []agent.RemediationResultDTO `json:"data"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed decoding json response: %v", err)
+	}
+	if resp.Status != "ok" {
+		t.Errorf("expected status ok, got %s", resp.Status)
+	}
+	if len(resp.Data) != 1 || resp.Data[0].Target != "coredns-test" {
+		t.Errorf("unexpected history data: %+v", resp.Data)
+	}
+}
+
+func TestHostRemediationHandler_GetNodeRemediationHistory_Success(t *testing.T) {
+	client := &mockRemediationClient{
+		historyResp: []agent.RemediationResultDTO{},
+	}
+	handler := adapthttp.NewHostRemediationHandler(nil, client, nil)
+	router := setupRemediationTestRouter(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/k8s/nodes/node-alpha/remediate/history", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Status string                      `json:"status"`
+		Data   []agent.RemediationResultDTO `json:"data"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed decoding json response: %v", err)
+	}
+	if resp.Status != "ok" || len(resp.Data) != 0 {
+		t.Errorf("unexpected empty history response: %+v", resp)
+	}
+}
+
+func TestHostRemediationHandler_GetHostRemediationHistory_BadGateway(t *testing.T) {
+	client := &mockRemediationClient{
+		historyErr: errors.New("connection refused"),
+	}
+	handler := adapthttp.NewHostRemediationHandler(nil, client, nil)
+	router := setupRemediationTestRouter(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/hosts/worker-01/remediate/history", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502 Bad Gateway, got %d (body: %s)", rec.Code, rec.Body.String())
 	}
 }

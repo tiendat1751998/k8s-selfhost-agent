@@ -1,0 +1,362 @@
+/* ==========================================================================
+   Host Self-Healing & Remediation Panel Styles (WCAG AA & 4-Tier RWD)
+   ========================================================================== */
+
+.remediation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.remediation-card {
+  padding: 16px;
+  background: var(--color-surface-card, #161f30);
+  border: 1px solid var(--color-border-subtle, #243147);
+  border-radius: 8px;
+  transition: border-color 0.15s ease;
+}
+
+.remediation-card:hover {
+  border-color: var(--color-border-strong, #384b6e);
+}
+
+.rem-header-flex {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rem-section-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--color-muted-strong, #cbd5e1);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Status Badges */
+.rem-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rem-badge.badge-healthy {
+  background: rgba(63, 185, 80, 0.15);
+  color: #3fb950;
+  border: 1px solid rgba(63, 185, 80, 0.35);
+}
+
+.rem-badge.badge-unhealthy {
+  background: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+  border: 1px solid rgba(248, 81, 73, 0.35);
+}
+
+.rem-badge.badge-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.rem-badge.badge-neutral {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+/* Section 1: Health Diagnostic Grid */
+.rem-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.rem-stat-cell {
+  background: var(--color-surface-inset, #111827);
+  border: 1px solid var(--color-hairline, #243147);
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rem-stat-lbl {
+  font-size: 10px;
+  color: var(--color-muted, #94a3b8);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rem-stat-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-body, #f8fafc);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Anomalies Alert Box */
+.rem-anomalies-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rem-anomaly-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 6px;
+  color: #fbbf24;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Section 2: Unhealthy Containers */
+.rem-container-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rem-container-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--color-surface-inset, #111827);
+  border: 1px solid rgba(248, 81, 73, 0.25);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.rem-container-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.rem-container-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f85149;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rem-container-meta {
+  font-size: 10px;
+  color: var(--color-muted, #94a3b8);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Section 3: Remediation Controls */
+.rem-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rem-service-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-subtle, #243147);
+}
+
+.rem-service-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rem-select,
+.rem-input {
+  background: var(--color-surface-inset, #111827);
+  border: 1px solid var(--color-border-subtle, #243147);
+  color: var(--color-body, #f8fafc);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.rem-select:focus,
+.rem-input:focus {
+  border-color: var(--color-primary, #326ce5);
+}
+
+.rem-select {
+  flex: 1;
+  min-width: 140px;
+}
+
+.rem-input {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* Inline Feedback Banner */
+.rem-feedback {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rem-feedback.feedback-success {
+  background: rgba(63, 185, 80, 0.1);
+  border: 1px solid rgba(63, 185, 80, 0.3);
+  color: #3fb950;
+}
+
+.rem-feedback.feedback-error {
+  background: rgba(248, 81, 73, 0.1);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+  color: #f85149;
+}
+
+.rem-feedback.feedback-cooldown {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+}
+
+.rem-feedback-header {
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rem-output-pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 120px;
+  overflow-y: auto;
+  color: var(--color-muted-strong, #cbd5e1);
+}
+
+/* Section 4: History Table */
+.rem-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rem-history-item {
+  background: var(--color-surface-inset, #111827);
+  border: 1px solid var(--color-hairline, #243147);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rem-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rem-history-action {
+  font-weight: 700;
+  color: var(--color-body, #f8fafc);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rem-history-meta {
+  color: var(--color-muted, #94a3b8);
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rem-history-output-toggle {
+  background: transparent;
+  border: none;
+  color: var(--color-primary-hover, #3b82f6);
+  cursor: pointer;
+  padding: 0;
+  font-size: 10px;
+  text-decoration: underline;
+}
+
+/* Mobile Responsiveness (Tier 1 < 640px) */
+@media (max-width: 640px) {
+  .rem-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .rem-service-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rem-quick-actions {
+    flex-direction: column;
+  }
+
+  .rem-quick-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .rem-container-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rem-container-item button {
+    align-self: flex-end;
+  }
+}

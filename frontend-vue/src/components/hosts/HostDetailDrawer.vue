@@ -2,6 +2,7 @@
 import BaseIcon from '../ui/BaseIcon.vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
+import HostRemediationPanel from './HostRemediationPanel.vue'
 import type { ComputeHost } from '../../api/compute'
 import type { HostTestResult, HostTestHistoryItem, HostTypeDefinition } from '../../types/hosts'
 
@@ -125,6 +126,11 @@ const emit = defineEmits<{
         <div v-else class="text-muted text-sm glass-panel" style="padding: 12px;">
           No placement labels assigned to this host.
         </div>
+      </div>
+
+      <!-- K8s & Self-Healing Remediation Panel -->
+      <div class="drawer-section">
+        <HostRemediationPanel :host-id="host.id" :host-status="host.status" />
       </div>
 
       <!-- Connection History (Last 10 tests) -->

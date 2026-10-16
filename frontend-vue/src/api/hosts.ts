@@ -169,6 +169,50 @@ export interface K8sResource {
 }
 
 // ==========================================
+// K8s & Node Remediation Interfaces
+// ==========================================
+
+export interface UnhealthyContainer {
+  id: string
+  name: string
+  image: string
+  state: string
+  status: string
+  restart_count: number
+}
+
+export interface NodeK8sHealthReport {
+  node_name: string
+  timestamp: string
+  kubelet_healthy: boolean
+  kubelet_status: string
+  container_runtime: string
+  runtime_healthy: boolean
+  runtime_socket_path: string
+  d_state_count: number
+  zombie_count: number
+  stuck_shim_count: number
+  anomalies: string[]
+  unhealthy_containers?: UnhealthyContainer[]
+}
+
+export interface RemediationRequest {
+  action: 'restart_service' | 'disk_pressure_cleanup' | 'cni_ipam_cleanup' | 'reap_zombies' | 'restart_container'
+  target?: string
+  reason?: string
+}
+
+export interface RemediationResult {
+  action: string
+  target?: string
+  status: string
+  output: string
+  bytes_freed?: number
+  executed_at: string
+  duration_ms: number
+}
+
+// ==========================================
 // API Clients Export
 // ==========================================
 
@@ -190,6 +234,24 @@ export const hostsApi = {
   },
   async testEndpoint(id: string): Promise<TestHostResponse> {
     return dockerApi.testHost(id)
+  },
+  async getK8sHealth(id: string): Promise<NodeK8sHealthReport> {
+    return api.get<NodeK8sHealthReport>(`/hosts/${id}/k8s-health`)
+  },
+  async remediate(id: string, payload: RemediationRequest): Promise<RemediationResult> {
+    return api.post<RemediationResult>(`/hosts/${id}/remediate`, payload)
+  },
+  async getRemediationHistory(id: string): Promise<RemediationResult[]> {
+    try {
+      const res = await api.get<RemediationResult[] | { data: RemediationResult[] }>(`/hosts/${id}/remediate/history`)
+      if (Array.isArray(res)) return res
+      if (res && Array.isArray((res as { data: RemediationResult[] }).data)) {
+        return (res as { data: RemediationResult[] }).data
+      }
+      return []
+    } catch {
+      return []
+    }
   },
 }
 
