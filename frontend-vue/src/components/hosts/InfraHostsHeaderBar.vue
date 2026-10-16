@@ -228,14 +228,14 @@ function handleFirstFencing() {
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
-  background: #f3f4f6 !important;
-  color: #08090a !important;
-  border: 1px solid #ffffff !important;
+  background: var(--color-primary, #326ce5) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, background 0.15s ease;
 }
 .btn-cmd-add:hover {
-  opacity: 0.9;
+  background: var(--color-primary-hover, #3b82f6) !important;
 }
 .hosts-micro-telemetry {
   display: flex;

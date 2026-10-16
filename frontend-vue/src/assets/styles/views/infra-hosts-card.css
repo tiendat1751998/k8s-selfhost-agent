@@ -11,6 +11,8 @@
   flex-direction: column;
   gap: 14px;
   border-radius: 14px;
+  background: var(--bg-card, #161f30);
+  border: 1px solid var(--color-border-subtle, #243147);
   transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   position: relative;
   overflow: hidden;
@@ -18,7 +20,7 @@
 
 .host-card:hover {
   transform: translateY(-1px);
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: var(--color-border-strong, rgba(255, 255, 255, 0.16));
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
@@ -83,22 +85,30 @@
   text-transform: uppercase;
 }
 
+.badge-k8s,
 .badge-cyan {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-primary, #f3f4f6);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  background: var(--color-badge-k8s-bg, rgba(50, 108, 229, 0.15));
+  color: var(--color-badge-k8s-text, #58a6ff);
+  border: 1px solid var(--color-badge-k8s-border, rgba(50, 108, 229, 0.40));
 }
 
+.badge-agent {
+  background: var(--color-badge-agent-bg, rgba(56, 189, 248, 0.15));
+  color: var(--color-badge-agent-text, #38bdf8);
+  border: 1px solid var(--color-badge-agent-border, rgba(56, 189, 248, 0.40));
+}
+
+.badge-docker,
 .badge-blue {
-  background: rgba(59, 130, 246, 0.12);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.35);
+  background: var(--color-badge-docker-bg, rgba(36, 150, 237, 0.15));
+  color: var(--color-badge-docker-text, #60a5fa);
+  border: 1px solid var(--color-badge-docker-border, rgba(36, 150, 237, 0.40));
 }
 
 .badge-purple {
-  background: rgba(168, 85, 247, 0.12);
-  color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.35);
+  background: var(--color-badge-metrics-bg, rgba(168, 85, 247, 0.15));
+  color: var(--color-badge-metrics-text, #c084fc);
+  border: 1px solid var(--color-badge-metrics-border, rgba(168, 85, 247, 0.40));
 }
 
 .badge-orange {
@@ -108,15 +118,15 @@
 }
 
 .badge-emerald {
-  background: rgba(16, 185, 129, 0.12);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.35);
+  background: var(--color-status-online-bg, rgba(46, 160, 67, 0.15));
+  color: var(--color-status-online, #3fb950);
+  border: 1px solid var(--color-status-online-border, rgba(63, 185, 80, 0.35));
 }
 
 .badge-amber {
-  background: rgba(245, 158, 11, 0.12);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: var(--color-status-warning-bg, rgba(245, 158, 11, 0.15));
+  color: var(--color-status-warning, #f59e0b);
+  border: 1px solid var(--color-status-warning-border, rgba(245, 158, 11, 0.35));
 }
 
 .badge-slate {
@@ -132,13 +142,16 @@
   justify-content: space-between;
   gap: 8px;
   padding: 8px 12px;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--color-surface-inset, rgba(0, 0, 0, 0.35));
+  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08));
   border-radius: 8px;
 }
 
 .endpoint-text {
+  font-family: var(--font-mono, monospace);
+  color: var(--color-endpoint-syntax, #58a6ff);
   font-size: 11px;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -240,8 +253,8 @@
 }
 
 .host-tag, .host-tag-sm {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--color-surface-inset, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08));
   color: var(--text-secondary, #94a3b8);
   border-radius: 4px;
   padding: 2px 6px;
@@ -261,7 +274,7 @@
   gap: 8px;
   margin-top: auto;
   padding-top: 10px;
-  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-top: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08));
 }
 
 .footer-btn-group {

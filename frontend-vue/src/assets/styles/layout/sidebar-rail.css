@@ -154,9 +154,9 @@
 
 /* Active route indicator on 64px rail */
 .sidebar.is-collapsed .nav-item.nav-active {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.10);
-  color: var(--text-primary, #f3f4f6);
+  background: rgba(50, 108, 229, 0.14);
+  border-color: rgba(50, 108, 229, 0.4);
+  color: var(--text-primary);
   box-shadow: none;
 }
 
@@ -166,14 +166,14 @@
   left: 0;
   top: 10px;
   bottom: 10px;
-  width: 2px;
-  background: #f3f4f6;
+  width: 3px;
+  background: var(--color-primary, #326ce5);
   border-radius: 0 2px 2px 0;
   box-shadow: none;
 }
 
 .sidebar.is-collapsed .nav-item.nav-active .nav-icon {
-  color: var(--text-primary, #f3f4f6);
+  color: var(--color-primary, #326ce5);
   filter: none;
 }
 
@@ -193,10 +193,10 @@
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  background: var(--bg-card, #141516);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  background: var(--bg-card);
+  border: 1px solid var(--border-medium);
   border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   pointer-events: none;
@@ -211,23 +211,23 @@
   transform: translateY(-50%) rotate(45deg);
   width: 8px;
   height: 8px;
-  background: var(--bg-card, #141516);
-  border-left: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  background: var(--bg-card);
+  border-left: 1px solid var(--border-medium);
+  border-bottom: 1px solid var(--border-medium);
 }
 
 .rail-tooltip-name {
   font-size: 12px;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--text-primary);
   letter-spacing: 0.02em;
 }
 
 .rail-tooltip-sub {
   font-size: 10px;
-  color: var(--text-muted, #94a3b8);
+  color: var(--text-muted);
   padding-left: 4px;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  border-left: 1px solid var(--border-subtle);
 }
 
 .rail-tooltip-badge {

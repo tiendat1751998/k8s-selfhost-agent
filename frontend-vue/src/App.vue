@@ -76,6 +76,13 @@ const showCommandPalette = ref(false)
 const mobileSidebarOpen = ref(false)
 const isSidebarCollapsed = ref(false)
 const showZeroTrustDrawer = ref(false)
+const uiTheme = ref<'dark' | 'light'>((localStorage.getItem('k8s_ui_theme') as 'dark' | 'light') || 'dark')
+
+function toggleTheme() {
+  uiTheme.value = uiTheme.value === 'dark' ? 'light' : 'dark'
+  document.documentElement.setAttribute('data-theme', uiTheme.value)
+  localStorage.setItem('k8s_ui_theme', uiTheme.value)
+}
 
 watch(() => route.path, () => {
   mobileSidebarOpen.value = false
@@ -153,6 +160,7 @@ watch(() => authStore.isAuthenticated, (authed) => {
 })
 
 onMounted(() => {
+  document.documentElement.setAttribute('data-theme', uiTheme.value)
   if (authStore.isAuthenticated) {
     backupStore.fetchAll().catch(() => {})
     securityStore.fetchAll().catch(() => {})
@@ -276,6 +284,17 @@ function handleNavigateToHost(nodeNameOrId: string) {
 
           <!-- Top HUD Global Alert Bell & Dropdown Toast -->
           <TopHudAlertBell />
+
+          <!-- 1-Click Dark/Light Theme Toggle (Visible on Desktop & Mobile) -->
+          <button
+            class="theme-toggle-btn"
+            type="button"
+            @click="toggleTheme"
+            :title="uiTheme === 'dark' ? 'Switch to Cloud Console Light Mode' : 'Switch to K8s Dark Mode'"
+            aria-label="Toggle color theme"
+          >
+            <BaseIcon :name="uiTheme === 'dark' ? 'sun' : 'moon'" size="xs" />
+          </button>
 
           <!-- Unified User Profile & Sign Out -->
           <div v-if="authStore.user" class="hud-user">

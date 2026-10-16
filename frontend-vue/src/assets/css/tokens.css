@@ -1,29 +1,75 @@
 :root {
-  --color-primary: #2563eb;
-  --color-primary-active: #1d4ed8;
+  /* Brand Accents - CNCF Kubernetes Blue */
+  --color-primary: #326ce5;
+  --color-primary-hover: #3b82f6;
+  --color-primary-active: #2563eb;
   --color-primary-disabled: #1e293b;
   --color-on-primary: #ffffff;
-  --color-canvas-dark: #08090a;
-  --color-surface-inset: #0f1011;
-  --color-surface-card: #141516;
-  --color-surface-elevated: #1a1b1e;
-  --color-ink: #08090a;
+
+  /* 4-Tier Deep Slate Surface Ladder (DevOps / GitHub Primer Dark Dimmed) */
+  --color-canvas-dark: #0b0f17;
+  --color-surface-inset: #111827;
+  --color-surface-card: #161f30;
+  --color-surface-elevated: #222f46;
+  --color-ink: #0b0f17;
+
+  /* Visible Crisp Borders */
+  --color-border-subtle: #243147;
+  --color-border-strong: #384b6e;
+  --color-hairline: #243147;
+  --border-subtle: 1px solid var(--color-border-subtle);
+
+  /* High-Contrast WCAG AAA/AA Text & Syntax Colors */
   --color-body: #f8fafc;
-  --color-muted: #94a3b8;
   --color-muted-strong: #cbd5e1;
+  --color-muted: #94a3b8;
   --color-on-dark: #ffffff;
   --color-text: var(--color-body);
-  --color-text-secondary: var(--color-muted);
-  --color-hairline: rgba(255, 255, 255, 0.08);
-  --border-subtle: 1px solid var(--color-hairline);
-  --color-trading-up: #10b981;
-  --color-trading-down: #ef4444;
-  --color-info: #3b82f6;
+  --color-text-secondary: var(--color-muted-strong);
+  --color-endpoint-syntax: #58a6ff;
+
+  /* Status Colors */
+  --color-trading-up: #3fb950;
+  --color-trading-down: #f85149;
+  --color-info: #58a6ff;
   --color-warning: #f59e0b;
+
+  /* Semantic Status & Protocol Pill Tokens (Dark Mode) */
+  --color-status-online: #3fb950;
+  --color-status-online-bg: rgba(46, 160, 67, 0.15);
+  --color-status-online-border: rgba(63, 185, 80, 0.35);
+
+  --color-status-warning: #f59e0b;
+  --color-status-warning-bg: rgba(245, 158, 11, 0.15);
+  --color-status-warning-border: rgba(245, 158, 11, 0.35);
+
+  --color-status-offline: #f85149;
+  --color-status-offline-bg: rgba(248, 81, 73, 0.15);
+  --color-status-offline-border: rgba(248, 81, 73, 0.35);
+
+  --color-badge-k8s-text: #58a6ff;
+  --color-badge-k8s-bg: rgba(50, 108, 229, 0.15);
+  --color-badge-k8s-border: rgba(50, 108, 229, 0.40);
+
+  --color-badge-agent-text: #38bdf8;
+  --color-badge-agent-bg: rgba(56, 189, 248, 0.15);
+  --color-badge-agent-border: rgba(56, 189, 248, 0.40);
+
+  --color-badge-docker-text: #60a5fa;
+  --color-badge-docker-bg: rgba(36, 150, 237, 0.15);
+  --color-badge-docker-border: rgba(36, 150, 237, 0.40);
+
+  --color-badge-metrics-text: #d2a8ff;
+  --color-badge-metrics-bg: rgba(163, 113, 247, 0.15);
+  --color-badge-metrics-border: rgba(163, 113, 247, 0.40);
+
+  /* Typography Fonts */
   --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Mono', 'Cascadia Code', 'Segoe UI Mono', 'Consolas', 'Menlo', monospace;
   --font-number: 'JetBrains Mono', 'Inter', monospace;
   --font-display: var(--font-sans);
+
+  /* Typography Scale */
   --text-hero: 48px;
   --text-display-lg: 36px;
   --text-display-sm: 28px;
@@ -40,6 +86,8 @@
   --text-desc-fluid: clamp(11.5px, 2.5vw, 13px);
   --text-tag-fluid: clamp(9.5px, 2vw, 11px);
   --text-number-fluid: clamp(20px, 5vw, 28px);
+
+  /* Spacing Scale */
   --space-xxs: 4px;
   --space-xs: 8px;
   --space-sm: 12px;
@@ -47,35 +95,85 @@
   --space-lg: 24px;
   --space-xl: 32px;
   --space-xxl: 48px;
+
+  /* Border Radii */
   --rounded-sm: 4px;
   --rounded-md: 6px;
   --rounded-lg: 8px;
   --rounded-xl: 12px;
   --rounded-pill: 9999px;
+
+  /* Transitions */
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
+
+  /* Breakpoints */
   --breakpoint-sm: 640px;
   --breakpoint-md: 768px;
   --breakpoint-lg: 1024px;
 }
+
 [data-theme="light"] {
-  --color-canvas-dark: #f6f8fa;
-  --color-surface-inset: #edf2f7;
+  /* Brand Accents - Cloud Console Light */
+  --color-primary: #1d4ed8;
+  --color-primary-hover: #2563eb;
+  --color-primary-active: #1e40af;
+  --color-on-primary: #ffffff;
+
+  /* 4-Tier Surface Ladder (Cloud Console Light) */
+  --color-canvas-dark: #f8fafc;
+  --color-surface-inset: #f1f5f9;
   --color-surface-card: #ffffff;
   --color-surface-elevated: #ffffff;
+
+  /* Borders */
+  --color-border-subtle: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-hairline: #e2e8f0;
+  --border-subtle: 1px solid var(--color-border-subtle);
+
+  /* High-Contrast WCAG AAA/AA Text */
   --color-ink: #ffffff;
-  --color-body: #181a20;
-  --color-muted: #5e6673;
-  --color-muted-strong: #474d57;
-  --color-on-dark: #1e2329;
-  --color-hairline: rgba(0, 0, 0, 0.08);
-  --border-subtle: 1px solid var(--color-hairline);
+  --color-body: #0f172a;
+  --color-muted-strong: #334155;
+  --color-muted: #64748b;
+  --color-on-dark: #0f172a;
   --color-text: var(--color-body);
-  --color-text-secondary: var(--color-muted);
-  --color-primary: #f0b90b;
-  --color-primary-active: #d4a20a;
-  --color-trading-up: #0ba360;
-  --color-trading-down: #dc3545;
-  --color-info: #2563eb;
-  --color-warning: #d97706;
+  --color-text-secondary: var(--color-muted-strong);
+  --color-endpoint-syntax: #0969da;
+
+  /* Status Colors */
+  --color-trading-up: #15803d;
+  --color-trading-down: #b91c1c;
+  --color-info: #1d4ed8;
+  --color-warning: #b45309;
+
+  /* Semantic Status & Protocol Pill Tokens (Light Mode) */
+  --color-status-online: #15803d;
+  --color-status-online-bg: #dcfce7;
+  --color-status-online-border: #86efac;
+
+  --color-status-warning: #b45309;
+  --color-status-warning-bg: #fef3c7;
+  --color-status-warning-border: #fcd34d;
+
+  --color-status-offline: #b91c1c;
+  --color-status-offline-bg: #fee2e2;
+  --color-status-offline-border: #fca5a5;
+
+  --color-badge-k8s-text: #1d4ed8;
+  --color-badge-k8s-bg: #eff6ff;
+  --color-badge-k8s-border: #bfdbfe;
+
+  --color-badge-agent-text: #0284c7;
+  --color-badge-agent-bg: #f0f9ff;
+  --color-badge-agent-border: #bae6fd;
+
+  --color-badge-docker-text: #0369a1;
+  --color-badge-docker-bg: #f0f9ff;
+  --color-badge-docker-border: #7dd3fc;
+
+  --color-badge-metrics-text: #6d28d9;
+  --color-badge-metrics-bg: #f5f3ff;
+  --color-badge-metrics-border: #ddd6fe;
 }
