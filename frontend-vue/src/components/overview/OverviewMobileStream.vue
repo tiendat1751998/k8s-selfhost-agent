@@ -126,9 +126,9 @@ const mobileMemArea = computed(() => {
             </linearGradient>
           </defs>
           <!-- Grid lines -->
-          <line x1="0" y1="8" x2="350" y2="8" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 3" />
-          <line x1="0" y1="45" x2="350" y2="45" stroke="rgba(255,255,255,0.04)" stroke-dasharray="3 3" />
-          <line x1="0" y1="82" x2="350" y2="82" stroke="rgba(255,255,255,0.08)" />
+          <line x1="0" y1="8" x2="350" y2="8" stroke="var(--color-border-subtle)" stroke-dasharray="3 3" />
+          <line x1="0" y1="45" x2="350" y2="45" stroke="var(--color-border-subtle)" stroke-dasharray="3 3" />
+          <line x1="0" y1="82" x2="350" y2="82" stroke="var(--color-border-subtle)" />
 
           <!-- Series Areas -->
           <path v-if="mobileMemArea" :d="mobileMemArea" fill="url(#mobileMemGrad)" />

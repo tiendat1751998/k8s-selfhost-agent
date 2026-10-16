@@ -143,10 +143,11 @@ onUnmounted(() => {
       @click="openDropdown('cluster')"
     >
       <span class="status-dot" :class="clusterStatusDotClass" />
-      <span class="pill-text font-mono">{{ currentCluster.name || currentCluster.id }}</span>
+      <span class="pill-prefix">Cluster</span>
+      <span class="pill-text">{{ currentCluster.name || currentCluster.id }}</span>
       <BaseIcon name="chevron-down" size="xs" class="pill-caret" />
     </button>
-    <span class="pill-slash font-mono">/</span>
+    <span class="pill-divider" aria-hidden="true"></span>
     <button
       ref="namespaceBtnRef"
       type="button"
@@ -157,7 +158,8 @@ onUnmounted(() => {
       title="Namespace Context: Click to switch"
       @click="openDropdown('namespace')"
     >
-      <span class="pill-text font-mono">{{ activeNamespaceDisplay }}</span>
+      <span class="pill-prefix">NS</span>
+      <span class="pill-text">{{ activeNamespaceDisplay }}</span>
       <BaseIcon name="chevron-down" size="xs" class="pill-caret" />
     </button>
     <Teleport to="body">

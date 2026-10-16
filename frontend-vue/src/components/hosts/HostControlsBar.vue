@@ -19,7 +19,6 @@ const props = defineProps<{
   availableLabels: string[]
   hostTypeDefinitions: HostTypeDefinition[]
   loading?: boolean
-  showTelemetry?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -28,7 +27,6 @@ const emit = defineEmits<{
   (e: 'update:selectedStatusFilter', val: string): void
   (e: 'update:selectedLabelFilter', val: string): void
   (e: 'update:viewMode', val: 'grid' | 'table'): void
-  (e: 'update:showTelemetry', val: boolean): void
   (e: 'refresh'): void
   (e: 'add-host'): void
 }>()
@@ -167,19 +165,6 @@ const hosts = computed(() => props.hosts || { length: props.totalHosts ?? 0 })
         <span>Grid</span>
       </button>
     </div>
-
-    <!-- Telemetry Toggle Button -->
-    <button
-      v-if="showTelemetry !== undefined"
-      type="button"
-      class="toolbar-btn toolbar-btn-telemetry font-mono"
-      :class="{ 'btn-active': showTelemetry }"
-      :title="showTelemetry ? 'Hide Telemetry' : 'Show Telemetry & Latency'"
-      @click="emit('update:showTelemetry', !showTelemetry)"
-    >
-      <BaseIcon :name="showTelemetry ? 'chevron-up' : 'activity'" size="xs" />
-      <span>Telemetry</span>
-    </button>
 
     <!-- Refresh Button -->
     <button

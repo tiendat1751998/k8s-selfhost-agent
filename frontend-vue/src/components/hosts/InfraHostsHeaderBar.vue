@@ -12,7 +12,6 @@ const props = defineProps<{
   onlineHostsCount: number
   offlineHostsCount: number
   avgLatency: number
-  showTelemetry?: boolean
   selectedTypeFilter?: string
   selectedStatusFilter?: string
   hostTypeDefinitions?: HostTypeDefinition[]
@@ -22,7 +21,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:showMobileSearch', val: boolean): void
   (e: 'update:searchQuery', val: string): void
-  (e: 'update:showTelemetry', val: boolean): void
   (e: 'update:selectedTypeFilter', val: string): void
   (e: 'update:selectedStatusFilter', val: string): void
   (e: 'addHost'): void
@@ -47,16 +45,6 @@ function handleFirstFencing() {
         <span class="command-bar-count-pill font-mono">{{ filteredHostsCount }}</span>
       </div>
       <div class="command-bar-actions">
-        <button
-          type="button"
-          class="btn-icon-cmd"
-          :class="{ active: showTelemetry }"
-          title="Toggle Fleet Telemetry"
-          aria-label="Toggle Fleet Telemetry"
-          @click="emit('update:showTelemetry', !showTelemetry)"
-        >
-          <BaseIcon name="activity" size="xs" />
-        </button>
         <button
           type="button"
           class="btn-icon-cmd"

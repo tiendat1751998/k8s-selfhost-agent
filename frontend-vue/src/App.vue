@@ -252,8 +252,8 @@ function handleNavigateToHost(nodeNameOrId: string) {
 
           <!-- Dynamic Screen Title & Category Breadcrumb -->
           <nav class="hud-breadcrumb" aria-label="Screen location breadcrumb">
-            <span class="bc-cat font-mono">{{ currentBreadcrumb.category }}</span>
-            <span class="bc-sep font-mono">/</span>
+            <span class="bc-cat">{{ currentBreadcrumb.category }}</span>
+            <span class="bc-sep">/</span>
             <span class="bc-title" :title="currentBreadcrumb.title">{{ currentBreadcrumb.title }}</span>
           </nav>
         </div>

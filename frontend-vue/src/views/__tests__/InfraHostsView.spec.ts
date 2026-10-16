@@ -6,18 +6,26 @@ import { resolve } from 'node:path'
 const { describe, it, expect } = await import('vitest')
 
 describe('Zero-Neon Redesign & Hosts Architecture Verification', () => {
-  it('eliminates synthetic time-series loops and fake scrubbing badge in HostFleetTelemetryPanel.vue', () => {
-    const fileContent = readFileSync(
-      resolve(__dirname, '../../components/hosts/HostFleetTelemetryPanel.vue'),
+  it('eliminates redundant HostFleetTelemetryPanel and Telemetry button from InfraHostsView and controls', () => {
+    const viewContent = readFileSync(
+      resolve(__dirname, '../InfraHostsView.vue'),
       'utf-8'
     )
-    // Synthetic 16-point fake loop must NOT exist
-    expect(fileContent).not.toContain('fleetTelemetryWindow')
-    expect(fileContent).not.toContain('SYNCHRONIZED SCRUBBING')
-    expect(fileContent).not.toContain('CanvasTimeSeries')
-    // Must contain authentic 4-column fleet diagnostics panel
-    expect(fileContent).toContain('fleet-diagnostics-panel')
-    expect(fileContent).toContain('diag-col')
+    expect(viewContent).not.toContain('HostFleetTelemetryPanel')
+    expect(viewContent).not.toContain('showTelemetry')
+
+    const controlsBar = readFileSync(
+      resolve(__dirname, '../../components/hosts/HostControlsBar.vue'),
+      'utf-8'
+    )
+    expect(controlsBar).not.toContain('toolbar-btn-telemetry')
+    expect(controlsBar).not.toContain('showTelemetry')
+
+    const headerBar = readFileSync(
+      resolve(__dirname, '../../components/hosts/InfraHostsHeaderBar.vue'),
+      'utf-8'
+    )
+    expect(headerBar).not.toContain('showTelemetry')
   })
 
   it('eliminates duplicate Add Host button in HostsTable.vue', () => {
