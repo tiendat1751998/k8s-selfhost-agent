@@ -8,9 +8,12 @@
    1. Stepper Navigation Indicators (TOTPStepWizard.vue)
    -------------------------------------------------------------------------- */
 .stepper-card {
-  padding: 16px 20px;
+  padding: 14px 18px;
   width: 100%;
   box-sizing: border-box;
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
 }
 
 .stepper {
@@ -31,10 +34,10 @@
 }
 
 .step-circle {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  min-height: 32px;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
   border-radius: 50%;
   background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
@@ -42,7 +45,7 @@
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-muted);
   flex-shrink: 0;
   transition: all 0.2s ease;
@@ -55,8 +58,8 @@
 }
 
 .step-title {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -81,12 +84,12 @@
 
 /* Stepper States */
 .step-item.step-active .step-circle {
-  background: var(--color-primary, #326ce5);
-  border-color: var(--color-primary, #326ce5);
-  color: #ffffff;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-primary-fg, #ffffff);
   box-shadow: none;
 }
-.step-item.step-active .step-title { color: var(--color-primary, #326ce5); }
+.step-item.step-active .step-title { color: var(--text-primary); font-weight: 600; }
 .step-item.step-completed .step-circle {
   background: var(--color-status-online-bg, rgba(16, 185, 129, 0.2));
   border-color: var(--color-status-online, #10b981);
@@ -172,18 +175,18 @@
   gap: 12px;
   background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
-  padding: 8px 14px;
-  border-radius: 12px;
-  backdrop-filter: blur(8px);
+  padding: 6px 12px;
+  border-radius: 6px;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
 }
 
 .secret-key {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--accent-cyan, #06b6d4);
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-primary);
   letter-spacing: 1.5px;
   word-break: break-all;
   overflow-wrap: anywhere;
@@ -196,12 +199,13 @@
   height: 32px;
   min-height: 32px;
   padding: 0 12px;
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 600;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 6px;
   touch-action: manipulation;
 }
 
@@ -247,25 +251,26 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 8px 12px;
   background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
-  border-radius: 10px;
+  border-radius: 6px;
   position: relative;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 0.15s, background 0.15s;
   box-sizing: border-box;
 }
 .recovery-code-card:hover {
   background: var(--bg-card-hover);
-  border-color: rgba(245, 158, 11, 0.35);
+  border-color: var(--color-border-subtle);
 }
 
 .code-number { font-size: 11px; color: var(--text-muted); font-weight: 600; }
 .code-value {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--accent-amber, #f59e0b);
-  letter-spacing: 2px;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-primary);
+  letter-spacing: 1.5px;
 }
 
 .recovery-actions-bar {
@@ -282,9 +287,9 @@
   height: 32px;
   min-height: 32px;
   padding: 0 12px;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
-  border-radius: 8px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
