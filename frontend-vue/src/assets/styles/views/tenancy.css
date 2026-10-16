@@ -442,17 +442,21 @@
 .tenancy-toolbar-sleek .toolbar-right {
   display: flex; align-items: center; gap: 10px; flex-shrink: 0;
 }
-.search-pill {
-  display: flex; align-items: center; height: 32px; border-radius: 6px;
+.tenancy-page .toolbar-search-pill, .tenancy-page .search-pill, .search-pill {
+  display: inline-flex; align-items: center; height: 32px; border-radius: 6px;
   background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle);
-  padding: 0 10px; position: relative; gap: 6px;
+  padding: 0 10px; position: relative; gap: 8px; box-sizing: border-box;
 }
-.search-pill .search-icon { position: static; flex-shrink: 0; font-size: 12px; color: var(--text-muted); }
-.search-input-sleek {
-  background: transparent; border: none; color: var(--text-primary);
-  font-size: 13px; font-family: var(--font-sans); width: 180px; padding: 0;
+.tenancy-page .toolbar-search-pill .search-icon, .tenancy-page .search-pill .search-icon, .search-pill .search-icon {
+  position: static; flex-shrink: 0; font-size: 12px; color: var(--text-muted);
 }
-.search-input-sleek:focus { outline: none; }
+.tenancy-page .toolbar-search-pill .search-input, .tenancy-page .toolbar-search-pill input,
+.tenancy-page .search-pill .search-input, .tenancy-page .search-pill .search-input-sleek,
+.tenancy-page .search-pill input, .search-input-sleek {
+  border: none !important; background: transparent !important; box-shadow: none !important;
+  height: 100% !important; padding: 0 8px 0 0 !important; width: 100% !important;
+  outline: none !important; font-size: 13px !important; font-family: var(--font-sans) !important; color: var(--text-primary) !important;
+}
 .search-pill .clear-btn { position: absolute; right: 8px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; }
 .scope-select { display: flex; align-items: center; gap: 6px; }
 .scope-label { font-size: 12px; color: var(--text-muted); }
