@@ -279,7 +279,7 @@ function getNodePing(node: NodeMetrics): number {
 .node-table { table-layout: fixed !important; width: 100% !important; }
 .node-table th { padding: 6px 8px !important; }
 .node-table td { padding: 2px 8px !important; }
-.col-actions { width: 44px !important; min-width: 40px !important; max-width: 48px !important; text-align: center !important; }
+.col-actions { width: 4% !important; min-width: 48px !important; text-align: center !important; }
 .sortable-th { cursor: pointer; user-select: none; transition: color 0.15s ease; }
 .sortable-th:hover { color: var(--text-primary, #fff); }
 .th-sort-wrap { display: inline-flex; align-items: center; gap: 6px; }
