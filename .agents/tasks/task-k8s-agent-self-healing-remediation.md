@@ -1,6 +1,7 @@
 # Task Specification: `k8s-agent` Local-First K8s Self-Healing & Active Node Remediation
 
 > **Created**: 2026-10-16
+> **Status**: ✅ COMPLETED (`ab9fa22c`, `2428e6ae`, `43201876`)
 > **Branch**: `fix/comprehensive-audit`
 > **Target Footprint**: Strictly $\le 50\text{ MB}$ RAM per `k8s-agent` daemon (zero external binaries/sidecars required; native Go + OS syscalls + guarded whitelist execution).
 
