@@ -31,6 +31,19 @@ const effectiveService = computed(() => {
   return selectedService.value === 'custom' ? customService.value.trim() : selectedService.value
 })
 
+const isRuntimeHealthy = computed(() => {
+  return Boolean(
+    health.value?.runtime_healthy ||
+    health.value?.containerd_healthy ||
+    health.value?.docker_healthy ||
+    health.value?.crio_healthy
+  )
+})
+
+const anomalyList = computed(() => {
+  return health.value?.detected_anomalies ?? health.value?.anomalies ?? []
+})
+
 async function fetchDiagnostics() {
   if (!props.hostId) return
   loading.value = true
@@ -52,10 +65,13 @@ async function triggerRemediation(action: RemediationRequest['action'], target?:
   feedback.value = null
   try {
     const res = await hostsApi.remediate(props.hostId, { action, target })
+    const isSuccess = res.success !== false && res.status !== 'failed'
     feedback.value = {
-      type: 'success',
-      message: `Action ${action} completed successfully (${res.duration_ms}ms)`,
-      output: res.output,
+      type: isSuccess ? 'success' : 'error',
+      message: isSuccess
+        ? `Action ${action} completed successfully (${res.duration_ms}ms)`
+        : `Action ${action} failed (${res.duration_ms}ms)`,
+      output: res.details || res.output || 'Remediation action executed successfully.',
     }
     await fetchDiagnostics()
   } catch (err: unknown) {
@@ -106,14 +122,14 @@ onMounted(() => fetchDiagnostics())
         <div class="rem-stat-cell">
           <span class="rem-stat-lbl">Runtime</span>
           <div class="rem-stat-val">
-            <span class="rem-badge" :class="health?.runtime_healthy ? 'badge-healthy' : 'badge-unhealthy'">
-              {{ health?.container_runtime || 'runtime' }}: {{ health?.runtime_healthy ? 'OK' : 'ERR' }}
+            <span class="rem-badge" :class="isRuntimeHealthy ? 'badge-healthy' : 'badge-unhealthy'">
+              {{ health?.container_runtime || 'runtime' }}: {{ isRuntimeHealthy ? 'OK' : 'ERR' }}
             </span>
           </div>
         </div>
         <div class="rem-stat-cell">
           <span class="rem-stat-lbl">D-State</span>
-          <div class="rem-stat-val" :class="{ 'text-rose': (health?.d_state_count ?? 0) > 0 }">{{ health?.d_state_count ?? 0 }}</div>
+          <div class="rem-stat-val" :class="{ 'text-rose': (health?.d_state_processes ?? health?.d_state_count ?? 0) > 0 }">{{ health?.d_state_processes ?? health?.d_state_count ?? 0 }}</div>
         </div>
         <div class="rem-stat-cell">
           <span class="rem-stat-lbl">Zombies</span>
@@ -126,8 +142,8 @@ onMounted(() => fetchDiagnostics())
       </div>
 
       <!-- Anomalies List -->
-      <div v-if="health?.anomalies && health.anomalies.length > 0" class="rem-anomalies-list">
-        <div v-for="(anomaly, aIdx) in health.anomalies" :key="aIdx" class="rem-anomaly-item">
+      <div v-if="anomalyList.length > 0" class="rem-anomalies-list">
+        <div v-for="(anomaly, aIdx) in anomalyList" :key="aIdx" class="rem-anomaly-item">
           <BaseIcon name="alert-triangle" size="xs" /><span>{{ anomaly }}</span>
         </div>
       </div>
@@ -230,15 +246,17 @@ onMounted(() => fetchDiagnostics())
               <span v-if="item.target" class="text-muted">({{ item.target }})</span>
             </div>
             <div class="rem-history-meta">
-              <span class="rem-badge" :class="item.status === 'success' || item.status === 'ok' ? 'badge-healthy' : 'badge-unhealthy'">{{ item.status }}</span>
+              <span class="rem-badge" :class="item.success || item.status === 'success' || item.status === 'ok' ? 'badge-healthy' : 'badge-unhealthy'">
+                {{ item.status || (item.success ? 'SUCCESS' : 'FAILED') }}
+              </span>
               <span>{{ item.duration_ms }}ms</span>
             </div>
           </div>
-          <div v-if="item.output">
+          <div v-if="item.details || item.output">
             <button class="rem-history-output-toggle" @click="toggleHistoryItem(idx)">
               {{ expandedHistory[idx] ? 'Hide Output' : 'View Output' }}
             </button>
-            <pre v-if="expandedHistory[idx]" class="rem-output-pre">{{ item.output }}</pre>
+            <pre v-if="expandedHistory[idx]" class="rem-output-pre">{{ item.details || item.output }}</pre>
           </div>
         </div>
       </div>

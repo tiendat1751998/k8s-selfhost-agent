@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import type { NodeK8sHealthReport, RemediationResult } from '../src/api/hosts'
 
 // Helper types & functions to test
 export type RemediationAction =
@@ -50,6 +51,52 @@ export function resolveHealthBadgeClass(isHealthy: boolean): { label: string; ba
     return { label: 'HEALTHY', badgeClass: 'badge-healthy' }
   }
   return { label: 'UNHEALTHY', badgeClass: 'badge-unhealthy' }
+}
+
+export function resolveRuntimeHealthy(health?: {
+  runtime_healthy?: boolean
+  containerd_healthy?: boolean
+  docker_healthy?: boolean
+  crio_healthy?: boolean
+}): boolean {
+  return Boolean(
+    health?.runtime_healthy ||
+    health?.containerd_healthy ||
+    health?.docker_healthy ||
+    health?.crio_healthy
+  )
+}
+
+export function resolveDStateCount(health?: {
+  d_state_processes?: number
+  d_state_count?: number
+}): number {
+  return health?.d_state_processes ?? health?.d_state_count ?? 0
+}
+
+export function resolveAnomalies(health?: {
+  detected_anomalies?: string[]
+  anomalies?: string[]
+}): string[] {
+  return health?.detected_anomalies ?? health?.anomalies ?? []
+}
+
+export function resolveRemediationFeedback(
+  res: { success?: boolean; status?: string; duration_ms: number; details?: string; output?: string },
+  action: string
+): { type: 'success' | 'error'; message: string; output?: string } {
+  const isSuccess = res.success !== false && res.status !== 'failed'
+  return {
+    type: isSuccess ? 'success' : 'error',
+    message: isSuccess
+      ? `Action ${action} completed successfully (${res.duration_ms}ms)`
+      : `Action ${action} failed (${res.duration_ms}ms)`,
+    output: res.details || res.output,
+  }
+}
+
+export function isRemediationSuccess(item: { success?: boolean; status?: string }): boolean {
+  return Boolean(item.success || item.status === 'success' || item.status === 'ok')
 }
 
 describe('Host Self-Healing & Remediation Unit & Architecture Tests', () => {
@@ -114,6 +161,70 @@ describe('Host Self-Healing & Remediation Unit & Architecture Tests', () => {
     const unhealthy = resolveHealthBadgeClass(false)
     assert.equal(unhealthy.label, 'UNHEALTHY')
     assert.equal(unhealthy.badgeClass, 'badge-unhealthy')
+  })
+
+  it('normalizes and resolves backend NodeK8sHealthReport fields accurately', () => {
+    const backendHealth: NodeK8sHealthReport = {
+      node_name: 'k8s-worker-01',
+      checked_at: '2026-10-16T12:00:00Z',
+      kubelet_healthy: true,
+      kubelet_status: 'Ready',
+      containerd_healthy: true,
+      docker_healthy: false,
+      crio_healthy: false,
+      container_runtime: 'containerd',
+      d_state_processes: 4,
+      zombie_count: 1,
+      stuck_shim_count: 2,
+      detected_anomalies: ['D_STATE_PROCESSES_STUCK', 'ZOMBIE_PROCESSES_DETECTED'],
+    }
+
+    // Verify runtime health computation
+    assert.equal(resolveRuntimeHealthy(backendHealth), true)
+    assert.equal(resolveRuntimeHealthy({ docker_healthy: true }), true)
+    assert.equal(resolveRuntimeHealthy({ runtime_healthy: false, containerd_healthy: false }), false)
+
+    // Verify d_state count fallback
+    assert.equal(resolveDStateCount(backendHealth), 4)
+    assert.equal(resolveDStateCount({ d_state_count: 3 }), 3)
+    assert.equal(resolveDStateCount({}), 0)
+
+    // Verify anomalies list fallback
+    assert.deepEqual(resolveAnomalies(backendHealth), ['D_STATE_PROCESSES_STUCK', 'ZOMBIE_PROCESSES_DETECTED'])
+    assert.deepEqual(resolveAnomalies({ anomalies: ['ANOMALY_1'] }), ['ANOMALY_1'])
+    assert.deepEqual(resolveAnomalies({}), [])
+  })
+
+  it('normalizes and resolves backend RemediationResult fields for feedback and audit trail', () => {
+    const backendResult: RemediationResult = {
+      action: 'restart_service',
+      target: 'containerd',
+      success: true,
+      status: 'success',
+      details: 'Job for containerd.service restarted.',
+      duration_ms: 350,
+      timestamp: '2026-10-16T12:05:00Z',
+    }
+
+    const feedback = resolveRemediationFeedback(backendResult, backendResult.action)
+    assert.equal(feedback.type, 'success')
+    assert.equal(feedback.message, 'Action restart_service completed successfully (350ms)')
+    assert.equal(feedback.output, 'Job for containerd.service restarted.')
+    assert.equal(isRemediationSuccess(backendResult), true)
+
+    // Test failure case with success: false and details error
+    const failedResult: RemediationResult = {
+      action: 'reap_zombies',
+      success: false,
+      status: 'failed',
+      details: 'operation not permitted',
+      duration_ms: 120,
+    }
+    const failedFeedback = resolveRemediationFeedback(failedResult, failedResult.action)
+    assert.equal(failedFeedback.type, 'error')
+    assert.equal(failedFeedback.message, 'Action reap_zombies failed (120ms)')
+    assert.equal(failedFeedback.output, 'operation not permitted')
+    assert.equal(isRemediationSuccess(failedResult), false)
   })
 
   it('verifies strict line limits on modified and created files', () => {
