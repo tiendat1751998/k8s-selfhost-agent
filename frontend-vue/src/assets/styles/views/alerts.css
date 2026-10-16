@@ -139,15 +139,19 @@
 }
 .alerts-toolbar-sleek .toolbar-pill-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); }
 .alerts-toolbar-sleek .toolbar-pill-btn.active {
-  background: rgba(37, 99, 235, 0.2); color: #93c5fd; font-weight: 700;
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.4);
+  background: var(--color-badge-k8s-bg, rgba(50, 108, 229, 0.15));
+  color: var(--color-badge-k8s-text, #326ce5);
+  font-weight: 600;
+  box-shadow: none;
+  border: 1px solid var(--color-badge-k8s-border, rgba(50, 108, 229, 0.4));
 }
 .alerts-toolbar-sleek .pill-badge {
   font-size: 10px; line-height: 1; padding: 2px 6px; border-radius: 8px;
   background: var(--color-surface-inset); color: inherit; font-family: var(--font-mono, monospace);
 }
 .alerts-toolbar-sleek .toolbar-pill-btn.active .pill-badge {
-  background: rgba(37, 99, 235, 0.35); color: #ffffff;
+  background: var(--color-badge-k8s-border, rgba(50, 108, 229, 0.25));
+  color: var(--color-badge-k8s-text, #326ce5);
 }
 
 .alerts-toolbar-sleek .toolbar-kpi-strip {
@@ -232,13 +236,13 @@
   height: 32px; min-height: 32px; padding: 0 10px; font-size: 11.5px;
   white-space: nowrap; display: inline-flex; align-items: center; justify-content: center;
 }
-.btn-cyan { background: rgba(6, 182, 212, 0.15); color: #38bdf8; border: 1px solid rgba(6, 182, 212, 0.35); }
-.btn-cyan:hover { background: rgba(6, 182, 212, 0.25); color: #fff; }
+.btn-cyan { background: var(--color-badge-agent-bg, rgba(6, 182, 212, 0.15)); color: var(--color-badge-agent-text, #38bdf8); border: 1px solid var(--color-badge-agent-border, rgba(6, 182, 212, 0.35)); }
+.btn-cyan:hover { background: var(--color-badge-agent-bg, rgba(6, 182, 212, 0.25)); color: var(--color-badge-k8s-text, #38bdf8); }
 .btn-delete-crimson {
-  background: rgba(244, 63, 94, 0.12) !important; color: #f43f5e !important;
-  border: 1px solid rgba(244, 63, 94, 0.35) !important; cursor: pointer; transition: all 0.15s ease;
+  background: var(--color-status-offline-bg, rgba(244, 63, 94, 0.12)) !important; color: var(--color-status-offline, #f43f5e) !important;
+  border: 1px solid var(--color-status-offline-border, rgba(244, 63, 94, 0.35)) !important; cursor: pointer; transition: all 0.15s ease;
 }
-.btn-delete-crimson:hover { background: rgba(244, 63, 94, 0.25) !important; border-color: #f43f5e !important; color: #fff !important; }
+.btn-delete-crimson:hover { background: var(--color-status-offline-bg, rgba(244, 63, 94, 0.25)) !important; border-color: var(--color-status-offline, #f43f5e) !important; color: var(--color-status-offline, #f43f5e) !important; }
 
 .btn-state {
   height: 32px; min-height: 32px; padding: 0 10px;

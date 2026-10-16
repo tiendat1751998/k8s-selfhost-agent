@@ -301,10 +301,10 @@ async function downloadAttestation() {
 .sync-divider { height: 1px; background: var(--color-border-subtle); }
 .drawer-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .btn-zt-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }
-.btn-rotate { background: rgba(6, 182, 212, 0.14); border: 1px solid rgba(6, 182, 212, 0.4); color: #38bdf8; }
-.btn-rotate:hover:not(:disabled) { background: rgba(6, 182, 212, 0.25); color: #fff; }
-.btn-verify { background: rgba(16, 185, 129, 0.14); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; }
-.btn-verify:hover:not(:disabled) { background: rgba(16, 185, 129, 0.25); color: #fff; }
+.btn-rotate { background: var(--color-badge-agent-bg, rgba(6, 182, 212, 0.14)); border: 1px solid var(--color-badge-agent-border, rgba(6, 182, 212, 0.4)); color: var(--color-badge-agent-text, #38bdf8); }
+.btn-rotate:hover:not(:disabled) { background: var(--color-badge-agent-bg, rgba(6, 182, 212, 0.25)); color: var(--color-badge-k8s-text, #38bdf8); }
+.btn-verify { background: var(--color-status-online-bg, rgba(16, 185, 129, 0.14)); border: 1px solid var(--color-status-online-border, rgba(16, 185, 129, 0.4)); color: var(--color-status-online, #34d399); }
+.btn-verify:hover:not(:disabled) { background: var(--color-status-online-bg, rgba(16, 185, 129, 0.25)); color: var(--color-status-online, #34d399); }
 .btn-download { background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle); color: var(--text-primary); }
 .btn-download:hover { background: var(--bg-card-hover); color: var(--text-primary); }
 .btn-zt-action:disabled { opacity: 0.6; cursor: not-allowed; }

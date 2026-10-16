@@ -72,6 +72,8 @@ th {
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--border-medium);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   user-select: none;
 }
 

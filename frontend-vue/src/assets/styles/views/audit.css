@@ -174,13 +174,13 @@
   width: 26px; min-width: 26px; height: 26px; min-height: 26px; padding: 0; justify-content: center;
 }
 .sleek-btn-scan {
-  background: rgba(14, 165, 233, 0.18);
-  border-color: rgba(56, 189, 248, 0.35);
-  color: #38bdf8;
+  background: var(--color-badge-agent-bg, rgba(14, 165, 233, 0.18));
+  border-color: var(--color-badge-agent-border, rgba(56, 189, 248, 0.35));
+  color: var(--color-badge-agent-text, #38bdf8);
 }
 .sleek-btn-scan:hover:not(:disabled) {
-  background: rgba(14, 165, 233, 0.3);
-  color: #fff;
+  background: var(--color-badge-agent-bg, rgba(14, 165, 233, 0.3));
+  color: var(--color-badge-k8s-text, #38bdf8);
 }
 .sleek-live-btn.live-active {
   background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.3); color: #34d399;
@@ -251,7 +251,9 @@
 }
 .toolbar-filter-toggle:hover { background: var(--bg-card-hover); color: var(--text-primary); }
 .toolbar-filter-toggle.filter-active {
-  background: rgba(14, 165, 233, 0.15); border-color: rgba(56, 189, 248, 0.4); color: #38bdf8;
+  background: var(--color-badge-k8s-bg, rgba(50, 108, 229, 0.15));
+  border-color: var(--color-badge-k8s-border, rgba(50, 108, 229, 0.4));
+  color: var(--color-badge-k8s-text, #326ce5);
 }
 .filter-toggle-arrow { font-size: 9px; opacity: 0.8; }
 .toolbar-expandable-drawer { display: none; flex-direction: column; gap: 10px; overflow: hidden; }
@@ -269,8 +271,15 @@
   background: var(--color-surface-inset); color: var(--text-secondary);
   touch-action: manipulation; transition: all 0.15s ease; white-space: nowrap; flex-shrink: 0;
 }
-.filter-pill:hover,
-.filter-pill.filter-active { background: rgba(14, 165, 233, 0.15); border-color: rgba(56, 189, 248, 0.4); color: #fff; }
+.filter-pill:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+.filter-pill.filter-active {
+  background: var(--color-badge-k8s-bg, rgba(50, 108, 229, 0.15));
+  border-color: var(--color-badge-k8s-border, rgba(50, 108, 229, 0.4));
+  color: var(--color-badge-k8s-text, #326ce5);
+}
 .filter-select { height: 30px; min-height: 30px; padding: 4px 8px; font-size: 11.5px; border-radius: 6px; touch-action: manipulation; }
 .date-range-box { display: flex; align-items: center; gap: 6px; width: 100%; }
 .date-input { height: 30px; min-height: 30px; padding: 4px 6px; font-size: 11px; border-radius: 6px; color: var(--text-primary); touch-action: manipulation; }
