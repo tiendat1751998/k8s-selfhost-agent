@@ -104,27 +104,27 @@ Connect the Control Plane's existing SRE modules directly to `k8s-agent`'s new `
 
 ---
 
-## 3. Phase 8: Multi-App Container & Systemd Remediation, Active Watchdog Triggers & UI Controls
+## 3. Phase 8: Multi-App Container & Systemd Remediation, Active Watchdog Triggers & UI Controls (COMPLETED)
 
-### 8.1 `k8s-agent` Multi-App & Container Self-Healing (`cmd/agent/`)
-1. **Expanded Systemd Application Allowlist + Configurable Services (`cmd/agent/remediator.go`)**:
+### 8.1 `k8s-agent` Multi-App & Container Self-Healing (`cmd/agent/`) — COMPLETED
+1. **Expanded Systemd Application Allowlist + Configurable Services (`cmd/agent/remediator.go`, `cmd/agent/remediator_containers.go`)**:
    - Default allowlist: `kubelet`, `containerd`, `docker`, `crio`, `postgresql`, `postgres`, `nginx`, `redis`, `redis-server`, `haproxy`, `keepalived`, `etcd`, `patroni`, `traefik`, `coredns`, `nats`, `minio`, `clickhouse-server`.
-   - Configurable custom services via `--allowed-services` / `AGENT_ALLOWED_SERVICES` (strictly validated against `^[a-zA-Z0-9._@-]+$`, blocking OS-critical services like `sshd`, `networking`, `systemd-networkd`, `dbus`).
+   - Configurable custom services via `--allowed-services` / `AGENT_ALLOWED_SERVICES` (strictly validated against `^[a-zA-Z0-9._@-]+$`, blocking OS-critical services like `sshd`, `networking`, `systemd-networkd`, `dbus` with case-insensitive normalization).
 2. **Docker Container Health Diagnostics & `restart_container` Action (`cmd/agent/k8s_health.go`, `cmd/agent/remediator_containers.go`)**:
-   - Inspect local containers via Docker API / CLI fallback to report `unhealthy_containers` (`id`, `name`, `image`, `state`, `status`, `exit_code`, `oom_killed`) in `GET /k8s/health`.
+   - Inspect local containers via Docker CLI to report `unhealthy_containers` (`id`, `name`, `image`, `state`, `status`, `restart_count`) in `GET /k8s/health`.
    - Implement `restart_container` action (`target: "<container_name_or_id>"`) with 3-per-30m circuit breaker and audit trail.
-3. **Active Watchdog Anomaly & Container/Zombie/CNI Auto-Healing (`cmd/agent/watchdog.go`)**:
+3. **Active Watchdog Anomaly & Container/Zombie/CNI Auto-Healing (`cmd/agent/watchdog.go`, `cmd/agent/main.go`)**:
    - Auto-trigger `reap_zombies` when `ZombieCount > 0` (10m cooldown).
    - Auto-trigger `cni_ipam_cleanup` when `CNI_SANDBOX_FAILURE` log anomaly is detected (10m cooldown).
    - Auto-trigger `restart_container` for unhealthy/crashed containers in `UnhealthyContainers` (circuit-breaker guarded).
-   - Wire `DetectLogAnomaly` into live log ingestion via `RecordLogLine`.
+   - Wire `DetectLogAnomaly` into live Pod log ingestion via `watchdog.HookPodTailer(podTailer)` -> `RecordLogLine`.
 4. **`deploy-agent.sh` Token Sync & CRLF Hardening**:
    - Strip `\r` when reading `.env` and preserve existing remote `~/.k8s-agent/agent.env` token when local `.env` has no explicit token.
 
-### 8.2 Control Plane History & Container Remediation Proxy (`internal/`)
-- Add `restart_container` action support and `GET /api/v1/hosts/{id}/remediate/history` (plus `GET /api/v1/k8s/nodes/{node}/remediate/history`) in `internal/infrastructure/agent/remediation_client.go` and `internal/adapter/http/host_remediation_handler.go`.
+### 8.2 Control Plane History & Container Remediation Proxy (`internal/`) — COMPLETED
+- Added `restart_container` action support and `GET /api/v1/hosts/{id}/remediate/history` (plus `GET /api/v1/k8s/nodes/{node}/remediate/history`) in `internal/infrastructure/agent/remediation_client.go` and `internal/adapter/http/host_remediation_handler.go`.
 
-### 8.3 Frontend UI Diagnostics & 1-Click Remediation (`frontend-vue/`)
-- Add `getK8sHealth`, `remediateHost`, and `getRemediationHistory` to `frontend-vue/src/api/hosts.ts`.
-- Create `HostRemediationPanel.vue` (< 280 lines) inside `HostDetailDrawer.vue` with live K8s/App health badges, unhealthy container restart buttons, 1-click remediation actions (`disk_pressure_cleanup`, `cni_ipam_cleanup`, `reap_zombies`, `restart_service`), and self-healing history log.
+### 8.3 Frontend UI Diagnostics & 1-Click Remediation (`frontend-vue/`) — COMPLETED
+- Added `getK8sHealth`, `remediate`, and `getRemediationHistory` to `frontend-vue/src/api/hosts.ts`.
+- Created `HostRemediationPanel.vue` (271 lines) inside `HostDetailDrawer.vue` (186 lines) with live K8s/App health badges, unhealthy container restart buttons, 1-click remediation actions (`disk_pressure_cleanup`, `cni_ipam_cleanup`, `reap_zombies`, `restart_service`), and self-healing history log.
 
