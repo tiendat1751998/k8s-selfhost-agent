@@ -95,8 +95,8 @@ const flowAnimationDuration = computed(() => {
   display: flex;
   align-items: center;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
   backdrop-filter: blur(12px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   transition: border-color 0.25s ease;
