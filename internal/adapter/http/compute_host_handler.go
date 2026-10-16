@@ -25,6 +25,10 @@ func (h *DockerHandler) RegisterHostRoutes(r chi.Router) {
 	r.Put("/{id}", h.UpdateHost)
 	r.Delete("/{id}", h.DeleteHost)
 	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Post("/{id}/test", h.TestHost)
+	if remHandler := h.getRemediationHandler(); remHandler != nil {
+		r.Get("/{id}/k8s-health", remHandler.GetHostK8sHealth)
+		r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin", "operator")).Post("/{id}/remediate", remHandler.RemediateHost)
+	}
 }
 
 // Compute Host Request DTOs

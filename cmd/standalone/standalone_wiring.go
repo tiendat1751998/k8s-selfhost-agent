@@ -225,6 +225,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		k8sIface = k8sClient
 	}
 	remediationCtrl := usecaseSRE.NewRemediationController(k8sIface, clientManager, log)
+	remediationCtrl.SetComputeHostRepo(computeHostRepo)
 
 	discoveryAdapter := infraK8s.NewDiscoveryAdapter()
 	if err := crypto.ValidateKey(); err != nil {
@@ -260,10 +261,13 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	backupUC.SetRunner(backupRunner)
 
 	aux := initStandaloneAuxHandlers(cfg, log, k8sClient, clientManager, dbPool, gitopsController)
+	hostRemediationHandler := adapthttp.NewHostRemediationHandler(computeHostRepo, nil, log)
+	dockerHandler := adapthttp.NewDockerHandler(dockerRepo, computeHostRepo, authUsecase, metricsCollector, hostRemediationHandler)
 
 	platformHandlers := &adapthttp.PlatformHandlers{
 		Dashboard:       dashboardHandler,
-		Docker:          adapthttp.NewDockerHandler(dockerRepo, computeHostRepo, authUsecase, metricsCollector),
+		Docker:          dockerHandler,
+		HostRemediation: hostRemediationHandler,
 		Overview:        overviewHandler,
 		Drift:           adapthttp.NewDriftHandler(postgres.NewDriftRepo(dbPool)),
 		Correlation:     adapthttp.NewCorrelationHandler(postgres.NewCorrelationRepo(dbPool)),
