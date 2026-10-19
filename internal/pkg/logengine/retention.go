@@ -78,6 +78,9 @@ func pruneOldParts(partsDir, activePartDir string, maxRetention time.Duration, m
 		excess := len(candidates) - maxSealedParts
 		for i := 0; i < excess; i++ {
 			_ = os.RemoveAll(candidates[i].dir)
+			if (i+1)%25 == 0 {
+				time.Sleep(2 * time.Millisecond)
+			}
 		}
 		candidates = candidates[excess:]
 	}

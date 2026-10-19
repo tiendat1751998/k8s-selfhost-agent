@@ -149,17 +149,19 @@ func (rb *RingBuffer) Push(entry Entry) bool {
 				atomic.StoreUint64(&slot.sequence, head+1)
 				return true
 			}
+			spins = 0
 			continue
 		}
 
 		if diff < 0 {
-			if spins < 100 {
+			if spins < 16 {
 				spinPause(30)
 				spins++
 				continue
 			}
-			if spins < 500 {
+			if spins < 20 {
 				runtime.Gosched()
+				time.Sleep(100 * time.Microsecond)
 				spins++
 				continue
 			}
@@ -169,6 +171,7 @@ func (rb *RingBuffer) Push(entry Entry) bool {
 		}
 
 		// diff > 0: CAS race, retry
+		spins = 0
 	}
 }
 
@@ -202,18 +205,18 @@ func (rb *RingBuffer) PushWait(ctx context.Context, entry Entry) error {
 		}
 
 		if diff < 0 {
-			if spins < 100 {
+			if spins < 8 {
 				spinPause(30)
 				spins++
 				continue
 			}
-			if spins < 150 {
+			if spins < 12 {
 				runtime.Gosched()
 				spins++
 				continue
 			}
 			if timer == nil {
-				timer = time.NewTimer(50 * time.Microsecond)
+				timer = time.NewTimer(5 * time.Millisecond)
 			} else {
 				if !timer.Stop() {
 					select {
@@ -221,7 +224,7 @@ func (rb *RingBuffer) PushWait(ctx context.Context, entry Entry) error {
 					default:
 					}
 				}
-				timer.Reset(50 * time.Microsecond)
+				timer.Reset(5 * time.Millisecond)
 			}
 			select {
 			case <-ctx.Done():

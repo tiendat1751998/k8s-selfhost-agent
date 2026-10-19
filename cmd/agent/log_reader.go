@@ -52,9 +52,7 @@ func newDockerLogSource() *DockerLogSource {
 }
 
 // NewDockerLogSourceWithClient creates a DockerLogSource with a custom/mock client.
-func NewDockerLogSourceWithClient(cli DockerClientInterface) *DockerLogSource {
-	return &DockerLogSource{cli: cli}
-}
+func NewDockerLogSourceWithClient(cli DockerClientInterface) *DockerLogSource { return &DockerLogSource{cli: cli} }
 
 func (d *DockerLogSource) ListServices(ctx context.Context) ([]string, error) {
 	if d.cli == nil {
@@ -128,12 +126,8 @@ func (d *DockerLogSource) GetLogs(ctx context.Context, app string, tail int, sin
 		}
 
 		serviceName := swarmSvc
-		if serviceName == "" {
-			serviceName = composeSvc
-		}
-		if serviceName == "" {
-			serviceName = name
-		}
+		if serviceName == "" { serviceName = composeSvc }
+		if serviceName == "" { serviceName = name }
 
 		logsReader, err := d.cli.ContainerLogs(ctx, c.ID, container.LogsOptions{
 			ShowStdout: true, ShowStderr: true, Tail: tailStr, Since: sinceStr, Until: untilStr, Timestamps: true,
@@ -263,7 +257,7 @@ func (f *FileLogSource) GetLogs(ctx context.Context, app string, tail int, since
 	return allEntries, nil
 }
 
-// IngestToWriter pipes all existing .log files into the columnar logengine.Writer safely.
+// IngestToWriter pipes recent .log file tails into the columnar logengine.Writer safely.
 func (f *FileLogSource) IngestToWriter(ctx context.Context, w *logengine.Writer) error {
 	if f.logDir == "" || w == nil {
 		return nil
@@ -288,12 +282,26 @@ func (f *FileLogSource) IngestToWriter(ctx context.Context, w *logengine.Writer)
 			}
 			defer file.Close()
 
+			if fi, err := file.Stat(); err == nil && fi.Size() > 64*1024 {
+				if _, err := file.Seek(fi.Size()-64*1024, io.SeekStart); err == nil {
+					s := bufio.NewScanner(file)
+					s.Scan() // discard partial first line
+				}
+			}
+
+			var lines []string
 			scanner := bufio.NewScanner(file)
 			for scanner.Scan() {
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
-				entry := parseLogLine(scanner.Text(), svcName)
+				lines = append(lines, scanner.Text())
+				if len(lines) > 500 {
+					lines = lines[1:]
+				}
+			}
+			for _, line := range lines {
+				entry := parseLogLine(line, svcName)
 				if err := w.Write(logengine.Entry{
 					Timestamp: entry.Timestamp, Service: entry.Service, Level: entry.Level, Message: entry.Message, Raw: entry.Raw,
 				}); err != nil {
@@ -346,9 +354,7 @@ func newJournalctlLogSource() *JournalctlLogSource {
 	return &JournalctlLogSource{available: true}
 }
 
-func (j *JournalctlLogSource) ListServices(ctx context.Context) ([]string, error) {
-	return nil, nil
-}
+func (j *JournalctlLogSource) ListServices(_ context.Context) ([]string, error) { return nil, nil }
 
 func (j *JournalctlLogSource) GetLogs(ctx context.Context, app string, tail int, sinceTime, untilTime *time.Time, query string, level string) ([]LogEntry, error) {
 	if !j.available || app == "" {
@@ -388,9 +394,7 @@ type MemoryLogSource struct {
 	logs map[string][]LogEntry
 }
 
-func NewMemoryLogSource() *MemoryLogSource {
-	return &MemoryLogSource{logs: make(map[string][]LogEntry)}
-}
+func NewMemoryLogSource() *MemoryLogSource { return &MemoryLogSource{logs: make(map[string][]LogEntry)} }
 
 func (m *MemoryLogSource) AddEntry(service string, timestamp time.Time, level, message string) {
 	m.mu.Lock()
@@ -460,16 +464,12 @@ func (e *EngineLogSource) Writer() *logengine.Writer { return e.writer }
 func (e *EngineLogSource) Reader() *logengine.Reader { return e.reader }
 
 func (e *EngineLogSource) Close() error {
-	if e.writer != nil {
-		return e.writer.Close()
-	}
+	if e.writer != nil { return e.writer.Close() }
 	return nil
 }
 
-func (e *EngineLogSource) ListServices(ctx context.Context) ([]string, error) {
-	if e.dict == nil {
-		return nil, nil
-	}
+func (e *EngineLogSource) ListServices(_ context.Context) ([]string, error) {
+	if e.dict == nil { return nil, nil }
 	return e.dict.Export(), nil
 }
 

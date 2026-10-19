@@ -118,6 +118,8 @@ func TestJournalTailer_SkipsK8sAgentOwnLogs(t *testing.T) {
 
 	fakeOutput := `{"MESSAGE":"k8s-agent self log 1","__REALTIME_TIMESTAMP":"1726315200000000","_SYSTEMD_UNIT":"k8s-agent.service","PRIORITY":"6"}
 {"MESSAGE":"k8s-agent self log 2","__REALTIME_TIMESTAMP":"1726315201000000","SYSLOG_IDENTIFIER":"k8s-agent","PRIORITY":"6"}
+{"MESSAGE":"k8s-agent self user unit log","__REALTIME_TIMESTAMP":"1726315201500000","_SYSTEMD_USER_UNIT":"k8s-agent.service","PRIORITY":"6"}
+{"MESSAGE":"k8s-agent comm log","__REALTIME_TIMESTAMP":"1726315201800000","_COMM":"k8s-agent","PRIORITY":"6"}
 {"MESSAGE":"valid service log","__REALTIME_TIMESTAMP":"1726315202000000","_SYSTEMD_UNIT":"nginx.service","PRIORITY":"6"}
 `
 	tailer.streamReader = func(ctx context.Context) (io.ReadCloser, error) {

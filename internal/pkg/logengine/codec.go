@@ -137,6 +137,13 @@ func (d *LabelDictionary) LookupID(label string) (uint16, bool) {
 	return id, exists
 }
 
+// Size returns the total number of registered dictionary labels.
+func (d *LabelDictionary) Size() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return len(d.idToStr)
+}
+
 // Export returns a snapshot copy of the label entries for persistence.
 func (d *LabelDictionary) Export() []string {
 	d.mu.RLock()

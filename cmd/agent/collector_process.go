@@ -20,6 +20,17 @@ type procStatSnapshot struct {
 	writeBytes int64
 }
 
+type procCandidate struct {
+	pid        int
+	pidDir     string
+	comm       string
+	state      string
+	utime      uint64
+	stime      uint64
+	rssPages   uint64
+	cpuPercent float64
+}
+
 // readTopProcesses scans /proc for process metrics and returns the top resource-consuming processes.
 func (c *SystemCollector) readTopProcesses(limit int, totalMem int64) []ProcessMetric {
 	if limit <= 0 {
@@ -50,24 +61,64 @@ func (c *SystemCollector) readTopProcesses(limit int, totalMem int64) []ProcessM
 	}
 
 	currentProcStats := make(map[int]procStatSnapshot, len(pids))
-	processes := make([]ProcessMetric, 0, len(pids))
+	candidates := make([]procCandidate, 0, len(pids))
 
+	// Pass 1: Lightweight scan of /proc/<pid>/stat only
 	for _, pid := range pids {
 		pidDir := filepath.Join(c.procPath, strconv.Itoa(pid))
-		comm, state, utime, stime, ok := parseProcessStat(pidDir, pid)
+		comm, state, utime, stime, rssPages, ok := parseProcessStat(pidDir, pid)
 		if !ok {
 			continue
 		}
 
-		cmdline := parseProcessCmdline(pidDir, comm)
-		name, state, uidStr, memBytes := parseProcessStatus(pidDir, state)
+		cpuPercent, _, _ := calcProcRates(prevProcStats, lastCPUDiff, lastCPUCount, pid, utime, stime, 0, 0, elapsed)
+		currentProcStats[pid] = procStatSnapshot{utime: utime, stime: stime}
+
+		candidates = append(candidates, procCandidate{
+			pid:        pid,
+			pidDir:     pidDir,
+			comm:       comm,
+			state:      state,
+			utime:      utime,
+			stime:      stime,
+			rssPages:   rssPages,
+			cpuPercent: cpuPercent,
+		})
+	}
+
+	// Sort lightweight candidates by CPU%, then approx RSS pages, then PID
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].cpuPercent != candidates[j].cpuPercent {
+			return candidates[i].cpuPercent > candidates[j].cpuPercent
+		}
+		if candidates[i].rssPages != candidates[j].rssPages {
+			return candidates[i].rssPages > candidates[j].rssPages
+		}
+		return candidates[i].pid < candidates[j].pid
+	})
+
+	// Pass 2: Deep inspect only top limit * 2 (at least 20) candidates
+	candLimit := limit * 2
+	if candLimit < 20 {
+		candLimit = 20
+	}
+	if candLimit > len(candidates) {
+		candLimit = len(candidates)
+	}
+
+	topCandidates := candidates[:candLimit]
+	processes := make([]ProcessMetric, 0, len(topCandidates))
+
+	for _, cand := range topCandidates {
+		cmdline := parseProcessCmdline(cand.pidDir, cand.comm)
+		name, state, uidStr, memBytes := parseProcessStatus(cand.pidDir, cand.state)
 		if name == "" {
-			name = comm
+			name = cand.comm
 		}
 
-		readBytes, writeBytes := parseProcessIO(pidDir, pid)
-		cpuPercent, readRate, writeRate := calcProcRates(prevProcStats, lastCPUDiff, lastCPUCount, pid, utime, stime, readBytes, writeBytes, elapsed)
-		currentProcStats[pid] = procStatSnapshot{utime: utime, stime: stime, readBytes: readBytes, writeBytes: writeBytes}
+		readBytes, writeBytes := parseProcessIO(cand.pidDir, cand.pid)
+		_, readRate, writeRate := calcProcRates(prevProcStats, lastCPUDiff, lastCPUCount, cand.pid, cand.utime, cand.stime, readBytes, writeBytes, elapsed)
+		currentProcStats[cand.pid] = procStatSnapshot{utime: cand.utime, stime: cand.stime, readBytes: readBytes, writeBytes: writeBytes}
 
 		var memPercent float64
 		if totalMem > 0 && memBytes > 0 {
@@ -75,8 +126,8 @@ func (c *SystemCollector) readTopProcesses(limit int, totalMem int64) []ProcessM
 		}
 
 		processes = append(processes, ProcessMetric{
-			PID: pid, Name: name, CommandLine: cmdline, User: resolveUser(uidStr), State: state,
-			CPUPercent: cpuPercent, MemoryBytes: memBytes, MemoryPercent: memPercent,
+			PID: cand.pid, Name: name, CommandLine: cmdline, User: resolveUser(uidStr), State: state,
+			CPUPercent: cand.cpuPercent, MemoryBytes: memBytes, MemoryPercent: memPercent,
 			ReadBytesPerSec: readRate, WriteBytesPerSec: writeRate,
 		})
 	}
@@ -144,36 +195,41 @@ func collectPIDs(entries []os.DirEntry) []int {
 	return pids
 }
 
-func parseProcessStat(pidDir string, pid int) (comm, state string, utime, stime uint64, ok bool) {
+func parseProcessStat(pidDir string, pid int) (comm, state string, utime, stime, rssPages uint64, ok bool) {
 	statBytes, err := os.ReadFile(filepath.Join(pidDir, "stat"))
 	if err != nil {
-		return "", "", 0, 0, false
+		return "", "", 0, 0, 0, false
 	}
 
 	statStr := string(statBytes)
 	firstParen := strings.Index(statStr, "(")
 	lastParen := strings.LastIndex(statStr, ")")
 	if firstParen == -1 || lastParen <= firstParen {
-		return "", "", 0, 0, false
+		return "", "", 0, 0, 0, false
 	}
 
 	comm = statStr[firstParen+1 : lastParen]
 	fields := strings.Fields(strings.TrimSpace(statStr[lastParen+1:]))
 	if len(fields) < 13 {
-		return "", "", 0, 0, false
+		return "", "", 0, 0, 0, false
 	}
 
 	state = parseState(fields[0])
 	var parseErr error
 	if utime, parseErr = strconv.ParseUint(fields[11], 10, 64); parseErr != nil {
 		slog.Warn("failed to parse process utime", slog.Int("pid", pid), slog.Any("error", parseErr))
-		return "", "", 0, 0, false
+		return "", "", 0, 0, 0, false
 	}
 	if stime, parseErr = strconv.ParseUint(fields[12], 10, 64); parseErr != nil {
 		slog.Warn("failed to parse process stime", slog.Int("pid", pid), slog.Any("error", parseErr))
-		return "", "", 0, 0, false
+		return "", "", 0, 0, 0, false
 	}
-	return comm, state, utime, stime, true
+	if len(fields) > 21 {
+		if pages, err := strconv.ParseUint(fields[21], 10, 64); err == nil {
+			rssPages = pages
+		}
+	}
+	return comm, state, utime, stime, rssPages, true
 }
 
 func parseProcessCmdline(pidDir string, comm string) string {

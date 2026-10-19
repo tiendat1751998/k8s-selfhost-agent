@@ -56,7 +56,9 @@ type journalJSONEntry struct {
 	Message           string `json:"MESSAGE"`
 	RealtimeTimestamp string `json:"__REALTIME_TIMESTAMP"`
 	SystemdUnit       string `json:"_SYSTEMD_UNIT"`
+	SystemdUserUnit   string `json:"_SYSTEMD_USER_UNIT"`
 	SyslogIdentifier  string `json:"SYSLOG_IDENTIFIER"`
+	Comm              string `json:"_COMM"`
 	Priority          string `json:"PRIORITY"`
 }
 
@@ -164,7 +166,10 @@ func (j *JournalTailer) readStream(ctx context.Context, r io.Reader) {
 func (j *JournalTailer) parseJournalLine(line string) (LogEntry, bool) {
 	var je journalJSONEntry
 	if err := json.Unmarshal([]byte(line), &je); err == nil && je.Message != "" {
-		if strings.TrimSpace(je.SystemdUnit) == "k8s-agent.service" || strings.TrimSpace(je.SyslogIdentifier) == "k8s-agent" {
+		if strings.TrimSpace(je.SystemdUnit) == "k8s-agent.service" ||
+			strings.TrimSpace(je.SystemdUserUnit) == "k8s-agent.service" ||
+			strings.TrimSpace(je.SyslogIdentifier) == "k8s-agent" ||
+			strings.TrimSpace(je.Comm) == "k8s-agent" {
 			return LogEntry{}, false
 		}
 
@@ -177,7 +182,13 @@ func (j *JournalTailer) parseJournalLine(line string) (LogEntry, bool) {
 
 		svc := strings.TrimSpace(je.SystemdUnit)
 		if svc == "" {
+			svc = strings.TrimSpace(je.SystemdUserUnit)
+		}
+		if svc == "" {
 			svc = strings.TrimSpace(je.SyslogIdentifier)
+		}
+		if svc == "" {
+			svc = strings.TrimSpace(je.Comm)
 		}
 		if svc == "" {
 			svc = "journald"

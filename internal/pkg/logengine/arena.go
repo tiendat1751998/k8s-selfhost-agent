@@ -17,9 +17,9 @@ var BlockBufferPool = sync.Pool{
 }
 
 // InitEngineRuntime tunes the Go runtime memory limits and garbage collection
-// to keep total process RSS strictly under 45-50MB.
+// to keep total process RSS strictly under 25-30MB without cgroup page cache thrashing.
 func InitEngineRuntime() {
-	debug.SetMemoryLimit(38 * 1024 * 1024)
+	debug.SetMemoryLimit(28 * 1024 * 1024)
 	debug.SetGCPercent(25)
 }
 

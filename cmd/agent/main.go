@@ -344,86 +344,11 @@ func main() {
 	collector := NewSystemCollector("", "", nil, WithCollectionInterval(interval))
 	go collector.Start(ctx)
 
-	engineDir = resolveEngineDir(logDir, engineDir, logger)
-
 	logServer := NewLogServer(WithLogDir(logDir))
-	var engineSrc *EngineLogSource
-	var tailerWg sync.WaitGroup
-	var containerTailer *ContainerTailer
-	var podTailer *PodTailer
-
-	if eng, err := NewEngineLogSource(engineDir); err == nil {
-		engineSrc = eng
-		logger.Info("Columnar log engine initialized", slog.String("engine_dir", engineDir))
-		logServer.AddSource(engineSrc)
-
-		fileSrc := &FileLogSource{logDir: logDir}
-		tailerWg.Add(1)
-		go func() {
-			defer tailerWg.Done()
-			if err := fileSrc.IngestToWriter(ctx, engineSrc.Writer()); err != nil && ctx.Err() == nil {
-				logger.Warn("Initial log ingestion into log engine encountered warning", slog.String("error", err.Error()))
-			}
-		}()
-
-		// Continuous container log tailing
-		if dockerCli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation()); err == nil {
-			logServer.SetDockerClient(dockerCli)
-			containerTailer = NewContainerTailer(dockerCli, engineSrc.Writer(), logger)
-			tailerWg.Add(1)
-			go func() {
-				defer tailerWg.Done()
-				containerTailer.Start(ctx)
-			}()
-		}
-
-		// Continuous journalctl log tailing
-		journalTailer := NewJournalTailer(engineSrc.Writer(), logger)
-		tailerWg.Add(1)
-		go func() {
-			defer tailerWg.Done()
-			journalTailer.Start(ctx)
-		}()
-
-		// Continuous Kubernetes CRI Pod log tailing with offset checkpointing
-		checkpointPath := filepath.Join(engineDir, "tail_offsets.json")
-		podTailer = NewPodTailer("/var/log/pods", engineSrc.Writer(), logger, checkpointPath)
-		tailerWg.Add(1)
-		go func() {
-			defer tailerWg.Done()
-			podTailer.Start(ctx)
-		}()
-	} else {
-		logger.Warn("Failed to initialize columnar log engine, falling back to standard sources", slog.String("error", err.Error()))
-	}
-
-	if controlPlaneURL != "" {
-		registrar := NewRegistrar(RegistrarConfig{
-			ControlPlaneURL: controlPlaneURL,
-			NodeIP:          nodeIP,
-			Port:            port,
-			AuthToken:       authToken,
-			Interval:        10 * time.Second,
-			Logger:          logger,
-		})
-		go registrar.Start(ctx)
-	}
-
 	healthChecker := NewK8sHealthChecker(collector, WithK8sProcPath("/proc"))
 	remediator := NewNodeRemediator(WithRemediatorLogDir(logDir))
 	if allowedServices != "" {
 		remediator.AddAllowedServices(strings.Split(allowedServices, ","))
-	}
-
-	if autoHeal {
-		var logWriter *logengine.Writer
-		if engineSrc != nil {
-			logWriter = engineSrc.Writer()
-		}
-		watchdog := NewSelfHealingWatchdog(healthChecker, remediator, WithWatchdogLogWriter(logWriter))
-		watchdog.HookPodTailer(podTailer)
-		go watchdog.Start(ctx)
-		logger.Info("Autonomous self-healing watchdog started")
 	}
 
 	handler := setupHandler(collector, authToken, logServer, healthChecker, remediator)
@@ -443,6 +368,94 @@ func main() {
 
 	logger.Info("Monitoring agent listening", slog.String("addr", srv.Addr))
 
+	if controlPlaneURL != "" {
+		registrar := NewRegistrar(RegistrarConfig{
+			ControlPlaneURL: controlPlaneURL,
+			NodeIP:          nodeIP,
+			Port:            port,
+			AuthToken:       authToken,
+			Interval:        10 * time.Second,
+			Logger:          logger,
+		})
+		go registrar.Start(ctx)
+	}
+
+	var watchdog *SelfHealingWatchdog
+	if autoHeal {
+		watchdog = NewSelfHealingWatchdog(healthChecker, remediator)
+		go watchdog.Start(ctx)
+		logger.Info("Autonomous self-healing watchdog started")
+	}
+
+	engineDir = resolveEngineDir(logDir, engineDir, logger)
+
+	var (
+		engineMu        sync.Mutex
+		engineSrc       *EngineLogSource
+		tailerWg        sync.WaitGroup
+		containerTailer *ContainerTailer
+		podTailer       *PodTailer
+		initDone        = make(chan struct{})
+	)
+
+	go func() {
+		defer close(initDone)
+		eng, err := NewEngineLogSource(engineDir)
+		if err != nil {
+			logger.Warn("Failed to initialize columnar log engine, falling back to standard sources", slog.String("error", err.Error()))
+			return
+		}
+		engineMu.Lock()
+		engineSrc = eng
+		engineMu.Unlock()
+
+		logger.Info("Columnar log engine initialized", slog.String("engine_dir", engineDir))
+		logServer.AddSource(eng)
+
+		fileSrc := &FileLogSource{logDir: logDir}
+		tailerWg.Add(1)
+		go func() {
+			defer tailerWg.Done()
+			if err := fileSrc.IngestToWriter(ctx, eng.Writer()); err != nil && ctx.Err() == nil {
+				logger.Warn("Initial log ingestion into log engine encountered warning", slog.String("error", err.Error()))
+			}
+		}()
+
+		if dockerCli, err := dockerclient.NewClientWithOpts(dockerclient.FromEnv, dockerclient.WithAPIVersionNegotiation()); err == nil {
+			logServer.SetDockerClient(dockerCli)
+			ct := NewContainerTailer(dockerCli, eng.Writer(), logger)
+			engineMu.Lock()
+			containerTailer = ct
+			engineMu.Unlock()
+			tailerWg.Add(1)
+			go func() {
+				defer tailerWg.Done()
+				ct.Start(ctx)
+			}()
+		}
+
+		journalTailer := NewJournalTailer(eng.Writer(), logger)
+		tailerWg.Add(1)
+		go func() {
+			defer tailerWg.Done()
+			journalTailer.Start(ctx)
+		}()
+
+		checkpointPath := filepath.Join(engineDir, "tail_offsets.json")
+		pt := NewPodTailer("/var/log/pods", eng.Writer(), logger, checkpointPath)
+		engineMu.Lock()
+		podTailer = pt
+		engineMu.Unlock()
+		if watchdog != nil {
+			watchdog.HookPodTailer(pt)
+		}
+		tailerWg.Add(1)
+		go func() {
+			defer tailerWg.Done()
+			pt.Start(ctx)
+		}()
+	}()
+
 	<-ctx.Done()
 	logger.Info("Shutting down monitoring agent...")
 
@@ -455,17 +468,23 @@ func main() {
 
 	collector.Stop()
 
-	// Drain active tailers before closing log engine
-	if containerTailer != nil {
-		containerTailer.Stop()
+	<-initDone
+	engineMu.Lock()
+	ct := containerTailer
+	pt := podTailer
+	es := engineSrc
+	engineMu.Unlock()
+
+	if ct != nil {
+		ct.Stop()
 	}
-	if podTailer != nil {
-		podTailer.Stop()
+	if pt != nil {
+		pt.Stop()
 	}
 	tailerWg.Wait()
 
-	if engineSrc != nil {
-		if err := engineSrc.Close(); err != nil {
+	if es != nil {
+		if err := es.Close(); err != nil {
 			logger.Error("Error closing log engine", slog.String("error", err.Error()))
 		}
 	}

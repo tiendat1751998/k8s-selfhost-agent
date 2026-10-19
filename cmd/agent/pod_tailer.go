@@ -77,7 +77,7 @@ func NewPodTailer(baseDir string, writer *logengine.Writer, logger *slog.Logger,
 		checkpointPath: cp,
 		writer:         writer,
 		logger:         logger,
-		pollInterval:   1 * time.Second,
+		pollInterval:   3 * time.Second,
 		files:          make(map[string]*podFileState),
 	}
 	tailer.loadCheckpoint()
@@ -130,6 +130,7 @@ func (p *PodTailer) pollOnce(ctx context.Context) {
 		return
 	}
 
+	var dirty bool
 	seen := make(map[string]bool, len(matches))
 	for _, path := range matches {
 		if ctx.Err() != nil {
@@ -142,7 +143,9 @@ func (p *PodTailer) pollOnce(ctx context.Context) {
 		}
 
 		seen[path] = true
-		p.tailFile(ctx, path)
+		if p.tailFile(ctx, path) {
+			dirty = true
+		}
 	}
 
 	// Prune dead files no longer existing on disk
@@ -150,17 +153,20 @@ func (p *PodTailer) pollOnce(ctx context.Context) {
 	for path := range p.files {
 		if !seen[path] {
 			delete(p.files, path)
+			dirty = true
 		}
 	}
 	p.mu.Unlock()
 
-	p.saveCheckpoint()
+	if dirty {
+		p.saveCheckpoint()
+	}
 }
 
-func (p *PodTailer) tailFile(ctx context.Context, path string) {
+func (p *PodTailer) tailFile(ctx context.Context, path string) bool {
 	fi, err := os.Stat(path)
 	if err != nil {
-		return
+		return false
 	}
 
 	p.mu.Lock()
@@ -171,32 +177,39 @@ func (p *PodTailer) tailFile(ctx context.Context, path string) {
 	}
 	p.mu.Unlock()
 
+	var modified bool
 	// Detect log rotation: file truncated or replaced
 	if fi.Size() < state.offset {
 		// Check if rotated file .1 exists to read any remaining unread bytes
 		rotatedPath := path + ".1"
 		if rfi, rerr := os.Stat(rotatedPath); rerr == nil && rfi.Size() > state.offset {
-			p.readChunk(ctx, rotatedPath, state, rfi.Size())
+			if p.readChunk(ctx, rotatedPath, state, rfi.Size()) {
+				modified = true
+			}
 		}
 		state.offset = 0
 		state.partialBuf.Reset()
+		modified = true
 	}
 
 	if fi.Size() > state.offset {
-		p.readChunk(ctx, path, state, fi.Size())
+		if p.readChunk(ctx, path, state, fi.Size()) {
+			modified = true
+		}
 	}
+	return modified
 }
 
-func (p *PodTailer) readChunk(ctx context.Context, path string, state *podFileState, currentSize int64) {
+func (p *PodTailer) readChunk(ctx context.Context, path string, state *podFileState, currentSize int64) bool {
 	f, err := os.Open(path)
 	if err != nil {
-		return
+		return false
 	}
 	defer f.Close()
 
 	if state.offset > 0 {
 		if _, err := f.Seek(state.offset, io.SeekStart); err != nil {
-			return
+			return false
 		}
 	}
 
@@ -220,6 +233,7 @@ func (p *PodTailer) readChunk(ctx context.Context, path string, state *podFileSt
 
 	state.offset += bytesRead
 	state.lastSize = currentSize
+	return bytesRead > 0
 }
 
 func (p *PodTailer) processLine(rawLine string, meta PodMeta, state *podFileState) {

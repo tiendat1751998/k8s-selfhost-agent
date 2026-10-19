@@ -306,10 +306,13 @@ func (h *K8sHealthChecker) CheckHealth(ctx context.Context) NodeK8sHealthRespons
 		resp.DetectedAnomalies = append(resp.DetectedAnomalies, "ZOMBIE_PROCESSES_DETECTED")
 	}
 
-	// 6. Inspect local containers
-	resp.UnhealthyContainers = detectUnhealthyContainers(ctx, h.runner)
-	if len(resp.UnhealthyContainers) > 0 {
-		resp.DetectedAnomalies = append(resp.DetectedAnomalies, "UNHEALTHY_CONTAINERS_DETECTED")
+	// 6. Inspect local containers (only if Docker is healthy, or using mock runner in tests)
+	_, isOSRunner := h.runner.(*osCommandRunner)
+	if resp.DockerHealthy || !isOSRunner {
+		resp.UnhealthyContainers = detectUnhealthyContainers(ctx, h.runner)
+		if len(resp.UnhealthyContainers) > 0 {
+			resp.DetectedAnomalies = append(resp.DetectedAnomalies, "UNHEALTHY_CONTAINERS_DETECTED")
+		}
 	}
 
 	return resp

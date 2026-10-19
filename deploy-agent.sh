@@ -1,15 +1,15 @@
 #!/bin/bash
-# deploy-agent.sh — Deploy k8s-agent to remote server(s)
-# Usage: ./deploy-agent.sh user@remote-ip [user2@remote-ip2 ...]
+# deploy-agent.sh — Deploy k8s-agent locally or to remote server(s)
+# Usage: ./deploy-agent.sh [user@remote-ip ...]
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
 
-if [ $# -lt 1 ]; then
-    echo "Usage: $0 user@remote-ip [user2@remote-ip2 ...]"
-    echo "Example: $0 datdt@10.10.10.60 datdt@10.10.10.133"
-    exit 1
+LOCAL_MODE=false
+if [ $# -eq 0 ]; then
+    LOCAL_MODE=true
+    echo "🏠 No remote host specified; running in LOCAL deployment mode..."
 fi
 
 TOKEN_EXPLICIT=false
@@ -17,16 +17,22 @@ if [ -n "$AGENT_AUTH_TOKEN" ]; then
     TOKEN_EXPLICIT=true
 fi
 
-# Auto-load AGENT_AUTH_TOKEN and CONTROL_PLANE_URL from .env if present and unset in shell
-if [ -f "$ENV_FILE" ]; then
-    if [ "$TOKEN_EXPLICIT" = "false" ]; then
-        VAL=$(grep -E '^[[:space:]]*AGENT_AUTH_TOKEN=' "$ENV_FILE" | tail -n 1 | cut -d '=' -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
-        if [ -n "$VAL" ]; then
-            AGENT_AUTH_TOKEN="$VAL"
-            TOKEN_EXPLICIT=true
-            echo "🔑 Loaded AGENT_AUTH_TOKEN from $ENV_FILE"
+# Auto-load AGENT_AUTH_TOKEN from ~/.k8s-agent/agent.env, /etc/k8s-agent/agent.env, or .env if unset in shell
+if [ "$TOKEN_EXPLICIT" = "false" ]; then
+    for ENV_CANDIDATE in "$HOME/.k8s-agent/agent.env" "/etc/k8s-agent/agent.env" "$ENV_FILE"; do
+        if [ -f "$ENV_CANDIDATE" ]; then
+            VAL=$(grep -E '^[[:space:]]*AGENT_AUTH_TOKEN=' "$ENV_CANDIDATE" 2>/dev/null | tail -n 1 | cut -d '=' -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
+            if [ -n "$VAL" ]; then
+                AGENT_AUTH_TOKEN="$VAL"
+                TOKEN_EXPLICIT=true
+                echo "🔑 Loaded AGENT_AUTH_TOKEN from $ENV_CANDIDATE"
+                break
+            fi
         fi
-    fi
+    done
+fi
+
+if [ -f "$ENV_FILE" ]; then
     if [ -z "$CONTROL_PLANE_URL" ]; then
         VAL=$(grep -E '^[[:space:]]*CONTROL_PLANE_URL=' "$ENV_FILE" | tail -n 1 | cut -d '=' -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
         if [ -n "$VAL" ]; then
@@ -55,11 +61,77 @@ if [ -n "$CONTROL_PLANE_URL" ]; then
     echo "🎯 Central Control Plane URL: $CONTROL_PLANE_URL"
 fi
 
-# Build agent for Linux amd64 once before deploying to hosts
+# Build agent for Linux amd64
 echo "🔨 Building agent for linux/amd64..."
 GOOS=linux GOARCH=amd64 go build -o k8s-agent ./cmd/agent
 
-# Temporary local file setup for credentials
+# Handle LOCAL mode
+if [ "$LOCAL_MODE" = "true" ]; then
+    echo ""
+    echo "============================================================"
+    echo "🚀 Deploying k8s-agent locally on this host..."
+    echo "============================================================"
+
+    # Stop any conflicting system service and user service
+    echo "🛑 Stopping conflicting services..."
+    sudo -n systemctl stop k8s-agent 2>/dev/null || true
+    sudo -n systemctl disable k8s-agent 2>/dev/null || true
+    systemctl --user stop k8s-agent 2>/dev/null || true
+
+    mkdir -p ~/.config/systemd/user
+    mkdir -p ~/.k8s-agent/logengine
+
+    # Check for legacy 1-block part flood (>150 part_* dirs)
+    if [ -d "$HOME/.k8s-agent/logengine/parts" ]; then
+        PART_COUNT=$(find "$HOME/.k8s-agent/logengine/parts" -mindepth 1 -maxdepth 1 -type d -name 'part_*' 2>/dev/null | wc -l)
+        if [ "$PART_COUNT" -gt 150 ]; then
+            echo "🧹 Wiping legacy parts flood ($PART_COUNT parts > 150) in ~/.k8s-agent/logengine/parts..."
+            rm -rf "$HOME/.k8s-agent/logengine/parts" && mkdir -p "$HOME/.k8s-agent/logengine/parts"
+        fi
+    fi
+
+    cp -f k8s-agent "$HOME/k8s-agent"
+    chmod +x "$HOME/k8s-agent"
+
+    cat > "$HOME/.k8s-agent/agent.env" << EOF
+AGENT_AUTH_TOKEN=${AGENT_AUTH_TOKEN}
+EOF
+    if [ -n "$CONTROL_PLANE_URL" ]; then
+        cat >> "$HOME/.k8s-agent/agent.env" << EOF
+CONTROL_PLANE_URL=${CONTROL_PLANE_URL}
+EOF
+    fi
+    chmod 600 "$HOME/.k8s-agent/agent.env"
+
+    cat > "$HOME/.config/systemd/user/k8s-agent.service" << 'UNIT'
+[Unit]
+Description=K8sControl Monitoring Agent
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=-%h/.k8s-agent/agent.env
+ExecStart=%h/k8s-agent --port 9100 --engine-dir %h/.k8s-agent/logengine
+Restart=always
+RestartSec=5
+MemoryMax=128M
+
+[Install]
+WantedBy=default.target
+UNIT
+
+    systemctl --user daemon-reload
+    systemctl --user enable k8s-agent
+    systemctl --user restart k8s-agent
+    (loginctl enable-linger "$(whoami)" 2>/dev/null || true)
+
+    echo ""
+    echo "✅ Agent successfully updated & running locally on port 9100"
+    echo "📊 Test: curl http://localhost:9100/health"
+    exit 0
+fi
+
+# Temporary local file setup for credentials for remote deploys
 TMP_SUFFIX="$$"
 LOCAL_ENV_FILE=".agent.env.${TMP_SUFFIX}"
 LOCAL_BIN_COPY="k8s-agent-new.${TMP_SUFFIX}"
@@ -94,7 +166,16 @@ for REMOTE in "$@"; do
     ssh -t "$REMOTE" "
       mkdir -p ~/.config/systemd/user && \
       mkdir -p ~/.k8s-agent/logengine && \
+      (sudo -n systemctl stop k8s-agent 2>/dev/null || true) && \
+      (sudo -n systemctl disable k8s-agent 2>/dev/null || true) && \
       (systemctl --user stop k8s-agent 2>/dev/null || true) && \
+      if [ -d ~/.k8s-agent/logengine/parts ]; then
+        PART_COUNT=\$(find ~/.k8s-agent/logengine/parts -mindepth 1 -maxdepth 1 -type d -name 'part_*' 2>/dev/null | wc -l)
+        if [ \"\$PART_COUNT\" -gt 150 ]; then
+          echo '🧹 Wiping legacy parts flood (> 150) in ~/.k8s-agent/logengine/parts...'
+          rm -rf ~/.k8s-agent/logengine/parts && mkdir -p ~/.k8s-agent/logengine/parts
+        fi
+      fi && \
       mv -f /tmp/$LOCAL_BIN_COPY ~/k8s-agent && \
       chmod +x ~/k8s-agent && \
       if [ \"$TOKEN_EXPLICIT\" = \"false\" ] && [ -f ~/.k8s-agent/agent.env ]; then
@@ -117,8 +198,7 @@ EnvironmentFile=-%h/.k8s-agent/agent.env
 ExecStart=%h/k8s-agent --port 9100 --engine-dir %h/.k8s-agent/logengine
 Restart=always
 RestartSec=5
-MemoryHigh=40M
-MemoryMax=50M
+MemoryMax=128M
 
 [Install]
 WantedBy=default.target
@@ -141,4 +221,3 @@ done
 
 echo ""
 echo "✨ All deployments completed successfully."
-

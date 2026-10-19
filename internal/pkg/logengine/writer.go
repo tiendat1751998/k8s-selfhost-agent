@@ -34,9 +34,10 @@ type Writer struct {
 	activePartDir    string
 	activePartBlocks int
 	activePartBytes  int64
-	maxRetention     time.Duration
-	maxDiskBytes     int64
-	lastPruneTime    time.Time
+	maxRetention      time.Duration
+	maxDiskBytes      int64
+	lastPruneTime     time.Time
+	lastSavedDictSize int
 
 	flushReqCh chan chan error
 	closeCh    chan struct{}
@@ -105,7 +106,7 @@ func (w *Writer) flusherLoop() {
 
 	ticker := time.NewTicker(w.flushInterval)
 	defer ticker.Stop()
-	idleTimer := time.NewTimer(10 * time.Millisecond)
+	idleTimer := time.NewTimer(100 * time.Millisecond)
 	defer idleTimer.Stop()
 
 	batch := make([]Entry, w.maxRows)
@@ -176,7 +177,7 @@ func (w *Writer) flusherLoop() {
 				default:
 				}
 			}
-			idleTimer.Reset(10 * time.Millisecond)
+			idleTimer.Reset(100 * time.Millisecond)
 
 			select {
 			case <-w.closeCh:
@@ -439,13 +440,16 @@ func (w *Writer) flushCurrentBlock() error {
 	w.activePartBytes += int64(len(compressed))
 	w.closedMu.Unlock()
 
-	// 5. Persist dictionary snapshot
-	dictData, err := json.Marshal(w.dict.Export())
-	if err != nil {
-		return fmt.Errorf("failed to marshal dict: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(w.dir, "dict.json"), dictData, 0644); err != nil {
-		return fmt.Errorf("failed to write dict.json: %w", err)
+	// 5. Persist dictionary snapshot (only when dictionary has changed)
+	if w.dict != nil && w.dict.Size() != w.lastSavedDictSize {
+		dictData, err := json.Marshal(w.dict.Export())
+		if err != nil {
+			return fmt.Errorf("failed to marshal dict: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(w.dir, "dict.json"), dictData, 0644); err != nil {
+			return fmt.Errorf("failed to write dict.json: %w", err)
+		}
+		w.lastSavedDictSize = w.dict.Size()
 	}
 
 	w.builder.Reset()
