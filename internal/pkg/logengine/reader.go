@@ -26,10 +26,12 @@ type QueryParams struct {
 
 // Reader executes search queries across columnar parts with 3-stage pruning.
 type Reader struct {
-	mu       sync.RWMutex
-	dir      string
-	partsDir string
-	dict     *LabelDictionary
+	mu                 sync.RWMutex
+	dir                string
+	partsDir           string
+	dict               *LabelDictionary
+	cachedBlockCount   int
+	blockCountCachedAt time.Time
 }
 
 // NewReader initializes a Reader for the given engine directory.
@@ -79,42 +81,27 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 		return nil, err
 	}
 
-	type partInfo struct {
-		id      uint64
-		name    string
-		dir     string
-		minTime int64
-		maxTime int64
-		pidx    *PrimaryIndex
+	type partMeta struct {
+		id   uint64
+		name string
+		dir  string
 	}
 
-	var parts []partInfo
+	var parts []partMeta
 	for _, e := range partEntries {
 		if e.IsDir() && strings.HasPrefix(e.Name(), "part_") {
 			var id uint64
 			_, _ = fmt.Sscanf(e.Name(), "part_%d", &id)
-			pDir := filepath.Join(r.partsDir, e.Name())
-			pidx, err := loadPrimaryIndex(filepath.Join(pDir, "primary.idx"))
-			if err != nil || pidx.Len() == 0 {
-				continue
-			}
-			parts = append(parts, partInfo{
-				id:      id,
-				name:    e.Name(),
-				dir:     pDir,
-				minTime: pidx.entries[0].MinTime,
-				maxTime: pidx.entries[pidx.Len()-1].MaxTime,
-				pidx:    pidx,
+			parts = append(parts, partMeta{
+				id:   id,
+				name: e.Name(),
+				dir:  filepath.Join(r.partsDir, e.Name()),
 			})
 		}
 	}
 
-	// Sort parts chronologically by numeric part ID and min timestamp
 	sort.Slice(parts, func(i, j int) bool {
-		if parts[i].id != parts[j].id {
-			return parts[i].id < parts[j].id
-		}
-		return parts[i].minTime < parts[j].minTime
+		return parts[i].id < parts[j].id
 	})
 
 	if len(parts) == 0 {
@@ -152,34 +139,55 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 	}
 
 	if sinceUnix > 0 {
-		// Forward search starting at targeted chunk index matching the requested time window
-		startIdx := sort.Search(len(parts), func(i int) bool {
-			return parts[i].maxTime >= sinceUnix
-		})
-		for i := startIdx; i < len(parts); i++ {
+		type loadedPart struct {
+			dir  string
+			pidx *PrimaryIndex
+		}
+		var matchingParts []loadedPart
+		for i := len(parts) - 1; i >= 0; i-- {
+			if ctx.Err() != nil {
+				break
+			}
+			pidx, err := loadPrimaryIndex(filepath.Join(parts[i].dir, "primary.idx"))
+			if err != nil || pidx.Len() == 0 {
+				continue
+			}
+			if pidx.entries[pidx.Len()-1].MaxTime < sinceUnix {
+				break // Earliest relevant part reached; stop reverse scan
+			}
+			matchingParts = append(matchingParts, loadedPart{dir: parts[i].dir, pidx: pidx})
+		}
+
+		// Scan matching parts in chronological forward order
+		for i := len(matchingParts) - 1; i >= 0; i-- {
 			if ctx.Err() != nil || len(results) >= limit {
 				break
 			}
-			if untilUnix > 0 && parts[i].minTime > untilUnix {
-				break
+			lp := matchingParts[i]
+			if untilUnix > 0 && lp.pidx.entries[0].MinTime > untilUnix {
+				continue
 			}
-			candidates := parts[i].pidx.Search(sinceUnix, untilUnix)
-			candidates = filterBlocksByBloom(parts[i].dir, candidates)
+			candidates := lp.pidx.Search(sinceUnix, untilUnix)
+			candidates = filterBlocksByBloom(lp.dir, candidates)
 			if len(candidates) == 0 {
 				continue
 			}
-			results = r.scanPartBlocks(parts[i].dir, candidates, view, results, limit, sinceUnix, untilUnix, queryLower, params, false)
+			results = r.scanPartBlocks(lp.dir, candidates, view, results, limit, sinceUnix, untilUnix, queryLower, params, false)
 		}
 	} else {
-		// No since filter: retrieve the latest entries up to limit starting from newest chunk parts
+		// No since filter: retrieve the latest entries up to limit starting from newest chunk parts lazily
 		for i := len(parts) - 1; i >= 0; i-- {
 			if ctx.Err() != nil || len(results) >= limit {
 				break
 			}
-			if untilUnix > 0 && parts[i].minTime > untilUnix {
+			pidx, err := loadPrimaryIndex(filepath.Join(parts[i].dir, "primary.idx"))
+			if err != nil || pidx.Len() == 0 {
 				continue
 			}
-			candidates := parts[i].pidx.Search(sinceUnix, untilUnix)
+			if untilUnix > 0 && pidx.entries[0].MinTime > untilUnix {
+				continue
+			}
+			candidates := pidx.Search(sinceUnix, untilUnix)
 			candidates = filterBlocksByBloom(parts[i].dir, candidates)
 			if len(candidates) == 0 {
 				continue
@@ -339,25 +347,67 @@ func loadPrimaryIndex(path string) (*PrimaryIndex, error) {
 	return pidx, nil
 }
 
-// BlockCount returns total indexed blocks across all parts.
+// BlockCount returns total indexed blocks across parts (cached with 5s TTL, capped at newest 256 parts).
 func (r *Reader) BlockCount() int {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if !r.blockCountCachedAt.IsZero() && time.Since(r.blockCountCachedAt) < 5*time.Second {
+		return r.cachedBlockCount
+	}
 
 	partEntries, err := os.ReadDir(r.partsDir)
 	if err != nil {
+		r.cachedBlockCount = 0
+		r.blockCountCachedAt = time.Now()
 		return 0
 	}
-	total := 0
+
+	type partItem struct {
+		id   uint64
+		name string
+	}
+	var parts []partItem
 	for _, e := range partEntries {
 		if e.IsDir() && strings.HasPrefix(e.Name(), "part_") {
-			pidx, err := loadPrimaryIndex(filepath.Join(r.partsDir, e.Name(), "primary.idx"))
-			if err == nil {
-				total += pidx.Len()
-			}
+			var id uint64
+			_, _ = fmt.Sscanf(e.Name(), "part_%d", &id)
+			parts = append(parts, partItem{id: id, name: e.Name()})
 		}
 	}
+
+	sort.Slice(parts, func(i, j int) bool {
+		return parts[i].id < parts[j].id
+	})
+
+	start := 0
+	if len(parts) > 256 {
+		start = len(parts) - 256
+	}
+
+	total := 0
+	for i := start; i < len(parts); i++ {
+		pidx, err := loadPrimaryIndex(filepath.Join(r.partsDir, parts[i].name, "primary.idx"))
+		if err == nil {
+			total += pidx.Len()
+		}
+	}
+
+	r.cachedBlockCount = total
+	r.blockCountCachedAt = time.Now()
 	return total
+}
+
+// HasBlocks returns true quickly if there are any indexed blocks.
+func (r *Reader) HasBlocks() bool {
+	r.mu.RLock()
+	if r.cachedBlockCount > 0 && time.Since(r.blockCountCachedAt) < 5*time.Second {
+		r.mu.RUnlock()
+		return true
+	}
+	r.mu.RUnlock()
+
+	return r.BlockCount() > 0
 }
 
 func (r *Reader) Close() error { return nil }

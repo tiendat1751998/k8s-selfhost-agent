@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"context"
@@ -104,6 +104,57 @@ func TestJournalTailer_IngestsJSONEntries(t *testing.T) {
 	}
 }
 
+func TestJournalTailer_SkipsK8sAgentOwnLogs(t *testing.T) {
+	tempDir := t.TempDir()
+	dict := logengine.NewLabelDictionary()
+	writer, err := logengine.NewWriter(tempDir, dict)
+	if err != nil {
+		t.Fatalf("failed to create writer: %v", err)
+	}
+	defer writer.Close()
+
+	tailer := NewJournalTailer(writer, slog.Default())
+	tailer.availableCheck = func() bool { return true }
+
+	fakeOutput := `{"MESSAGE":"k8s-agent self log 1","__REALTIME_TIMESTAMP":"1726315200000000","_SYSTEMD_UNIT":"k8s-agent.service","PRIORITY":"6"}
+{"MESSAGE":"k8s-agent self log 2","__REALTIME_TIMESTAMP":"1726315201000000","SYSLOG_IDENTIFIER":"k8s-agent","PRIORITY":"6"}
+{"MESSAGE":"valid service log","__REALTIME_TIMESTAMP":"1726315202000000","_SYSTEMD_UNIT":"nginx.service","PRIORITY":"6"}
+`
+	tailer.streamReader = func(ctx context.Context) (io.ReadCloser, error) {
+		return &stringCloser{Reader: strings.NewReader(fakeOutput)}, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		tailer.Start(ctx)
+		close(done)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	<-done
+
+	_ = writer.Flush()
+	reader, err := logengine.NewReader(tempDir, dict)
+	if err != nil {
+		t.Fatalf("reader failed: %v", err)
+	}
+	defer reader.Close()
+
+	results, err := reader.Search(context.Background(), logengine.QueryParams{Limit: 10})
+	if err != nil {
+		t.Fatalf("search failed: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("expected exactly 1 entry (k8s-agent logs skipped), got %d: %+v", len(results), results)
+	}
+	if results[0].Service != "nginx.service" {
+		t.Errorf("expected service 'nginx.service', got '%s'", results[0].Service)
+	}
+}
+
 type stringCloser struct {
 	*strings.Reader
 }
@@ -111,3 +162,4 @@ type stringCloser struct {
 func (s *stringCloser) Close() error {
 	return nil
 }
+

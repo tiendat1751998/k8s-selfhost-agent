@@ -388,12 +388,10 @@ type MemoryLogSource struct {
 	logs map[string][]LogEntry
 }
 
-// NewMemoryLogSource creates an empty MemoryLogSource.
 func NewMemoryLogSource() *MemoryLogSource {
 	return &MemoryLogSource{logs: make(map[string][]LogEntry)}
 }
 
-// AddEntry adds a single log entry.
 func (m *MemoryLogSource) AddEntry(service string, timestamp time.Time, level, message string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -443,7 +441,10 @@ type EngineLogSource struct {
 // NewEngineLogSource creates a new EngineLogSource backed by logengine.
 func NewEngineLogSource(engineDir string) (*EngineLogSource, error) {
 	dict := logengine.NewLabelDictionary()
-	w, err := logengine.NewWriter(engineDir, dict)
+	w, err := logengine.NewWriter(engineDir, dict,
+		logengine.WithMaxRetention(7*24*time.Hour),
+		logengine.WithMaxDiskBytes(256*1024*1024),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -487,10 +488,9 @@ func (e *EngineLogSource) GetLogs(ctx context.Context, app string, tail int, sin
 	}
 	results := make([]LogEntry, len(entries))
 	for i, en := range entries {
-		results[i] = LogEntry{
-			Timestamp: en.Timestamp, Service: en.Service, Level: en.Level, Message: en.Message,
-			Raw: formatLogEntry(LogEntry{Timestamp: en.Timestamp, Service: en.Service, Level: en.Level, Message: en.Message}),
-		}
+		le := LogEntry{Timestamp: en.Timestamp, Service: en.Service, Level: en.Level, Message: en.Message}
+		le.Raw = formatLogEntry(le)
+		results[i] = le
 	}
 	return results, nil
 }

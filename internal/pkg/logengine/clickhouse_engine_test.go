@@ -176,3 +176,66 @@ func TestClickHouse_RetentionAndDiskQuotaPruning(t *testing.T) {
 	// Due to 500 byte limit, older parts should have been pruned
 	assert.LessOrEqual(t, len(entries), 3, "older parts should be pruned by disk quota")
 }
+
+func TestClickHouse_PruneOldParts_HardCap128(t *testing.T) {
+	tmpDir := t.TempDir()
+	partsDir := filepath.Join(tmpDir, "parts")
+	require.NoError(t, os.MkdirAll(partsDir, 0755))
+
+	// Create 135 fake part directories
+	for i := 1; i <= 135; i++ {
+		pDir := filepath.Join(partsDir, fmt.Sprintf("part_%016d", i))
+		require.NoError(t, os.MkdirAll(pDir, 0755))
+		_ = os.WriteFile(filepath.Join(pDir, "primary.idx"), []byte{0}, 0644)
+	}
+
+	err := pruneOldParts(partsDir, "", 0, 0)
+	require.NoError(t, err)
+
+	entries, err := os.ReadDir(partsDir)
+	require.NoError(t, err)
+	assert.Equal(t, 128, len(entries), "should enforce hard cap of 128 sealed parts")
+
+	// Oldest parts 1..7 must have been deleted
+	for i := 1; i <= 7; i++ {
+		oldPart := filepath.Join(partsDir, fmt.Sprintf("part_%016d", i))
+		_, statErr := os.Stat(oldPart)
+		assert.True(t, os.IsNotExist(statErr), "part %d should have been pruned", i)
+	}
+
+	// Part 135 must still exist
+	newestPart := filepath.Join(partsDir, fmt.Sprintf("part_%016d", 135))
+	_, statErr := os.Stat(newestPart)
+	assert.False(t, os.IsNotExist(statErr), "newest part 135 should still exist")
+}
+
+func TestClickHouse_Reader_BlockCount_TTLAndHasBlocks(t *testing.T) {
+	tmpDir := t.TempDir()
+	dict := NewLabelDictionary()
+	w, err := NewWriter(tmpDir, dict, WithMaxRowsPerBlock(5))
+	require.NoError(t, err)
+
+	for i := 0; i < 5; i++ {
+		_ = w.Write(Entry{
+			Timestamp: time.Now().UTC(),
+			Service:   "test-svc",
+			Level:     "info",
+			Message:   fmt.Sprintf("msg %d", i),
+		})
+	}
+	require.NoError(t, w.Flush())
+	require.NoError(t, w.Close())
+
+	r, err := NewReader(tmpDir, dict)
+	require.NoError(t, err)
+	defer r.Close()
+
+	assert.True(t, r.HasBlocks(), "HasBlocks should return true")
+	count1 := r.BlockCount()
+	assert.Equal(t, 1, count1)
+
+	// Second call should return cached result
+	count2 := r.BlockCount()
+	assert.Equal(t, count1, count2)
+}
+

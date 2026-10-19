@@ -36,6 +36,7 @@ type Writer struct {
 	activePartBytes  int64
 	maxRetention     time.Duration
 	maxDiskBytes     int64
+	lastPruneTime    time.Time
 
 	flushReqCh chan chan error
 	closeCh    chan struct{}
@@ -98,6 +99,10 @@ func NewWriter(dir string, dict *LabelDictionary, opts ...WriterOption) (*Writer
 // and writes parts to disk.
 func (w *Writer) flusherLoop() {
 	defer w.wg.Done()
+	go func() {
+		_ = pruneOldParts(w.partsDir, "", w.maxRetention, w.maxDiskBytes)
+	}()
+
 	ticker := time.NewTicker(w.flushInterval)
 	defer ticker.Stop()
 	idleTimer := time.NewTimer(10 * time.Millisecond)
@@ -337,6 +342,7 @@ func (w *Writer) flushCurrentBlock() error {
 	}
 
 	w.closedMu.Lock()
+	isNewPart := false
 	if w.activePartDir == "" || w.activePartBlocks >= maxBlocksPerPart || w.activePartBytes >= maxPartBytes {
 		if w.activePartDir != "" {
 			w.nextPartID++
@@ -349,6 +355,7 @@ func (w *Writer) flushCurrentBlock() error {
 			w.closedMu.Unlock()
 			return fmt.Errorf("failed to create part dir %s: %w", w.activePartDir, err)
 		}
+		isNewPart = true
 	}
 	activeDir := w.activePartDir
 	w.closedMu.Unlock()
@@ -443,9 +450,13 @@ func (w *Writer) flushCurrentBlock() error {
 
 	w.builder.Reset()
 
-	// 6. Check retention / disk quota pruning
-	if err := pruneOldParts(w.partsDir, activeDir, w.maxRetention, w.maxDiskBytes); err != nil {
-		w.setLastError(err)
+	// 6. Check retention / disk quota pruning (throttled: only on new part or once per 60s)
+	now := time.Now()
+	if isNewPart || w.lastPruneTime.IsZero() || now.Sub(w.lastPruneTime) >= 60*time.Second {
+		w.lastPruneTime = now
+		if err := pruneOldParts(w.partsDir, activeDir, w.maxRetention, w.maxDiskBytes); err != nil {
+			w.setLastError(err)
+		}
 	}
 
 	return nil

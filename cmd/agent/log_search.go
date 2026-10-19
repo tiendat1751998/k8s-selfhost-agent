@@ -38,7 +38,7 @@ func (s *LogServer) QueryLogs(ctx context.Context, app string, tail int, sinceSt
 					break
 				}
 			}
-			if len(entries) > 0 || eng.BlockCount() > 0 || !hasOtherSources {
+			if len(entries) > 0 || eng.HasBlocks() || !hasOtherSources {
 				sort.SliceStable(entries, func(i, j int) bool {
 					return entries[i].Timestamp.Before(entries[j].Timestamp)
 				})

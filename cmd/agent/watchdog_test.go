@@ -192,3 +192,79 @@ func TestWatchdog_Rule5_RestartUnhealthyContainers(t *testing.T) {
 	}
 }
 
+func TestK8sHealth_NonK8sHost_KubeletNotInstalled(t *testing.T) {
+	tempProc := t.TempDir()
+	collector := NewSystemCollector(tempProc, "", nil, WithProcPath(tempProc))
+	checker := NewK8sHealthChecker(collector, WithK8sProcPath(tempProc), WithKubeletInstalledCheck(func() bool {
+		return false
+	}))
+
+	ctx := context.Background()
+	resp := checker.CheckHealth(ctx)
+
+	if resp.KubeletInstalled {
+		t.Errorf("expected KubeletInstalled to be false on non-K8s host")
+	}
+	for _, anomaly := range resp.DetectedAnomalies {
+		if anomaly == "KUBELET_UNRESPONSIVE" {
+			t.Errorf("KUBELET_UNRESPONSIVE should NOT be reported when kubelet is not installed")
+		}
+	}
+}
+
+func TestWatchdog_DoesNotRestartKubelet_WhenNotInstalled(t *testing.T) {
+	runner := newMockCommandRunner()
+	remediator := NewNodeRemediator(WithCommandRunner(runner))
+
+	prober := &mockRuntimeProber{
+		kubeletHealthy: false,
+		plegHealthy:    false,
+	}
+	collector := NewSystemCollector("", "", nil)
+	checker := NewK8sHealthChecker(collector, WithRuntimeProber(prober), WithKubeletInstalledCheck(func() bool {
+		return false
+	}))
+
+	watchdog := NewSelfHealingWatchdog(checker, remediator, WithWatchdogInterval(10*time.Millisecond))
+	ctx := context.Background()
+
+	// Run 3 iterations
+	for i := 0; i < 3; i++ {
+		watchdog.runOnce(ctx)
+	}
+
+	if runner.hasExecuted("systemctl restart kubelet") {
+		t.Errorf("watchdog MUST NOT restart kubelet when kubelet is not installed")
+	}
+	if watchdog.consecutiveKubeletFail != 0 {
+		t.Errorf("consecutiveKubeletFail should remain 0 when kubelet is not installed, got %d", watchdog.consecutiveKubeletFail)
+	}
+}
+
+func TestK8sHealth_ContainerdProc_And_DockerHealthy_NoSocketDownAnomaly(t *testing.T) {
+	tempProc := t.TempDir()
+	pidDir := filepath.Join(tempProc, "456")
+	_ = os.MkdirAll(pidDir, 0755)
+	_ = os.WriteFile(filepath.Join(pidDir, "stat"), []byte("456 (containerd) S 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0"), 0644)
+
+	prober := &mockRuntimeProber{
+		kubeletHealthy: true,
+		plegHealthy:    true,
+		socketStatus: map[string]bool{
+			"/var/run/docker.sock": true,
+		},
+	}
+	collector := NewSystemCollector(tempProc, "", nil, WithProcPath(tempProc))
+	checker := NewK8sHealthChecker(collector, WithRuntimeProber(prober), WithK8sProcPath(tempProc))
+
+	resp := checker.CheckHealth(context.Background())
+	if !resp.DockerHealthy {
+		t.Errorf("expected DockerHealthy=true")
+	}
+	for _, a := range resp.DetectedAnomalies {
+		if a == "CONTAINERD_SOCKET_DOWN" {
+			t.Errorf("CONTAINERD_SOCKET_DOWN should NOT be detected when Docker is healthy")
+		}
+	}
+}
+

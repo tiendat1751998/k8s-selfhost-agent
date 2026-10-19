@@ -23,6 +23,8 @@ func WithMaxDiskBytes(bytes int64) WriterOption {
 	}
 }
 
+const maxSealedParts = 128
+
 type partDiskInfo struct {
 	name    string
 	dir     string
@@ -34,10 +36,6 @@ type partDiskInfo struct {
 // pruneOldParts removes older parts when retention duration or disk quota is exceeded.
 // The currently active part directory is never pruned.
 func pruneOldParts(partsDir, activePartDir string, maxRetention time.Duration, maxDiskBytes int64) error {
-	if maxRetention <= 0 && maxDiskBytes <= 0 {
-		return nil
-	}
-
 	entries, err := os.ReadDir(partsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -46,9 +44,13 @@ func pruneOldParts(partsDir, activePartDir string, maxRetention time.Duration, m
 		return err
 	}
 
-	var parts []partDiskInfo
-	var totalBytes int64
+	type partCandidate struct {
+		name string
+		dir  string
+		id   uint64
+	}
 
+	var candidates []partCandidate
 	for _, e := range entries {
 		if !e.IsDir() || !strings.HasPrefix(e.Name(), "part_") {
 			continue
@@ -57,17 +59,44 @@ func pruneOldParts(partsDir, activePartDir string, maxRetention time.Duration, m
 		if activePartDir != "" && pDir == activePartDir {
 			continue // active part is immune from pruning
 		}
-
 		var id uint64
 		_, _ = fmt.Sscanf(e.Name(), "part_%d", &id)
+		candidates = append(candidates, partCandidate{
+			name: e.Name(),
+			dir:  pDir,
+			id:   id,
+		})
+	}
 
-		info, err := e.Info()
+	// Sort candidates from oldest to newest by part ID
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].id < candidates[j].id
+	})
+
+	// 0. Enforce hard cap of maxParts = 128 sealed directories BEFORE walking files
+	if len(candidates) > maxSealedParts {
+		excess := len(candidates) - maxSealedParts
+		for i := 0; i < excess; i++ {
+			_ = os.RemoveAll(candidates[i].dir)
+		}
+		candidates = candidates[excess:]
+	}
+
+	if maxRetention <= 0 && maxDiskBytes <= 0 {
+		return nil
+	}
+
+	var parts []partDiskInfo
+	var totalBytes int64
+
+	for _, c := range candidates {
+		info, err := os.Stat(c.dir)
 		if err != nil {
 			continue
 		}
 
 		var pSize int64
-		_ = filepath.Walk(pDir, func(_ string, fi os.FileInfo, err error) error {
+		_ = filepath.Walk(c.dir, func(_ string, fi os.FileInfo, err error) error {
 			if err == nil && fi != nil && !fi.IsDir() {
 				pSize += fi.Size()
 			}
@@ -76,11 +105,11 @@ func pruneOldParts(partsDir, activePartDir string, maxRetention time.Duration, m
 
 		totalBytes += pSize
 		parts = append(parts, partDiskInfo{
-			name:    e.Name(),
-			dir:     pDir,
+			name:    c.name,
+			dir:     c.dir,
 			modTime: info.ModTime(),
 			size:    pSize,
-			id:      id,
+			id:      c.id,
 		})
 	}
 

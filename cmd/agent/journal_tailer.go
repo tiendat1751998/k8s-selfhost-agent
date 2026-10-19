@@ -145,7 +145,10 @@ func (j *JournalTailer) readStream(ctx context.Context, r io.Reader) {
 			continue
 		}
 
-		entry := j.parseJournalLine(line)
+		entry, ok := j.parseJournalLine(line)
+		if !ok {
+			continue
+		}
 		if j.writer != nil {
 			_ = j.writer.Write(logengine.Entry{
 				Timestamp: entry.Timestamp,
@@ -158,9 +161,13 @@ func (j *JournalTailer) readStream(ctx context.Context, r io.Reader) {
 	}
 }
 
-func (j *JournalTailer) parseJournalLine(line string) LogEntry {
+func (j *JournalTailer) parseJournalLine(line string) (LogEntry, bool) {
 	var je journalJSONEntry
 	if err := json.Unmarshal([]byte(line), &je); err == nil && je.Message != "" {
+		if strings.TrimSpace(je.SystemdUnit) == "k8s-agent.service" || strings.TrimSpace(je.SyslogIdentifier) == "k8s-agent" {
+			return LogEntry{}, false
+		}
+
 		ts := time.Now().UTC()
 		if je.RealtimeTimestamp != "" {
 			if micro, err := strconv.ParseInt(je.RealtimeTimestamp, 10, 64); err == nil {
@@ -184,10 +191,10 @@ func (j *JournalTailer) parseJournalLine(line string) LogEntry {
 			Level:     lvl,
 			Message:   je.Message,
 			Raw:       line,
-		}
+		}, true
 	}
 
-	return parseLogLine(line, "journald")
+	return parseLogLine(line, "journald"), true
 }
 
 func priorityToLevel(p string) string {

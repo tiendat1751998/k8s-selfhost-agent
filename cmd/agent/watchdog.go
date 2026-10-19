@@ -175,7 +175,7 @@ func (w *SelfHealingWatchdog) runOnce(ctx context.Context) {
 	}
 
 	// 2. Autonomous Kubelet Recovery
-	if !health.KubeletHealthy {
+	if !health.KubeletHealthy && health.KubeletInstalled {
 		w.consecutiveKubeletFail++
 		if w.consecutiveKubeletFail >= 3 {
 			w.consecutiveKubeletFail = 0

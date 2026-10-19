@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -23,6 +25,7 @@ type UnhealthyContainerInfo struct {
 // NodeK8sHealthResponse represents structured Kubernetes node-level diagnostics.
 type NodeK8sHealthResponse struct {
 	NodeName            string                   `json:"node_name"`
+	KubeletInstalled    bool                     `json:"kubelet_installed"`
 	KubeletHealthy      bool                     `json:"kubelet_healthy"`
 	KubeletLatencyMs    float64                  `json:"kubelet_latency_ms"`
 	PLEGHealthy         bool                     `json:"pleg_healthy"`
@@ -91,15 +94,21 @@ func (p *defaultRuntimeProber) ProbeSocket(sockPath string, timeout time.Duratio
 		_ = conn.Close()
 		return true
 	}
+	if os.IsPermission(err) || strings.Contains(strings.ToLower(err.Error()), "permission denied") {
+		if fi, statErr := os.Stat(sockPath); statErr == nil && fi.Mode()&os.ModeSocket != 0 {
+			return true
+		}
+	}
 	return false
 }
 
 // K8sHealthChecker probes local host runtime health.
 type K8sHealthChecker struct {
-	collector *SystemCollector
-	prober    RuntimeProber
-	procPath  string
-	runner    CommandRunner
+	collector          *SystemCollector
+	prober             RuntimeProber
+	procPath           string
+	runner             CommandRunner
+	kubeletInstalledFn func() bool
 }
 
 // HealthCheckerOption configures K8sHealthChecker.
@@ -128,6 +137,15 @@ func WithHealthCommandRunner(r CommandRunner) HealthCheckerOption {
 	return func(h *K8sHealthChecker) {
 		if r != nil {
 			h.runner = r
+		}
+	}
+}
+
+// WithKubeletInstalledCheck injects custom predicate for kubelet installation.
+func WithKubeletInstalledCheck(fn func() bool) HealthCheckerOption {
+	return func(h *K8sHealthChecker) {
+		if fn != nil {
+			h.kubeletInstalledFn = fn
 		}
 	}
 }
@@ -214,19 +232,59 @@ func (h *K8sHealthChecker) CheckHealth(ctx context.Context) NodeK8sHealthRespons
 		resp.CRISocketPath = containerdSock
 	}
 
-	// 4. Scan /proc for D-state and Zombie processes
-	dCount, zCount, totalPIDs := scanProcStates(h.procPath)
+	// 4. Scan /proc for D-state and Zombie processes + daemon states
+	dCount, zCount, totalPIDs, containerdRunning, kubeletRunning := scanProcStates(h.procPath)
 	resp.DStateProcesses = dCount
 	resp.ZombieCount = zCount
 	if totalPIDs >= 30000 {
 		resp.PIDPressure = true
 	}
 
+	if !resp.ContainerdHealthy && containerdRunning {
+		if _, err := os.Stat(containerdSock); err == nil {
+			resp.ContainerdHealthy = true
+			if resp.CRISocketPath == "" {
+				resp.CRISocketPath = containerdSock
+			}
+		}
+	}
+
+	// Default to containerdSock if neither docker nor crio succeeded
+	if resp.CRISocketPath == "" && !resp.DockerHealthy {
+		resp.CRISocketPath = containerdSock
+	}
+
+	// Determine if Kubelet is installed
+	if h.kubeletInstalledFn != nil {
+		resp.KubeletInstalled = h.kubeletInstalledFn()
+	} else if _, isDefault := h.prober.(*defaultRuntimeProber); !isDefault {
+		resp.KubeletInstalled = true
+	} else {
+		if resp.KubeletHealthy || kubeletRunning {
+			resp.KubeletInstalled = true
+		} else {
+			kubeletIndicators := []string{
+				"/usr/bin/kubelet",
+				"/usr/local/bin/kubelet",
+				"/var/lib/kubelet/config.yaml",
+				"/etc/kubernetes/kubelet.conf",
+				"/lib/systemd/system/kubelet.service",
+				"/etc/systemd/system/kubelet.service",
+			}
+			for _, path := range kubeletIndicators {
+				if _, err := os.Stat(path); err == nil {
+					resp.KubeletInstalled = true
+					break
+				}
+			}
+		}
+	}
+
 	// 5. Detect anomalies
-	if !resp.KubeletHealthy {
+	if !resp.KubeletHealthy && resp.KubeletInstalled {
 		resp.DetectedAnomalies = append(resp.DetectedAnomalies, "KUBELET_UNRESPONSIVE")
 	}
-	if !resp.ContainerdHealthy {
+	if !resp.ContainerdHealthy && !resp.DockerHealthy {
 		resp.DetectedAnomalies = append(resp.DetectedAnomalies, "CONTAINERD_SOCKET_DOWN")
 	}
 	if resp.DiskPressure {
@@ -257,11 +315,11 @@ func (h *K8sHealthChecker) CheckHealth(ctx context.Context) NodeK8sHealthRespons
 	return resp
 }
 
-// scanProcStates counts D-state and Zombie processes with zero heap-alloc buffer reuse.
-func scanProcStates(procPath string) (dCount int, zCount int, totalPIDs int) {
+// scanProcStates counts D-state, Zombie processes, and detects containerd/kubelet with zero heap allocations.
+func scanProcStates(procPath string) (dCount int, zCount int, totalPIDs int, containerdRunning bool, kubeletRunning bool) {
 	entries, err := os.ReadDir(procPath)
 	if err != nil {
-		return 0, 0, 0
+		return 0, 0, 0, false, false
 	}
 
 	buf := make([]byte, 512)
@@ -287,31 +345,48 @@ func scanProcStates(procPath string) (dCount int, zCount int, totalPIDs int) {
 		}
 
 		content := buf[:n]
+		firstParen := -1
 		lastParen := -1
+		for i := 0; i < len(content); i++ {
+			if content[i] == '(' {
+				firstParen = i
+				break
+			}
+		}
 		for i := len(content) - 1; i >= 0; i-- {
 			if content[i] == ')' {
 				lastParen = i
 				break
 			}
 		}
-		if lastParen == -1 || lastParen+2 >= len(content) {
+		if firstParen == -1 || lastParen <= firstParen || lastParen+2 >= len(content) {
 			continue
 		}
+
+		comm := content[firstParen+1 : lastParen]
 
 		idx := lastParen + 1
 		for idx < len(content) && content[idx] == ' ' {
 			idx++
 		}
 		if idx < len(content) {
-			switch content[idx] {
+			st := content[idx]
+			switch st {
 			case 'D':
 				dCount++
 			case 'Z':
 				zCount++
 			}
+			if st != 'Z' {
+				if bytes.Equal(comm, []byte("containerd")) {
+					containerdRunning = true
+				} else if bytes.Equal(comm, []byte("kubelet")) {
+					kubeletRunning = true
+				}
+			}
 		}
 	}
-	return dCount, zCount, totalPIDs
+	return dCount, zCount, totalPIDs, containerdRunning, kubeletRunning
 }
 
 // RegisterRoutes registers the /k8s/health endpoint to the provided ServeMux.
