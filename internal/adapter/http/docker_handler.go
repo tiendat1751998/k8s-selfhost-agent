@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
@@ -54,10 +55,6 @@ func NewDockerHandler(repo docker.Repository, args ...interface{}) *DockerHandle
 			if v != nil {
 				h.logClient = v
 			}
-		case *agent.AgentLogClient:
-			if v != nil {
-				h.logClient = v
-			}
 		case *HostRemediationHandler:
 			if v != nil {
 				h.remediationHandler = v
@@ -65,6 +62,24 @@ func NewDockerHandler(repo docker.Repository, args ...interface{}) *DockerHandle
 		}
 	}
 	return h
+}
+
+func isDockerDaemonUnavailable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, s := range []string{
+		"error during connect", "docker_engine", "docker.sock",
+		"cannot connect to the docker daemon", "is the docker daemon running",
+		"this node is not a swarm manager", "docker client not initialized",
+		"npipe", "dial unix", "system cannot find the file specified", "connection refused",
+	} {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // SetRemediationHandler configures the host remediation handler.
@@ -125,6 +140,10 @@ func (h *DockerHandler) ListContainers(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := h.repo.ListContainers(r.Context())
 	if err != nil {
+		if isDockerDaemonUnavailable(err) {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"data": []interface{}{}})
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "failed to list containers", err)
 		return
 	}
@@ -139,6 +158,10 @@ func (h *DockerHandler) ListNodes(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := h.repo.ListNodes(r.Context())
 	if err != nil {
+		if isDockerDaemonUnavailable(err) {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"data": []interface{}{}})
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "failed to list nodes", err)
 		return
 	}
@@ -180,8 +203,7 @@ func (h *DockerHandler) DrainNode(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "missing node id", nil)
 		return
 	}
-	err := h.repo.DrainNode(r.Context(), id)
-	if err != nil {
+	if err := h.repo.DrainNode(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to drain node", err)
 		return
 	}
@@ -199,8 +221,7 @@ func (h *DockerHandler) ActivateNode(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "missing node id", nil)
 		return
 	}
-	err := h.repo.ActivateNode(r.Context(), id)
-	if err != nil {
+	if err := h.repo.ActivateNode(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to activate node", err)
 		return
 	}
@@ -218,9 +239,7 @@ func (h *DockerHandler) RemoveNode(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "missing node id", nil)
 		return
 	}
-	force := r.URL.Query().Get("force") == "true"
-	err := h.repo.RemoveNode(r.Context(), id, force)
-	if err != nil {
+	if err := h.repo.RemoveNode(r.Context(), id, r.URL.Query().Get("force") == "true"); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to remove node", err)
 		return
 	}
@@ -235,6 +254,10 @@ func (h *DockerHandler) ListServices(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := h.repo.ListServices(r.Context())
 	if err != nil {
+		if isDockerDaemonUnavailable(err) {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"data": []interface{}{}})
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "failed to list services", err)
 		return
 	}
@@ -246,11 +269,9 @@ type scaleServiceRequest struct {
 }
 
 func (r *scaleServiceRequest) Validate() error {
-	ve := NewValidationError("validation failed")
 	if r.Replicas < 0 {
+		ve := NewValidationError("validation failed")
 		ve.Add("replicas", "replicas must be greater than or equal to 0")
-	}
-	if ve.HasErrors() {
 		return ve
 	}
 	return nil
@@ -267,9 +288,7 @@ func (h *DockerHandler) ScaleService(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-
-	err := h.repo.ScaleService(r.Context(), id, req.Replicas)
-	if err != nil {
+	if err := h.repo.ScaleService(r.Context(), id, req.Replicas); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to scale service", err)
 		return
 	}
@@ -281,13 +300,9 @@ type toggleContainerRequest struct {
 }
 
 func (r *toggleContainerRequest) Validate() error {
-	ve := NewValidationError("validation failed")
-	switch r.Action {
-	case "start", "stop":
-	default:
+	if r.Action != "start" && r.Action != "stop" {
+		ve := NewValidationError("validation failed")
 		ve.Add("action", "action must be start or stop")
-	}
-	if ve.HasErrors() {
 		return ve
 	}
 	return nil
@@ -304,9 +319,7 @@ func (h *DockerHandler) ToggleContainer(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-
-	err := h.repo.ToggleContainer(r.Context(), id, req.Action)
-	if err != nil {
+	if err := h.repo.ToggleContainer(r.Context(), id, req.Action); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to toggle container state", err)
 		return
 	}

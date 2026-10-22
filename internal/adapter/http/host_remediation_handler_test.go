@@ -402,3 +402,44 @@ func TestHostRemediationHandler_GetHostRemediationHistory_BadGateway(t *testing.
 		t.Fatalf("expected 502 Bad Gateway, got %d (body: %s)", rec.Code, rec.Body.String())
 	}
 }
+
+type mockAuthMiddleware struct {
+	requiredPerms []string
+}
+
+func (m *mockAuthMiddleware) RequirePermission(perm string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			m.requiredPerms = append(m.requiredPerms, perm)
+			http.Error(w, "Forbidden: missing permission "+perm, http.StatusForbidden)
+		})
+	}
+}
+
+func TestHostRemediationHandler_RemediateHost_RBACRequired(t *testing.T) {
+	client := &mockRemediationClient{
+		actionResult: &agent.RemediationActionResult{Success: true},
+	}
+	handler := adapthttp.NewHostRemediationHandler(nil, client, nil)
+	authMw := &mockAuthMiddleware{}
+	handler.SetAuthMiddleware(authMw)
+
+	r := chi.NewRouter()
+	r.Route("/api/v1/hosts", func(sub chi.Router) {
+		handler.RegisterRoutes(sub)
+	})
+
+	payload := `{"action":"restart_service","target":"containerd","reason":"test rescue"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/hosts/worker-01/remediate", bytes.NewBufferString(payload))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden because auth middleware requires cluster:write, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	if len(authMw.requiredPerms) == 0 || authMw.requiredPerms[len(authMw.requiredPerms)-1] != "cluster:write" {
+		t.Fatalf("expected cluster:write permission check, got %v", authMw.requiredPerms)
+	}
+}
+

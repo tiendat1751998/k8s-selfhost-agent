@@ -169,6 +169,12 @@ func (h *HelmHandler) ListReleases(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clusterID := chi.URLParam(r, "cluster")
+	if clusterID == "" {
+		clusterID = strings.TrimSpace(r.URL.Query().Get("cluster"))
+	}
+	if clusterID == "" {
+		clusterID = "default"
+	}
 	namespace := getNamespaceQuery(r)
 
 	releases, err := h.releaseManager.ListReleases(r.Context(), clusterID, namespace)
