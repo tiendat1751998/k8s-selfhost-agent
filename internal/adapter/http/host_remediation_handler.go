@@ -61,7 +61,7 @@ func (h *HostRemediationHandler) SetAuthMiddleware(authMw interface{ RequirePerm
 func (h *HostRemediationHandler) RegisterRoutes(r chi.Router) {
 	if h.authMw != nil {
 		r.With(h.authMw.RequirePermission("cluster:read")).Get("/{id}/k8s-health", h.GetHostK8sHealth)
-		r.Post("/{id}/remediate", h.RemediateHost)
+		r.With(h.authMw.RequirePermission("cluster:write")).Post("/{id}/remediate", h.RemediateHost)
 		r.With(h.authMw.RequirePermission("cluster:read")).Get("/{id}/remediate/history", h.GetHostRemediationHistory)
 		r.With(h.authMw.RequirePermission("cluster:read")).Get("/k8s/nodes/{node}/remediate/history", h.GetNodeRemediationHistory)
 		r.With(h.authMw.RequirePermission("cluster:read")).Get("/nodes/{node}/remediate/history", h.GetNodeRemediationHistory)

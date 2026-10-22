@@ -43,11 +43,10 @@ func (r *observabilityRepo) ListSLODefinitions(ctx context.Context) ([]observabi
 			FROM slo_definitions 
 			ORDER BY created_at DESC
 		`
-		fbQ, fbArgs := BuildTenantQuery(ctx, fallbackQuery)
 		var fbErr error
-		rows, fbErr = r.getDB(ctx).Query(ctx, fbQ, fbArgs...)
+		rows, fbErr = r.getDB(ctx).Query(ctx, fallbackQuery)
 		if fbErr != nil {
-			return nil, fmt.Errorf("querying slo definitions: %w", err)
+			return nil, fmt.Errorf("querying slo definitions: %w", fbErr)
 		}
 		defer rows.Close()
 

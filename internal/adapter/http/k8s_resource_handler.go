@@ -78,7 +78,14 @@ func isK8sUnavailable(err error) bool {
 		return true
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "kubernetes not connected") ||
+	return strings.Contains(msg, "clusterid cannot be empty") ||
+		strings.Contains(msg, "decrypting cluster") ||
+		strings.Contains(msg, "parsing kubeconfig") ||
+		strings.Contains(msg, "insecure tls rejected") ||
+		strings.Contains(msg, "not kubernetes") ||
+		strings.Contains(msg, "invalid configuration") ||
+		strings.Contains(msg, "fleet repository not initialized") ||
+		strings.Contains(msg, "kubernetes not connected") ||
 		strings.Contains(msg, "kubernetes cluster not connected") ||
 		strings.Contains(msg, "kubernetes client not initialized") ||
 		strings.Contains(msg, "cluster is unreachable") ||

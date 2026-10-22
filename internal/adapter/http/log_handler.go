@@ -72,6 +72,7 @@ func (h *LogHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/stream", h.HandleStream)
 	r.Get("/status", h.HandleStatus)
 	r.Get("/services", h.HandleGetServices)
+	r.Get("/targets", h.HandleGetServices)
 }
 
 // HandleStatus returns metadata on the storage engine, latency, total records, and retention.
@@ -363,7 +364,7 @@ func (h *LogHandler) HandleGetServices(w http.ResponseWriter, r *http.Request) {
 	if services == nil {
 		services = []string{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"services": services})
+	writeJSON(w, http.StatusOK, map[string]any{"services": services, "targets": services})
 }
 
 // HandleSurroundingContext retrieves log context around an event for a service.
