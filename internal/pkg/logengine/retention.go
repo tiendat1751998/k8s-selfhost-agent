@@ -73,9 +73,17 @@ func pruneOldParts(partsDir, activePartDir string, maxRetention time.Duration, m
 		return candidates[i].id < candidates[j].id
 	})
 
-	// 0. Enforce hard cap of maxParts = 128 sealed directories BEFORE walking files
-	if len(candidates) > maxSealedParts {
-		excess := len(candidates) - maxSealedParts
+	// 0. Enforce cap of effectiveMaxParts sealed directories BEFORE walking files
+	effectiveMaxParts := maxSealedParts
+	if maxDiskBytes > 0 {
+		needed := int(maxDiskBytes/(4*1024*1024)) + 16
+		if needed > effectiveMaxParts {
+			effectiveMaxParts = needed
+		}
+	}
+
+	if len(candidates) > effectiveMaxParts {
+		excess := len(candidates) - effectiveMaxParts
 		for i := 0; i < excess; i++ {
 			_ = os.RemoveAll(candidates[i].dir)
 			if (i+1)%25 == 0 {

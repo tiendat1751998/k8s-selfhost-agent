@@ -55,13 +55,9 @@ func newDockerLogSource() *DockerLogSource {
 func NewDockerLogSourceWithClient(cli DockerClientInterface) *DockerLogSource { return &DockerLogSource{cli: cli} }
 
 func (d *DockerLogSource) ListServices(ctx context.Context) ([]string, error) {
-	if d.cli == nil {
-		return nil, nil
-	}
+	if d.cli == nil { return nil, nil }
 	containers, err := d.cli.ContainerList(ctx, container.ListOptions{All: true})
-	if err != nil {
-		return nil, err
-	}
+	if err != nil { return nil, err }
 
 	services := make([]string, 0, len(containers))
 	seen := make(map[string]struct{}, len(containers))
@@ -89,21 +85,12 @@ func (d *DockerLogSource) ListServices(ctx context.Context) ([]string, error) {
 }
 
 func (d *DockerLogSource) GetLogs(ctx context.Context, app string, tail int, sinceTime, untilTime *time.Time, query string, level string) ([]LogEntry, error) {
-	if d.cli == nil {
-		return nil, nil
-	}
-
+	if d.cli == nil { return nil, nil }
 	containers, err := d.cli.ContainerList(ctx, container.ListOptions{All: true})
-	if err != nil {
-		return nil, err
-	}
+	if err != nil { return nil, err }
 
 	tailStr := "100"
-	if tail > 0 {
-		tailStr = strconv.Itoa(tail)
-	} else if tail < 0 {
-		tailStr = "all"
-	}
+	if tail > 0 { tailStr = strconv.Itoa(tail) } else if tail < 0 { tailStr = "all" }
 	var sinceStr, untilStr string
 	if sinceTime != nil {
 		sinceStr = sinceTime.Format(time.RFC3339Nano)
@@ -445,9 +432,15 @@ type EngineLogSource struct {
 // NewEngineLogSource creates a new EngineLogSource backed by logengine.
 func NewEngineLogSource(engineDir string) (*EngineLogSource, error) {
 	dict := logengine.NewLabelDictionary()
+	maxDiskBytes := int64(512 * 1024 * 1024)
+	if envVal := os.Getenv("AGENT_LOG_MAX_DISK_MB"); envVal != "" {
+		if mb, err := strconv.Atoi(envVal); err == nil && mb > 0 {
+			maxDiskBytes = int64(mb) * 1024 * 1024
+		}
+	}
 	w, err := logengine.NewWriter(engineDir, dict,
 		logengine.WithMaxRetention(7*24*time.Hour),
-		logengine.WithMaxDiskBytes(256*1024*1024),
+		logengine.WithMaxDiskBytes(maxDiskBytes),
 	)
 	if err != nil {
 		return nil, err
@@ -464,12 +457,16 @@ func (e *EngineLogSource) Writer() *logengine.Writer { return e.writer }
 func (e *EngineLogSource) Reader() *logengine.Reader { return e.reader }
 
 func (e *EngineLogSource) Close() error {
-	if e.writer != nil { return e.writer.Close() }
+	if e.writer != nil {
+		return e.writer.Close()
+	}
 	return nil
 }
 
 func (e *EngineLogSource) ListServices(_ context.Context) ([]string, error) {
-	if e.dict == nil { return nil, nil }
+	if e.dict == nil {
+		return nil, nil
+	}
 	return e.dict.Export(), nil
 }
 
@@ -480,9 +477,37 @@ func (e *EngineLogSource) GetLogs(ctx context.Context, app string, tail int, sin
 	var since, until time.Time
 	if sinceTime != nil { since = *sinceTime }
 	if untilTime != nil { until = *untilTime }
-	entries, err := e.reader.Search(ctx, logengine.QueryParams{
+
+	params := logengine.QueryParams{
 		Service: app, Level: level, Query: query, Since: since, Until: until, Limit: tail,
-	})
+	}
+
+	var entries []logengine.Entry
+	var err error
+
+	trimmedQuery := strings.TrimSpace(query)
+	hasAlphaNum := false
+	if trimmedQuery != "" {
+		for i := 0; i < len(trimmedQuery); i++ {
+			c := trimmedQuery[i]
+			if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' {
+				hasAlphaNum = true
+				break
+			}
+		}
+	}
+
+	if hasAlphaNum {
+		params.ExactMatch = true
+		entries, err = e.reader.Search(ctx, params)
+		if err == nil && len(entries) == 0 {
+			params.ExactMatch = false
+			entries, err = e.reader.Search(ctx, params)
+		}
+	} else {
+		entries, err = e.reader.Search(ctx, params)
+	}
+
 	if err != nil {
 		return nil, err
 	}

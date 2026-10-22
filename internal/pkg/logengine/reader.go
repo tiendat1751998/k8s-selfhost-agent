@@ -3,6 +3,7 @@ package logengine
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -49,6 +50,33 @@ func NewReader(dir string, dict *LabelDictionary) (*Reader, error) {
 	return &Reader{dir: dir, partsDir: filepath.Join(dir, "parts"), dict: dict}, nil
 }
 
+func readPartTimeBounds(pDir string) (minTime, maxTime int64, ok bool) {
+	f, err := os.Open(filepath.Join(pDir, "primary.idx"))
+	if err != nil {
+		return 0, 0, false
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil || fi.Size() < 16 {
+		return 0, 0, false
+	}
+	sz := fi.Size()
+
+	var buf [16]byte
+	if _, err := f.ReadAt(buf[0:8], 0); err != nil {
+		return 0, 0, false
+	}
+	minTime = int64(binary.LittleEndian.Uint64(buf[0:8]))
+
+	if _, err := f.ReadAt(buf[8:16], sz-8); err != nil {
+		return 0, 0, false
+	}
+	maxTime = int64(binary.LittleEndian.Uint64(buf[8:16]))
+
+	return minTime, maxTime, true
+}
+
 // Search executes query with 3-stage pruning (time index, bloom filter if exact match, decompression).
 func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error) {
 	r.mu.RLock()
@@ -67,9 +95,56 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 		untilUnix = params.Until.UnixNano()
 	}
 
-	var queryTokens [][]byte
-	if strings.TrimSpace(params.Query) != "" {
-		Tokenize([]byte(params.Query), func(tok []byte) { queryTokens = append(queryTokens, tok) })
+	var bloomTokens [][]byte
+	if params.ExactMatch && strings.TrimSpace(params.Query) != "" {
+		Tokenize([]byte(params.Query), func(tok []byte) {
+			if bytes.IndexByte(tok, '_') != -1 {
+				start := 0
+				for i := 0; i <= len(tok); i++ {
+					if i == len(tok) || tok[i] == '_' {
+						if i-start >= 2 {
+							bloomTokens = append(bloomTokens, tok[start:i])
+						}
+						start = i + 1
+					}
+				}
+			} else {
+				bloomTokens = append(bloomTokens, tok)
+			}
+		})
+	} else if !params.ExactMatch && params.Query != "" {
+		q := []byte(params.Query)
+		n := len(q)
+		i := 0
+		for i < n {
+			for i < n && !isAlphaNum(q[i]) {
+				i++
+			}
+			if i >= n {
+				break
+			}
+			start := i
+			for i < n && isAlphaNum(q[i]) {
+				i++
+			}
+			end := i
+			if start > 0 && end < n && !isAlphaNum(q[start-1]) && !isAlphaNum(q[end]) {
+				tok := q[start:end]
+				if bytes.IndexByte(tok, '_') != -1 {
+					subStart := 0
+					for j := 0; j <= len(tok); j++ {
+						if j == len(tok) || tok[j] == '_' {
+							if j-subStart >= 2 {
+								bloomTokens = append(bloomTokens, tok[subStart:j])
+							}
+							subStart = j + 1
+						}
+					}
+				} else if len(tok) >= 2 {
+					bloomTokens = append(bloomTokens, tok)
+				}
+			}
+		}
 	}
 	queryLower := strings.ToLower(strings.TrimSpace(params.Query))
 
@@ -111,41 +186,20 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 	view := NewBlockView()
 	var results []Entry
 
-	filterBlocksByBloom := func(pDir string, candidateBlocks []int) []int {
-		if params.ExactMatch && len(queryTokens) > 0 {
-			if bloomData, err := os.ReadFile(filepath.Join(pDir, "bloom.bin")); err == nil {
-				var surviving []int
-				var bf BlockBloomFilter
-				for _, bIdx := range candidateBlocks {
-					start := bIdx * BloomFilterSize
-					if start+BloomFilterSize <= len(bloomData) {
-						bf.CopyFrom(bloomData[start : start+BloomFilterSize])
-						match := true
-						for _, tok := range queryTokens {
-							if !bf.Contains(tok) {
-								match = false
-								break
-							}
-						}
-						if match {
-							surviving = append(surviving, bIdx)
-						}
-					}
-				}
-				return surviving
+	if sinceUnix > 0 {
+		startIdx := 0
+		if len(parts) > 8 {
+			startIdx = sort.Search(len(parts), func(i int) bool {
+				_, maxT, ok := readPartTimeBounds(parts[i].dir)
+				return ok && maxT >= sinceUnix
+			})
+			if startIdx > 0 {
+				startIdx--
 			}
 		}
-		return candidateBlocks
-	}
 
-	if sinceUnix > 0 {
-		type loadedPart struct {
-			dir  string
-			pidx *PrimaryIndex
-		}
-		var matchingParts []loadedPart
-		for i := len(parts) - 1; i >= 0; i-- {
-			if ctx.Err() != nil {
+		for i := startIdx; i < len(parts); i++ {
+			if ctx.Err() != nil || len(results) >= limit {
 				break
 			}
 			pidx, err := loadPrimaryIndex(filepath.Join(parts[i].dir, "primary.idx"))
@@ -153,26 +207,19 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 				continue
 			}
 			if pidx.entries[pidx.Len()-1].MaxTime < sinceUnix {
-				break // Earliest relevant part reached; stop reverse scan
-			}
-			matchingParts = append(matchingParts, loadedPart{dir: parts[i].dir, pidx: pidx})
-		}
-
-		// Scan matching parts in chronological forward order
-		for i := len(matchingParts) - 1; i >= 0; i-- {
-			if ctx.Err() != nil || len(results) >= limit {
-				break
-			}
-			lp := matchingParts[i]
-			if untilUnix > 0 && lp.pidx.entries[0].MinTime > untilUnix {
 				continue
 			}
-			candidates := lp.pidx.Search(sinceUnix, untilUnix)
-			candidates = filterBlocksByBloom(lp.dir, candidates)
+			if untilUnix > 0 && pidx.entries[0].MinTime > untilUnix {
+				if i > startIdx {
+					break
+				}
+				continue
+			}
+			candidates := pidx.Search(sinceUnix, untilUnix)
 			if len(candidates) == 0 {
 				continue
 			}
-			results = r.scanPartBlocks(lp.dir, candidates, view, results, limit, sinceUnix, untilUnix, queryLower, params, false)
+			results = r.scanPartBlocks(parts[i].dir, candidates, bloomTokens, view, results, limit, sinceUnix, untilUnix, queryLower, params, false)
 		}
 	} else {
 		// No since filter: retrieve the latest entries up to limit starting from newest chunk parts lazily
@@ -188,11 +235,10 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 				continue
 			}
 			candidates := pidx.Search(sinceUnix, untilUnix)
-			candidates = filterBlocksByBloom(parts[i].dir, candidates)
 			if len(candidates) == 0 {
 				continue
 			}
-			results = r.scanPartBlocks(parts[i].dir, candidates, view, results, limit, sinceUnix, untilUnix, queryLower, params, true)
+			results = r.scanPartBlocks(parts[i].dir, candidates, bloomTokens, view, results, limit, sinceUnix, untilUnix, queryLower, params, true)
 		}
 		// Sort the latest extracted entries chronologically ascending
 		sort.SliceStable(results, func(i, j int) bool {
@@ -203,16 +249,27 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 	return results, nil
 }
 
-func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, view *BlockView, results []Entry, limit int, sinceUnix, untilUnix int64, queryLower string, params QueryParams, reverse bool) []Entry {
+func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, bloomTokens [][]byte, view *BlockView, results []Entry, limit int, sinceUnix, untilUnix int64, queryLower string, params QueryParams, reverse bool) []Entry {
 	marksData, err := os.ReadFile(filepath.Join(pDir, "marks.bin"))
 	if err != nil {
 		return results
 	}
-	dataFile, err := os.Open(filepath.Join(pDir, "data.bin"))
-	if err != nil {
-		return results
-	}
-	defer dataFile.Close()
+
+	var bloomFile *os.File
+	var bloomOpened bool
+	defer func() {
+		if bloomFile != nil {
+			_ = bloomFile.Close()
+		}
+	}()
+
+	var dataFile *os.File
+	var dataOpened bool
+	defer func() {
+		if dataFile != nil {
+			_ = dataFile.Close()
+		}
+	}()
 
 	blocks := candidateBlocks
 	if reverse {
@@ -248,14 +305,44 @@ func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, view *BlockV
 		var mark BlockMark
 		mark.Decode(marksData[markOffset : markOffset+BlockMarkSize])
 
-		// 1. Bitmask Pruning: skip block if level bitmask does not intersect
+		// 1. Bitmask Pruning (Stage 1 in RAM): skip block if level bitmask or service bloom doesn't match
 		if targetLevelMask != 0xFFFF && mark.LevelMask != 0 && (mark.LevelMask&targetLevelMask) == 0 {
-			continue // zero disk read, zero decompression!
+			continue // 0 extra syscalls, 0 disk reads
+		}
+		if targetServiceBit != 0 && mark.ServiceBloom != 0 && (mark.ServiceBloom&targetServiceBit) != targetServiceBit {
+			continue // 0 extra syscalls, 0 disk reads
 		}
 
-		// 2. ServiceBloom Pruning: skip block if service bloom hash mask does not contain target bit
-		if targetServiceBit != 0 && mark.ServiceBloom != 0 && (mark.ServiceBloom&targetServiceBit) != targetServiceBit {
-			continue // zero disk read, zero decompression!
+		// 2. Bloom Filter Pruning (Stage 2: 1KB stack ReadAt)
+		if len(bloomTokens) > 0 {
+			if !bloomOpened {
+				bloomOpened = true
+				bloomFile, _ = os.Open(filepath.Join(pDir, "bloom.bin"))
+			}
+			if bloomFile != nil {
+				var bf BlockBloomFilter
+				if _, err := bloomFile.ReadAt(bf[:], int64(bIdx)*BloomFilterSize); err == nil {
+					hasAll := true
+					for _, tok := range bloomTokens {
+						if !bf.Contains(tok) {
+							hasAll = false
+							break
+						}
+					}
+					if !hasAll {
+						continue // missing token in block bloom filter; skip block!
+					}
+				}
+			}
+		}
+
+		// 3. Late Materialization & Decompression (Stage 3: lazy data.bin open)
+		if !dataOpened {
+			dataOpened = true
+			dataFile, err = os.Open(filepath.Join(pDir, "data.bin"))
+			if err != nil || dataFile == nil {
+				return results
+			}
 		}
 
 		readLen := int(mark.CompressedLength)
@@ -267,7 +354,6 @@ func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, view *BlockV
 			continue
 		}
 
-		// 3. Late Materialization: unpack ONLY metadata columns first
 		if err := view.UnpackMeta(compressedSlice, scratch); err != nil {
 			continue
 		}
@@ -277,7 +363,6 @@ func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, view *BlockV
 			start, end, step = view.RowCount-1, -1, -1
 		}
 
-		// First pass: check if any row matches timestamp, service, and level filters
 		hasMatchingRow := false
 		for i := start; i != end; i += step {
 			ts := view.Timestamps[i]
@@ -297,15 +382,13 @@ func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, view *BlockV
 		}
 
 		if !hasMatchingRow {
-			continue // LATE MATERIALIZATION: Zero message decompression!
+			continue // zero message decompression!
 		}
 
-		// Row matched! Decompress messages frame now
 		if err := view.EnsureMessagesDecompressed(scratch); err != nil {
 			continue
 		}
 
-		// Extract matched entries
 		for i := start; i != end && len(results) < limit; i += step {
 			ts := view.Timestamps[i]
 			if (sinceUnix > 0 && ts < sinceUnix) || (untilUnix > 0 && ts > untilUnix) {
@@ -347,7 +430,7 @@ func loadPrimaryIndex(path string) (*PrimaryIndex, error) {
 	return pidx, nil
 }
 
-// BlockCount returns total indexed blocks across parts (cached with 5s TTL, capped at newest 256 parts).
+// BlockCount returns total indexed blocks across all parts (cached with 5s TTL).
 func (r *Reader) BlockCount() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -363,33 +446,13 @@ func (r *Reader) BlockCount() int {
 		return 0
 	}
 
-	type partItem struct {
-		id   uint64
-		name string
-	}
-	var parts []partItem
+	total := 0
 	for _, e := range partEntries {
 		if e.IsDir() && strings.HasPrefix(e.Name(), "part_") {
-			var id uint64
-			_, _ = fmt.Sscanf(e.Name(), "part_%d", &id)
-			parts = append(parts, partItem{id: id, name: e.Name()})
-		}
-	}
-
-	sort.Slice(parts, func(i, j int) bool {
-		return parts[i].id < parts[j].id
-	})
-
-	start := 0
-	if len(parts) > 256 {
-		start = len(parts) - 256
-	}
-
-	total := 0
-	for i := start; i < len(parts); i++ {
-		pidx, err := loadPrimaryIndex(filepath.Join(r.partsDir, parts[i].name, "primary.idx"))
-		if err == nil {
-			total += pidx.Len()
+			fi, err := os.Stat(filepath.Join(r.partsDir, e.Name(), "primary.idx"))
+			if err == nil {
+				total += int(fi.Size() / 16)
+			}
 		}
 	}
 
@@ -412,79 +475,3 @@ func (r *Reader) HasBlocks() bool {
 
 func (r *Reader) Close() error { return nil }
 
-func matchFilter(actual, pattern string) bool {
-	if strings.EqualFold(actual, pattern) {
-		return true
-	}
-	if len(pattern) <= 3 {
-		return false
-	}
-	actLower := strings.ToLower(actual)
-	patLower := strings.ToLower(pattern)
-	if strings.HasPrefix(actLower, patLower) {
-		if len(actLower) > len(patLower) && isBoundary(actLower[len(patLower)]) {
-			return true
-		}
-	}
-	if strings.HasSuffix(actLower, patLower) {
-		if len(actLower) > len(patLower) && isBoundary(actLower[len(actLower)-len(patLower)-1]) {
-			return true
-		}
-	}
-	return false
-}
-
-func isBoundary(b byte) bool {
-	return b == '-' || b == '_' || b == '.' || b == '/' || b == ':' || (b < 'a' || b > 'z') && (b < '0' || b > '9')
-}
-
-func matchLevel(actual, filter string) bool {
-	filter = strings.TrimSpace(strings.ToLower(filter))
-	if filter == "" {
-		return true
-	}
-	actual = strings.TrimSpace(strings.ToLower(actual))
-	switch filter {
-	case "error", "err", "fatal", "critical":
-		return actual == "error" || actual == "fatal" || actual == "critical"
-	case "warn", "warning":
-		return actual == "error" || actual == "fatal" || actual == "critical" || actual == "warn"
-	case "info":
-		return actual == "error" || actual == "warn" || actual == "info"
-	case "debug", "trace":
-		return true
-	default:
-		return actual == filter || strings.Contains(actual, filter)
-	}
-}
-
-func bytesContainsFold(b []byte, subLower string) bool {
-	if len(subLower) == 0 {
-		return true
-	}
-	if len(b) < len(subLower) {
-		return false
-	}
-	if bytes.Contains(b, []byte(subLower)) {
-		return true
-	}
-	subLen := len(subLower)
-	maxI := len(b) - subLen
-	for i := 0; i <= maxI; i++ {
-		match := true
-		for j := 0; j < subLen; j++ {
-			c := b[i+j]
-			if c >= 'A' && c <= 'Z' {
-				c += 32
-			}
-			if c != subLower[j] {
-				match = false
-				break
-			}
-		}
-		if match {
-			return true
-		}
-	}
-	return false
-}

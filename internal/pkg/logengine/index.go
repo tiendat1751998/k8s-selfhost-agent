@@ -1,6 +1,7 @@
 package logengine
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 	"math"
@@ -256,3 +257,81 @@ func (idx *PrimaryIndex) ReadPrimaryIndex(r io.Reader) error {
 	}
 	return nil
 }
+
+func matchFilter(actual, pattern string) bool {
+	if strings.EqualFold(actual, pattern) {
+		return true
+	}
+	if len(pattern) <= 3 {
+		return false
+	}
+	actLower := strings.ToLower(actual)
+	patLower := strings.ToLower(pattern)
+	if strings.HasPrefix(actLower, patLower) {
+		if len(actLower) > len(patLower) && isBoundary(actLower[len(patLower)]) {
+			return true
+		}
+	}
+	if strings.HasSuffix(actLower, patLower) {
+		if len(actLower) > len(patLower) && isBoundary(actLower[len(actLower)-len(patLower)-1]) {
+			return true
+		}
+	}
+	return false
+}
+
+func isBoundary(b byte) bool {
+	return b == '-' || b == '_' || b == '.' || b == '/' || b == ':' || (b < 'a' || b > 'z') && (b < '0' || b > '9')
+}
+
+func matchLevel(actual, filter string) bool {
+	filter = strings.TrimSpace(strings.ToLower(filter))
+	if filter == "" {
+		return true
+	}
+	actual = strings.TrimSpace(strings.ToLower(actual))
+	switch filter {
+	case "error", "err", "fatal", "critical":
+		return actual == "error" || actual == "fatal" || actual == "critical"
+	case "warn", "warning":
+		return actual == "error" || actual == "fatal" || actual == "critical" || actual == "warn"
+	case "info":
+		return actual == "error" || actual == "warn" || actual == "info"
+	case "debug", "trace":
+		return true
+	default:
+		return actual == filter || strings.Contains(actual, filter)
+	}
+}
+
+func bytesContainsFold(b []byte, subLower string) bool {
+	if len(subLower) == 0 {
+		return true
+	}
+	if len(b) < len(subLower) {
+		return false
+	}
+	if bytes.Contains(b, []byte(subLower)) {
+		return true
+	}
+	subLen := len(subLower)
+	maxI := len(b) - subLen
+	for i := 0; i <= maxI; i++ {
+		match := true
+		for j := 0; j < subLen; j++ {
+			c := b[i+j]
+			if c >= 'A' && c <= 'Z' {
+				c += 32
+			}
+			if c != subLower[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
+}
+

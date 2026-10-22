@@ -404,3 +404,26 @@ func BenchmarkRedactor_Throughput(b *testing.B) {
 	}
 }
 
+func TestRedactor_ZeroAllocations_NormalJSON(t *testing.T) {
+	redactor := NewInStreamRedactor()
+	normalJSON := `{"timestamp":"2026-10-22T10:00:00Z","level":"info","service":"payment-svc","message":"user 42 completed checkout"}`
+
+	// Verify that normal JSON line is unchanged
+	res := redactor.MaskString(normalJSON)
+	assert.Equal(t, normalJSON, res)
+
+	// Verify 0 allocations per run on normal JSON logs
+	allocs := testing.AllocsPerRun(100, func() {
+		_ = redactor.MaskString(normalJSON)
+	})
+	assert.Equal(t, 0.0, allocs, "MaskString should have 0 allocations on normal JSON log lines")
+
+	// Verify that all 5 secret types are still properly masked
+	assert.Contains(t, redactor.MaskString(`{"secret":"my_secret_token"}`), "[REDACTED_SECRET]")
+	assert.Contains(t, redactor.MaskString(`{"password":"clear_password"}`), "[REDACTED_SECRET]")
+	assert.Contains(t, redactor.MaskString(`{"url":"postgres://root:pass@db:5432/test"}`), "[REDACTED_USER]:[REDACTED_SECRET]@")
+	assert.Contains(t, redactor.MaskString(`{"header":"Bearer secret_token_1234567890abcdef"}`), "[REDACTED_BEARER_TOKEN]")
+	assert.Contains(t, redactor.MaskString(`{"key":"sk_live_abcdef1234567890abcdef"}`), "[REDACTED_API_KEY]")
+	assert.Contains(t, redactor.MaskString("-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----"), "[REDACTED_PRIVATE_KEY]")
+}
+
