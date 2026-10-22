@@ -1,7 +1,6 @@
 package logengine
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 
@@ -86,17 +85,34 @@ func (b *BlockBuilder) Append(ts int64, serviceID, levelID uint16, msg []byte) {
 
 	Tokenize(msg, func(tok []byte) {
 		b.bloom.Add(tok)
-		if bytes.IndexByte(tok, '_') != -1 {
-			start := 0
-			for i := 0; i <= len(tok); i++ {
-				if i == len(tok) || tok[i] == '_' {
-					if i-start >= 2 {
-						b.bloom.Add(tok[start:i])
-					}
-					start = i + 1
-				}
-			}
+	})
+}
+
+// AppendString appends a row with a string message avoiding heap allocation.
+func (b *BlockBuilder) AppendString(ts int64, serviceID, levelID uint16, msg string) {
+	if len(b.timestamps) == 0 {
+		b.minTime = ts
+		b.maxTime = ts
+	} else {
+		if ts < b.minTime {
+			b.minTime = ts
 		}
+		if ts > b.maxTime {
+			b.maxTime = ts
+		}
+	}
+
+	b.timestamps = append(b.timestamps, ts)
+	b.serviceIDs = append(b.serviceIDs, serviceID)
+	b.levelIDs = append(b.levelIDs, levelID)
+	b.msgLengths = append(b.msgLengths, uint32(len(msg)))
+	b.messages = append(b.messages, msg...)
+
+	b.levelMask |= LevelToBit(LevelIDToString(levelID))
+	b.serviceBloom |= ServiceBloomBit(serviceID)
+
+	TokenizeString(msg, func(tok []byte) {
+		b.bloom.Add(tok)
 	})
 }
 

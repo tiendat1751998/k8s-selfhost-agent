@@ -170,3 +170,58 @@ func TestLogServer_HandleTailLogs_StreamsFromEngine(t *testing.T) {
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
+
+func TestLogServer_HandleLogsErrors(t *testing.T) {
+	tempDir := t.TempDir()
+	engineSrc, err := NewEngineLogSource(tempDir)
+	if err != nil {
+		t.Fatalf("failed to create engine source: %v", err)
+	}
+	defer engineSrc.Close()
+
+	_ = engineSrc.Writer().Write(logengine.Entry{
+		Timestamp: time.Now().UTC(),
+		Service:   "payment-svc",
+		Level:     "error",
+		Message:   "connection timeout after 150ms to 10.0.0.1:5432",
+	})
+	_ = engineSrc.Writer().Write(logengine.Entry{
+		Timestamp: time.Now().UTC(),
+		Service:   "payment-svc",
+		Level:     "error",
+		Message:   "connection timeout after 300ms to 10.0.0.2:5432",
+	})
+	_ = engineSrc.Writer().Flush()
+
+	logServer := NewLogServer(WithLogSource(engineSrc))
+	collector := NewSystemCollector("", "", nil)
+	const testToken = "test-log-token"
+	handler := setupHandler(collector, testToken, logServer)
+
+	req := httptest.NewRequest(http.MethodGet, "/logs/errors", nil)
+	req.Header.Set("Authorization", "Bearer "+testToken)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for /logs/errors, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Groups []logengine.ErrorGroup `json:"groups"`
+		Count  int                    `json:"count"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Count != 1 || len(resp.Groups) != 1 {
+		t.Fatalf("expected 1 error group, got count=%d, len=%d", resp.Count, len(resp.Groups))
+	}
+	if resp.Groups[0].Count != 2 {
+		t.Errorf("expected group count=2, got %d", resp.Groups[0].Count)
+	}
+	if resp.Groups[0].Service != "payment-svc" {
+		t.Errorf("expected service 'payment-svc', got %q", resp.Groups[0].Service)
+	}
+}

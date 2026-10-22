@@ -90,31 +90,13 @@ func (e *EngineLogSource) GetLogs(ctx context.Context, app string, tail int, sin
 		Service: app, Level: level, Query: query, Since: since, Until: until, Limit: tail,
 	}
 
-	var entries []logengine.Entry
-	var err error
-
 	trimmedQuery := strings.TrimSpace(query)
-	hasAlphaNum := false
-	if trimmedQuery != "" {
-		for i := 0; i < len(trimmedQuery); i++ {
-			c := trimmedQuery[i]
-			if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' {
-				hasAlphaNum = true
-				break
-			}
-		}
+	if len(trimmedQuery) >= 2 && trimmedQuery[0] == '"' && trimmedQuery[len(trimmedQuery)-1] == '"' {
+		params.ExactMatch = true
+		params.Query = trimmedQuery[1 : len(trimmedQuery)-1]
 	}
 
-	if hasAlphaNum {
-		params.ExactMatch = true
-		entries, err = e.reader.Search(ctx, params)
-		if err == nil && len(entries) == 0 {
-			params.ExactMatch = false
-			entries, err = e.reader.Search(ctx, params)
-		}
-	} else {
-		entries, err = e.reader.Search(ctx, params)
-	}
+	entries, err := e.reader.Search(ctx, params)
 
 	if err != nil {
 		return nil, err

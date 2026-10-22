@@ -130,17 +130,7 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 			end := i
 			if start > 0 && end < n && !isAlphaNum(q[start-1]) && !isAlphaNum(q[end]) {
 				tok := q[start:end]
-				if bytes.IndexByte(tok, '_') != -1 {
-					subStart := 0
-					for j := 0; j <= len(tok); j++ {
-						if j == len(tok) || tok[j] == '_' {
-							if j-subStart >= 2 {
-								bloomTokens = append(bloomTokens, tok[subStart:j])
-							}
-							subStart = j + 1
-						}
-					}
-				} else if len(tok) >= 2 {
+				if len(tok) >= 2 {
 					bloomTokens = append(bloomTokens, tok)
 				}
 			}
@@ -186,65 +176,58 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 	view := NewBlockView()
 	var results []Entry
 
-	if sinceUnix > 0 {
-		startIdx := 0
-		if len(parts) > 8 {
-			startIdx = sort.Search(len(parts), func(i int) bool {
-				_, maxT, ok := readPartTimeBounds(parts[i].dir)
-				return ok && maxT >= sinceUnix
-			})
-			if startIdx > 0 {
-				startIdx--
-			}
-		}
-
-		for i := startIdx; i < len(parts); i++ {
-			if ctx.Err() != nil || len(results) >= limit {
-				break
-			}
-			pidx, err := loadPrimaryIndex(filepath.Join(parts[i].dir, "primary.idx"))
-			if err != nil || pidx.Len() == 0 {
-				continue
-			}
-			if pidx.entries[pidx.Len()-1].MaxTime < sinceUnix {
-				continue
-			}
-			if untilUnix > 0 && pidx.entries[0].MinTime > untilUnix {
-				if i > startIdx {
-					break
-				}
-				continue
-			}
-			candidates := pidx.Search(sinceUnix, untilUnix)
-			if len(candidates) == 0 {
-				continue
-			}
-			results = r.scanPartBlocks(parts[i].dir, candidates, bloomTokens, view, results, limit, sinceUnix, untilUnix, queryLower, params, false)
-		}
-	} else {
-		// No since filter: retrieve the latest entries up to limit starting from newest chunk parts lazily
-		for i := len(parts) - 1; i >= 0; i-- {
-			if ctx.Err() != nil || len(results) >= limit {
-				break
-			}
-			pidx, err := loadPrimaryIndex(filepath.Join(parts[i].dir, "primary.idx"))
-			if err != nil || pidx.Len() == 0 {
-				continue
-			}
-			if untilUnix > 0 && pidx.entries[0].MinTime > untilUnix {
-				continue
-			}
-			candidates := pidx.Search(sinceUnix, untilUnix)
-			if len(candidates) == 0 {
-				continue
-			}
-			results = r.scanPartBlocks(parts[i].dir, candidates, bloomTokens, view, results, limit, sinceUnix, untilUnix, queryLower, params, true)
-		}
-		// Sort the latest extracted entries chronologically ascending
-		sort.SliceStable(results, func(i, j int) bool {
-			return results[i].Timestamp.Before(results[j].Timestamp)
+	startIdx := 0
+	if sinceUnix > 0 && len(parts) > 8 {
+		startIdx = sort.Search(len(parts), func(i int) bool {
+			_, maxT, ok := readPartTimeBounds(parts[i].dir)
+			return ok && maxT >= sinceUnix
 		})
+		if startIdx > 0 {
+			startIdx--
+		}
 	}
+
+	endIdx := len(parts) - 1
+	if untilUnix > 0 && len(parts) > 8 {
+		idx := sort.Search(len(parts), func(i int) bool {
+			minT, _, ok := readPartTimeBounds(parts[i].dir)
+			return ok && minT > untilUnix
+		})
+		if idx < len(parts) {
+			endIdx = idx
+		}
+	}
+	if endIdx >= len(parts) {
+		endIdx = len(parts) - 1
+	}
+
+	for i := endIdx; i >= startIdx; i-- {
+		if ctx.Err() != nil || len(results) >= limit {
+			break
+		}
+		pidx, err := loadPrimaryIndex(filepath.Join(parts[i].dir, "primary.idx"))
+		if err != nil || pidx.Len() == 0 {
+			continue
+		}
+		if sinceUnix > 0 && pidx.entries[pidx.Len()-1].MaxTime < sinceUnix {
+			if i < endIdx {
+				break
+			}
+			continue
+		}
+		if untilUnix > 0 && pidx.entries[0].MinTime > untilUnix {
+			continue
+		}
+		candidates := pidx.Search(sinceUnix, untilUnix)
+		if len(candidates) == 0 {
+			continue
+		}
+		results = r.scanPartBlocks(parts[i].dir, candidates, bloomTokens, view, results, limit, sinceUnix, untilUnix, queryLower, params, true)
+	}
+
+	sort.SliceStable(results, func(i, j int) bool {
+		return results[i].Timestamp.Before(results[j].Timestamp)
+	})
 
 	return results, nil
 }

@@ -16,6 +16,8 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/pkg/stdcopy"
+
+	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
 )
 
 // LogEntry represents a single parsed log line with metadata.
@@ -169,6 +171,48 @@ func (s *LogServer) HandleEngineStatus(w http.ResponseWriter, r *http.Request) {
 		"blocks": blocks,
 		"status": "healthy",
 	})
+}
+
+// HandleLogsErrors handles GET /logs/errors returning grouped errors across the engine.
+func (s *LogServer) HandleLogsErrors(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	eng := s.engineSrc
+	s.mu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	if eng == nil || eng.Reader() == nil {
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{"groups": []any{}, "count": 0})
+		return
+	}
+
+	q := r.URL.Query()
+	app := q.Get("app")
+	if app == "" { app = q.Get("service") }
+	level, limit := q.Get("level"), 100
+	if lStr := q.Get("limit"); lStr != "" {
+		if l, err := strconv.Atoi(lStr); err == nil && l > 0 { limit = l }
+	}
+
+	var since, until time.Time
+	if sStr := q.Get("since"); sStr != "" {
+		if t, err := parseTimeParam(sStr); err == nil && t != nil { since = *t }
+	}
+	if uStr := q.Get("until"); uStr != "" {
+		if t, err := parseTimeParam(uStr); err == nil && t != nil { until = *t }
+	}
+
+	groups, err := eng.Reader().SummarizeErrors(r.Context(), logengine.QueryParams{
+		Service: app, Level: level, Since: since, Until: until, Limit: limit,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{"groups": groups, "count": len(groups)})
 }
 
 // ListServices returns all unique service names available across all log sources.

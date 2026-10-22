@@ -1,4 +1,4 @@
-﻿package logengine
+package logengine
 
 import (
 	"github.com/cespare/xxhash/v2"
@@ -85,9 +85,9 @@ func (b *BlockBloomFilter) CopyFrom(src []byte) {
 	copy(b[:], src)
 }
 
-// isAlphaNum reports whether b is an alphanumeric character or underscore.
+// isAlphaNum reports whether b is an alphanumeric character (excluding underscore).
 func isAlphaNum(b byte) bool {
-	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || b == '_'
+	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
 }
 
 // Tokenize parses alphanumeric tokens from msg without allocating strings or heap memory.
@@ -106,5 +106,31 @@ func Tokenize(msg []byte, onToken func([]byte)) {
 			i++
 		}
 		onToken(msg[start:i])
+	}
+}
+
+// TokenizeString parses alphanumeric tokens from string msg using a stack buffer for tokens <= 64 bytes.
+func TokenizeString(msg string, onToken func([]byte)) {
+	n := len(msg)
+	i := 0
+	var stackBuf [64]byte
+	for i < n {
+		for i < n && !isAlphaNum(msg[i]) {
+			i++
+		}
+		if i >= n {
+			break
+		}
+		start := i
+		for i < n && isAlphaNum(msg[i]) {
+			i++
+		}
+		tokLen := i - start
+		if tokLen <= len(stackBuf) {
+			copy(stackBuf[:tokLen], msg[start:i])
+			onToken(stackBuf[:tokLen])
+		} else {
+			onToken([]byte(msg[start:i]))
+		}
 	}
 }
