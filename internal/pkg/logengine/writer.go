@@ -237,22 +237,10 @@ func (w *Writer) SealActivePart() {
 }
 
 func (w *Writer) closeActiveFiles() {
-	if w.activeDataFile != nil {
-		_ = w.activeDataFile.Close()
-		w.activeDataFile = nil
-	}
-	if w.activeMarksFile != nil {
-		_ = w.activeMarksFile.Close()
-		w.activeMarksFile = nil
-	}
-	if w.activeBloomFile != nil {
-		_ = w.activeBloomFile.Close()
-		w.activeBloomFile = nil
-	}
-	if w.activePidxFile != nil {
-		_ = w.activePidxFile.Close()
-		w.activePidxFile = nil
-	}
+	if w.activeDataFile != nil { _ = w.activeDataFile.Close(); w.activeDataFile = nil }
+	if w.activeMarksFile != nil { _ = w.activeMarksFile.Close(); w.activeMarksFile = nil }
+	if w.activeBloomFile != nil { _ = w.activeBloomFile.Close(); w.activeBloomFile = nil }
+	if w.activePidxFile != nil { _ = w.activePidxFile.Close(); w.activePidxFile = nil }
 }
 
 func (w *Writer) sealActivePartLocked() {
@@ -273,9 +261,7 @@ func (w *Writer) LastError() error {
 }
 
 func (w *Writer) setLastError(err error) {
-	if err == nil {
-		return
-	}
+	if err == nil { return }
 	w.closedMu.Lock()
 	w.lastErr = err
 	w.closedMu.Unlock()
@@ -283,25 +269,20 @@ func (w *Writer) setLastError(err error) {
 
 // DroppedEntries returns total entries dropped by ingest ring buffer.
 func (w *Writer) DroppedEntries() uint64 {
-	if w.ringBuf != nil {
-		return w.ringBuf.Dropped()
-	}
+	if w.ringBuf != nil { return w.ringBuf.Dropped() }
 	return 0
 }
 
 // Write pushes an entry into the lock-free ring buffer without acquiring a disk mutex.
 func (w *Writer) Write(entry Entry) error {
 	w.closedMu.RLock()
-	if w.closed {
-		w.closedMu.RUnlock()
-		return fmt.Errorf("writer is closed")
-	}
+	closed := w.closed
 	w.closedMu.RUnlock()
+	if closed { return fmt.Errorf("writer is closed") }
 
 	if w.redactor != nil {
 		entry.Message = w.redactor.MaskString(entry.Message)
 	}
-
 	if w.ringBuf.Push(entry) {
 		return nil
 	}
@@ -318,11 +299,9 @@ func (w *Writer) Write(entry Entry) error {
 // WriteBatch pushes a slice of entries into the lock-free ring buffer.
 func (w *Writer) WriteBatch(entries []Entry) error {
 	w.closedMu.RLock()
-	if w.closed {
-		w.closedMu.RUnlock()
-		return fmt.Errorf("writer is closed")
-	}
+	closed := w.closed
 	w.closedMu.RUnlock()
+	if closed { return fmt.Errorf("writer is closed") }
 
 	var writeErr error
 	for i := range entries {
@@ -368,6 +347,14 @@ func (w *Writer) flushCurrentBlock() error {
 		return nil
 	}
 
+	scratchBuf := GetBlockBuffer()
+	defer PutBlockBuffer(scratchBuf)
+
+	compBuf := GetBlockBuffer()
+	defer PutBlockBuffer(compBuf)
+
+	compressed, uncompressedSize, minTime, maxTime, bloom, levelMask, serviceBloom := w.builder.PackAndCompress(scratchBuf, compBuf)
+
 	w.closedMu.Lock()
 	isNewPart := false
 	if w.activePartDir == "" || w.activePartBlocks >= maxBlocksPerPart || w.activePartBytes >= maxPartBytes {
@@ -389,65 +376,41 @@ func (w *Writer) flushCurrentBlock() error {
 
 	if w.activeDataFile == nil {
 		var err error
-		w.activeDataFile, err = os.OpenFile(filepath.Join(activeDir, "data.bin"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err != nil {
-			w.closeActiveFiles()
-			w.closedMu.Unlock()
-			return fmt.Errorf("failed to open data.bin: %w", err)
+		if w.activeDataFile, err = os.OpenFile(filepath.Join(activeDir, "data.bin"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err != nil {
+			w.closeActiveFiles(); w.closedMu.Unlock(); return fmt.Errorf("open data.bin: %w", err)
 		}
-		w.activeMarksFile, err = os.OpenFile(filepath.Join(activeDir, "marks.bin"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err != nil {
-			w.closeActiveFiles()
-			w.closedMu.Unlock()
-			return fmt.Errorf("failed to open marks.bin: %w", err)
+		if w.activeMarksFile, err = os.OpenFile(filepath.Join(activeDir, "marks.bin"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err != nil {
+			w.closeActiveFiles(); w.closedMu.Unlock(); return fmt.Errorf("open marks.bin: %w", err)
 		}
-		w.activeBloomFile, err = os.OpenFile(filepath.Join(activeDir, "bloom.bin"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err != nil {
-			w.closeActiveFiles()
-			w.closedMu.Unlock()
-			return fmt.Errorf("failed to open bloom.bin: %w", err)
+		if w.activeBloomFile, err = os.OpenFile(filepath.Join(activeDir, "bloom.bin"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err != nil {
+			w.closeActiveFiles(); w.closedMu.Unlock(); return fmt.Errorf("open bloom.bin: %w", err)
 		}
-		w.activePidxFile, err = os.OpenFile(filepath.Join(activeDir, "primary.idx"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err != nil {
-			w.closeActiveFiles()
-			w.closedMu.Unlock()
-			return fmt.Errorf("failed to open primary.idx: %w", err)
+		if w.activePidxFile, err = os.OpenFile(filepath.Join(activeDir, "primary.idx"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err != nil {
+			w.closeActiveFiles(); w.closedMu.Unlock(); return fmt.Errorf("open primary.idx: %w", err)
 		}
 	}
-	w.closedMu.Unlock()
-
-	scratchBuf := GetBlockBuffer()
-	defer PutBlockBuffer(scratchBuf)
-
-	compBuf := GetBlockBuffer()
-	defer PutBlockBuffer(compBuf)
-
-	compressed, uncompressedSize, minTime, maxTime, bloom, levelMask, serviceBloom := w.builder.PackAndCompress(scratchBuf, compBuf)
 
 	// 1. Append data.bin
 	offset := w.activePartBytes
 	if _, err := w.activeDataFile.Write(compressed); err != nil {
-		return fmt.Errorf("failed to append data.bin: %w", err)
+		w.closedMu.Unlock(); return fmt.Errorf("failed to append data.bin: %w", err)
 	}
 
 	// 2. Append marks.bin
 	mark := BlockMark{
-		CompressedOffset: uint64(offset),
-		CompressedLength: uint32(len(compressed)),
-		UncompressedSize: uint32(uncompressedSize),
-		RowCount:         uint32(w.builder.RowCount()),
-		LevelMask:        levelMask,
-		ServiceBloom:     serviceBloom,
+		CompressedOffset: uint64(offset), CompressedLength: uint32(len(compressed)),
+		UncompressedSize: uint32(uncompressedSize), RowCount: uint32(w.builder.RowCount()),
+		LevelMask: levelMask, ServiceBloom: serviceBloom,
 	}
 	var markBytes [BlockMarkSize]byte
 	mark.Encode(markBytes[:])
 	if _, err := w.activeMarksFile.Write(markBytes[:]); err != nil {
-		return fmt.Errorf("failed to append marks.bin: %w", err)
+		w.closedMu.Unlock(); return fmt.Errorf("failed to append marks.bin: %w", err)
 	}
 
 	// 3. Append bloom.bin
 	if _, err := w.activeBloomFile.Write(bloom.Bytes()); err != nil {
-		return fmt.Errorf("failed to append bloom.bin: %w", err)
+		w.closedMu.Unlock(); return fmt.Errorf("failed to append bloom.bin: %w", err)
 	}
 
 	// 4. Append primary.idx
@@ -455,10 +418,9 @@ func (w *Writer) flushCurrentBlock() error {
 	binary.LittleEndian.PutUint64(idxBytes[0:8], uint64(minTime))
 	binary.LittleEndian.PutUint64(idxBytes[8:16], uint64(maxTime))
 	if _, err := w.activePidxFile.Write(idxBytes[:]); err != nil {
-		return fmt.Errorf("failed to append primary.idx: %w", err)
+		w.closedMu.Unlock(); return fmt.Errorf("failed to append primary.idx: %w", err)
 	}
 
-	w.closedMu.Lock()
 	w.activePartBlocks++
 	w.activePartBytes += int64(len(compressed))
 	w.closedMu.Unlock()

@@ -77,25 +77,18 @@ func (r *InStreamRedactor) AddRule(rule RedactionRule) {
 
 // indexTriggerByte safely maps initial byte variations into triggerMap without arithmetic underflow.
 func (r *InStreamRedactor) indexTriggerByte(b byte, ruleIdx int) {
-	if r.triggerMap == nil {
-		r.triggerMap = make(map[byte][]int)
-	}
+	if r.triggerMap == nil { r.triggerMap = make(map[byte][]int) }
+	r.triggerMap[b] = append(r.triggerMap[b], ruleIdx)
 	if b >= 'a' && b <= 'z' {
-		r.triggerMap[b] = append(r.triggerMap[b], ruleIdx)
 		r.triggerMap[b-('a'-'A')] = append(r.triggerMap[b-('a'-'A')], ruleIdx)
 	} else if b >= 'A' && b <= 'Z' {
-		r.triggerMap[b] = append(r.triggerMap[b], ruleIdx)
 		r.triggerMap[b+('a'-'A')] = append(r.triggerMap[b+('a'-'A')], ruleIdx)
-	} else {
-		r.triggerMap[b] = append(r.triggerMap[b], ruleIdx)
 	}
 }
 
 // GetTriggerRules returns the rule indices matching an initial byte, if any.
 func (r *InStreamRedactor) GetTriggerRules(b byte) []int {
-	if r.triggerMap == nil {
-		return nil
-	}
+	if r.triggerMap == nil { return nil }
 	return r.triggerMap[b]
 }
 
@@ -123,16 +116,11 @@ func (r *InStreamRedactor) MaskBytes(line []byte) []byte {
 		rule := &r.rules[matchedIndices[k]]
 		var handled bool
 		switch rule.Type {
-		case PatternConnectionString:
-			out, handled = maskConnectionStringBytes(out)
-		case PatternPasswordKeyValue:
-			out, handled = maskPasswordKeyValueBytes(out)
-		case PatternBearerToken:
-			out, handled = maskBearerTokenBytes(out)
-		case PatternAPIKey:
-			out, handled = maskAPIKeyBytes(out)
-		case PatternPrivateKey:
-			out, handled = maskPrivateKeyBytes(out)
+		case PatternConnectionString: out, handled = maskConnectionStringBytes(out)
+		case PatternPasswordKeyValue: out, handled = maskPasswordKeyValueBytes(out)
+		case PatternBearerToken:      out, handled = maskBearerTokenBytes(out)
+		case PatternAPIKey:           out, handled = maskAPIKeyBytes(out)
+		case PatternPrivateKey:       out, handled = maskPrivateKeyBytes(out)
 		}
 		if handled {
 			continue
@@ -150,22 +138,17 @@ func (r *InStreamRedactor) MaskString(s string) string {
 	if len(s) == 0 {
 		return s
 	}
-	hasTrigger := false
 	for i := range r.rules {
 		if ruleTriggeredString(&r.rules[i], s) {
-			hasTrigger = true
-			break
+			b := []byte(s)
+			masked := r.MaskBytes(b)
+			if bytes.Equal(b, masked) {
+				return s
+			}
+			return string(masked)
 		}
 	}
-	if !hasTrigger {
-		return s
-	}
-	b := []byte(s)
-	masked := r.MaskBytes(b)
-	if bytes.Equal(b, masked) {
-		return s
-	}
-	return string(masked)
+	return s
 }
 
 var (
@@ -349,8 +332,7 @@ func isTokenChar(c byte) bool { return isWordChar(c) || c == '-' || c == '.' }
 func isKeyChar(c byte) bool   { return isWordChar(c) || c == '-' }
 
 func hasAPIKeyTrigger(b []byte) bool {
-	offset := 0
-	for {
+	for offset := 0; offset < len(b); {
 		i1, i2 := bytes.IndexByte(b[offset:], '_'), bytes.IndexByte(b[offset:], '-')
 		if i1 == -1 && i2 == -1 { return false }
 		cand := i1
@@ -358,26 +340,25 @@ func hasAPIKeyTrigger(b []byte) bool {
 		pos := offset + cand
 		if b[pos] == '_' {
 			if (pos >= 7 && equalFoldBytes(b[pos-7:pos], "sk_live")) || (pos >= 3 && equalFoldBytes(b[pos-3:pos], "ghp")) { return true }
-		} else {
-			if (pos >= 5 && equalFoldBytes(b[pos-5:pos], "glpat")) || (pos >= 4 && equalFoldBytes(b[pos-4:pos], "xoxb")) { return true }
-		}
+		} else if (pos >= 5 && equalFoldBytes(b[pos-5:pos], "glpat")) || (pos >= 4 && equalFoldBytes(b[pos-4:pos], "xoxb")) { return true }
 		offset = pos + 1
 	}
+	return false
 }
 
 func equalFoldBytes(b []byte, s string) bool {
 	if len(b) != len(s) { return false }
 	for i := range b {
-		c := b[i]
+		c, sc := b[i], s[i]
 		if c >= 'A' && c <= 'Z' { c += 'a' - 'A' }
-		if c != s[i] { return false }
+		if sc >= 'A' && sc <= 'Z' { sc += 'a' - 'A' }
+		if c != sc { return false }
 	}
 	return true
 }
 
 func hasAPIKeyTriggerString(s string) bool {
-	offset := 0
-	for {
+	for offset := 0; offset < len(s); {
 		i1, i2 := strings.IndexByte(s[offset:], '_'), strings.IndexByte(s[offset:], '-')
 		if i1 == -1 && i2 == -1 { return false }
 		cand := i1
@@ -385,45 +366,33 @@ func hasAPIKeyTriggerString(s string) bool {
 		pos := offset + cand
 		if s[pos] == '_' {
 			if (pos >= 7 && strings.EqualFold(s[pos-7:pos], "sk_live")) || (pos >= 3 && strings.EqualFold(s[pos-3:pos], "ghp")) { return true }
-		} else {
-			if (pos >= 5 && strings.EqualFold(s[pos-5:pos], "glpat")) || (pos >= 4 && strings.EqualFold(s[pos-4:pos], "xoxb")) { return true }
-		}
+		} else if (pos >= 5 && strings.EqualFold(s[pos-5:pos], "glpat")) || (pos >= 4 && strings.EqualFold(s[pos-4:pos], "xoxb")) { return true }
 		offset = pos + 1
 	}
+	return false
 }
 
 func indexFoldBytes(s []byte, sub string) int {
 	n := len(sub)
 	if n == 0 { return 0 }
 	if len(s) < n { return -1 }
-	b0 := sub[0]
-	var f0L, f0U byte
-	if b0 >= 'a' && b0 <= 'z' { f0L, f0U = b0, b0-('a'-'A') } else if b0 >= 'A' && b0 <= 'Z' { f0L, f0U = b0+('a'-'A'), b0 } else { f0L, f0U = b0, b0 }
-	if bytes.IndexByte(s, f0L) == -1 && (f0L == f0U || bytes.IndexByte(s, f0U) == -1) { return -1 }
-	offset, limit := 0, len(s)-n
-	for offset <= limit {
-		idx1, idx2 := bytes.IndexByte(s[offset:], f0L), -1
-		if f0L != f0U { idx2 = bytes.IndexByte(s[offset:], f0U) }
-		cand := idx1
-		if idx1 == -1 || (idx2 != -1 && idx2 < idx1) { cand = idx2 }
-		if cand == -1 || offset+cand > limit { return -1 }
-		pos, match := offset+cand, true
-		for j := 1; j < n; j++ {
-			sc, tc := s[pos+j], sub[j]
-			if sc >= 'A' && sc <= 'Z' { sc += 'a' - 'A' }
-			if tc >= 'A' && tc <= 'Z' { tc += 'a' - 'A' }
-			if sc != tc { match = false; break }
-		}
-		if match { return pos }
+	f0L, f0U := sub[0], sub[0]
+	if f0L >= 'a' && f0L <= 'z' { f0U -= 'a' - 'A' } else if f0L >= 'A' && f0L <= 'Z' { f0L += 'a' - 'A' }
+	for offset := 0; offset <= len(s)-n; {
+		i1, i2 := bytes.IndexByte(s[offset:], f0L), -1
+		if f0L != f0U { i2 = bytes.IndexByte(s[offset:], f0U) }
+		cand := i1
+		if i1 == -1 || (i2 != -1 && i2 < i1) { cand = i2 }
+		if cand == -1 || offset+cand > len(s)-n { return -1 }
+		pos := offset + cand
+		if equalFoldBytes(s[pos:pos+n], sub) { return pos }
 		offset = pos + 1
 	}
 	return -1
 }
 
 func hasPasswordKeyTrigger(b []byte) bool {
-	if bytes.IndexByte(b, '"') == -1 || bytes.IndexByte(b, ':') == -1 {
-		return false
-	}
+	if bytes.IndexByte(b, '"') == -1 || bytes.IndexByte(b, ':') == -1 { return false }
 	for _, key := range passwordKeys {
 		if containsFoldBytes(b, key) { return true }
 	}
@@ -431,9 +400,7 @@ func hasPasswordKeyTrigger(b []byte) bool {
 }
 
 func hasPasswordKeyTriggerString(s string) bool {
-	if strings.IndexByte(s, '"') == -1 || strings.IndexByte(s, ':') == -1 {
-		return false
-	}
+	if strings.IndexByte(s, '"') == -1 || strings.IndexByte(s, ':') == -1 { return false }
 	for _, key := range passwordKeys {
 		if containsFoldString(s, key) { return true }
 	}
@@ -442,16 +409,11 @@ func hasPasswordKeyTriggerString(s string) bool {
 
 func ruleTriggeredBytes(rule *RedactionRule, b []byte) bool {
 	switch rule.Type {
-	case PatternConnectionString:
-		return bytes.Contains(b, triggerColons)
-	case PatternPrivateKey:
-		return bytes.Contains(b, triggerBegin)
-	case PatternPasswordKeyValue:
-		return hasPasswordKeyTrigger(b)
-	case PatternBearerToken:
-		return containsFoldBytes(b, "bearer")
-	case PatternAPIKey:
-		return hasAPIKeyTrigger(b)
+	case PatternConnectionString: return bytes.Contains(b, triggerColons)
+	case PatternPrivateKey:       return bytes.Contains(b, triggerBegin)
+	case PatternPasswordKeyValue: return hasPasswordKeyTrigger(b)
+	case PatternBearerToken:      return containsFoldBytes(b, "bearer")
+	case PatternAPIKey:           return hasAPIKeyTrigger(b)
 	}
 	if len(rule.triggers) == 0 { return true }
 	for _, tr := range rule.triggers {
@@ -462,16 +424,11 @@ func ruleTriggeredBytes(rule *RedactionRule, b []byte) bool {
 
 func ruleTriggeredString(rule *RedactionRule, s string) bool {
 	switch rule.Type {
-	case PatternConnectionString:
-		return strings.Contains(s, "://")
-	case PatternPrivateKey:
-		return strings.Contains(s, "BEGIN")
-	case PatternPasswordKeyValue:
-		return hasPasswordKeyTriggerString(s)
-	case PatternBearerToken:
-		return containsFoldString(s, "bearer")
-	case PatternAPIKey:
-		return hasAPIKeyTriggerString(s)
+	case PatternConnectionString: return strings.Contains(s, "://")
+	case PatternPrivateKey:       return strings.Contains(s, "BEGIN")
+	case PatternPasswordKeyValue: return hasPasswordKeyTriggerString(s)
+	case PatternBearerToken:      return containsFoldString(s, "bearer")
+	case PatternAPIKey:           return hasAPIKeyTriggerString(s)
 	}
 	if len(rule.triggers) == 0 { return true }
 	for _, tr := range rule.triggers {
@@ -486,25 +443,16 @@ func containsFoldString(s string, sub string) bool {
 	n := len(sub)
 	if n == 0 { return true }
 	if len(s) < n { return false }
-	b0 := sub[0]
-	var f0L, f0U byte
-	if b0 >= 'a' && b0 <= 'z' { f0L, f0U = b0, b0-('a'-'A') } else if b0 >= 'A' && b0 <= 'Z' { f0L, f0U = b0+('a'-'A'), b0 } else { f0L, f0U = b0, b0 }
-	if strings.IndexByte(s, f0L) == -1 && (f0L == f0U || strings.IndexByte(s, f0U) == -1) { return false }
-	offset, limit := 0, len(s)-n
-	for offset <= limit {
-		idx1, idx2 := strings.IndexByte(s[offset:], f0L), -1
-		if f0L != f0U { idx2 = strings.IndexByte(s[offset:], f0U) }
-		cand := idx1
-		if idx1 == -1 || (idx2 != -1 && idx2 < idx1) { cand = idx2 }
-		if cand == -1 || offset+cand > limit { return false }
-		pos, match := offset+cand, true
-		for j := 1; j < n; j++ {
-			sc, tc := s[pos+j], sub[j]
-			if sc >= 'A' && sc <= 'Z' { sc += 'a' - 'A' }
-			if tc >= 'A' && tc <= 'Z' { tc += 'a' - 'A' }
-			if sc != tc { match = false; break }
-		}
-		if match { return true }
+	f0L, f0U := sub[0], sub[0]
+	if f0L >= 'a' && f0L <= 'z' { f0U -= 'a' - 'A' } else if f0L >= 'A' && f0L <= 'Z' { f0L += 'a' - 'A' }
+	for offset := 0; offset <= len(s)-n; {
+		i1, i2 := strings.IndexByte(s[offset:], f0L), -1
+		if f0L != f0U { i2 = strings.IndexByte(s[offset:], f0U) }
+		cand := i1
+		if i1 == -1 || (i2 != -1 && i2 < i1) { cand = i2 }
+		if cand == -1 || offset+cand > len(s)-n { return false }
+		pos := offset + cand
+		if strings.EqualFold(s[pos:pos+n], sub) { return true }
 		offset = pos + 1
 	}
 	return false
