@@ -39,6 +39,16 @@ describe('LogTargetCategorizer', () => {
       }
     })
 
+    it('filters out systemd scope, slice, and user slice/service noise', () => {
+      assert.equal(isNoiseLog('init.scope'), true)
+      assert.equal(isNoiseLog('session-1215.scope'), true)
+      assert.equal(isNoiseLog('session-1.scope'), true)
+      assert.equal(isNoiseLog('user-1000.slice'), true)
+      assert.equal(isNoiseLog('system.slice'), true)
+      assert.equal(isNoiseLog('user@1000.service'), true)
+      assert.equal(isNoiseLog('user-runtime-dir@1000.service'), true)
+    })
+
     it('allows valid container workloads and systemd services', () => {
       assert.equal(isNoiseLog('postgres_db'), false)
       assert.equal(isNoiseLog('tiki_redis'), false)
@@ -53,7 +63,7 @@ describe('LogTargetCategorizer', () => {
   })
 
   describe('isSystemdService', () => {
-    it('identifies systemd units by suffix (.service, .socket, .target, .slice)', () => {
+    it('identifies systemd units by suffix (.service, .socket, .target, .slice, .scope)', () => {
       assert.equal(isSystemdService('vgauth.service'), true)
       assert.equal(isSystemdService('dbus.service'), true)
       assert.equal(isSystemdService('chrony.service'), true)
@@ -61,10 +71,28 @@ describe('LogTargetCategorizer', () => {
       assert.equal(isSystemdService('docker.socket'), true)
       assert.equal(isSystemdService('multi-user.target'), true)
       assert.equal(isSystemdService('system.slice'), true)
+      assert.equal(isSystemdService('init.scope'), true)
+    })
+
+    it('identifies system daemons as systemd (journald, systemd*, cron, sshd, dbus*, sudo, su, kernel)', () => {
+      assert.equal(isSystemdService('journald'), true)
+      assert.equal(isSystemdService('systemd'), true)
+      assert.equal(isSystemdService('systemd-logind'), true)
+      assert.equal(isSystemdService('systemd-udevd'), true)
+      assert.equal(isSystemdService('systemd-networkd'), true)
+      assert.equal(isSystemdService('cron'), true)
+      assert.equal(isSystemdService('CRON'), true)
+      assert.equal(isSystemdService('sshd'), true)
+      assert.equal(isSystemdService('dbus-daemon'), true)
+      assert.equal(isSystemdService('dbus'), true)
+      assert.equal(isSystemdService('sudo'), true)
+      assert.equal(isSystemdService('su'), true)
+      assert.equal(isSystemdService('kernel'), true)
     })
 
     it('returns false for container workloads', () => {
       assert.equal(isSystemdService('postgres_db'), false)
+      assert.equal(isSystemdService('db'), false)
       assert.equal(isSystemdService('tiki_redis'), false)
       assert.equal(isSystemdService('nats'), false)
       assert.equal(isSystemdService('traefik'), false)

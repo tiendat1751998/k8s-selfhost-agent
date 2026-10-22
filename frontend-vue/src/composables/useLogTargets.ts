@@ -12,6 +12,8 @@ export interface LogTarget {
   name: string
   icon?: string
   namespace?: string
+  node?: string
+  service?: string
 }
 
 export interface TargetNodeItem {
@@ -237,6 +239,64 @@ export function useLogTargets(
     return targetLogCounts.value.serviceCounts.get(serviceId.toLowerCase()) || 0
   }
 
+  const nodeServicesMap = computed<Record<string, TargetServiceItem[]>>(() => {
+    const map: Record<string, Map<string, TargetServiceItem>> = {}
+    for (const log of props.logs) {
+      const node = (log.node || log.attributes?.node || log.attributes?.node_name || '').toLowerCase()
+      if (!node) continue
+      const svc = log.service || log.container || log.attributes?.app || log.attributes?.service
+      if (!svc || isNoiseLog(svc)) continue
+      if (!map[node]) {
+        map[node] = new Map<string, TargetServiceItem>()
+      }
+      const svcLower = svc.toLowerCase()
+      if (!map[node].has(svcLower)) {
+        const classified = classifyLogTarget(svc)
+        map[node].set(svcLower, {
+          id: svc,
+          name: svc,
+          icon: classified.icon,
+          type: classified.type,
+          category: classified.category,
+        })
+      }
+    }
+    const result: Record<string, TargetServiceItem[]> = {}
+    for (const [node, svcMap] of Object.entries(map)) {
+      const items = Array.from(svcMap.values())
+      items.sort((a, b) => {
+        if (a.category !== b.category) {
+          return a.category === 'app' ? -1 : 1
+        }
+        return a.name.localeCompare(b.name)
+      })
+      result[node] = items
+    }
+    return result
+  })
+
+  function getNodeServices(nodeId: string): TargetServiceItem[] {
+    return nodeServicesMap.value[nodeId.toLowerCase()] || []
+  }
+
+  const nodeServiceCounts = computed<Map<string, number>>(() => {
+    const map = new Map<string, number>()
+    for (const l of props.logs) {
+      const node = (l.node || l.attributes?.node || l.attributes?.node_name || '').toLowerCase()
+      if (!node) continue
+      const sTargets = [l.service, l.container, l.attributes?.app, l.attributes?.service, l.pod].filter(Boolean) as string[]
+      for (const s of new Set(sTargets.map(st => st.toLowerCase()))) {
+        const key = `${node}::${s}`
+        map.set(key, (map.get(key) || 0) + 1)
+      }
+    }
+    return map
+  })
+
+  function getNodeServiceCount(nodeId: string, serviceId: string): number {
+    return nodeServiceCounts.value.get(`${nodeId.toLowerCase()}::${serviceId.toLowerCase()}`) || 0
+  }
+
   function autoSelectDefaultTarget() {
     if (props.modelValue && props.modelValue.type !== 'all' && props.modelValue.id && props.modelValue.id !== 'all') {
       return
@@ -272,6 +332,8 @@ export function useLogTargets(
     filteredHostNodes,
     getNodeCount,
     getServiceCount,
+    getNodeServices,
+    getNodeServiceCount,
     selectTarget,
   }
 }

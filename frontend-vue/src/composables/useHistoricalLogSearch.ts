@@ -1,8 +1,10 @@
-﻿import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { Ref } from 'vue'
 import type { LogTarget } from '../components/logs/LogTargetTree.vue'
 import type { LogFilterParams } from '../api/logging'
 import type { useLogStore, LogEntry } from '../stores/logStore'
+import { isNoiseLog, isSystemdService } from '../utils/logTargetCategorizer'
+import { matchesTarget } from '../stores/logStore'
 
 export interface TimeRangeConfig {
   label: string
@@ -30,6 +32,30 @@ export function useHistoricalLogSearch(
   const currentOffset = ref(0)
   const selectedHistoricalLimit = ref(1000)
 
+  const activeServiceSubFilter = ref<string>('')
+  const sourceCategory = ref<'all' | 'app' | 'systemd'>('all')
+  const mutedServices = ref<string[]>([])
+  const hoverPauseEnabled = ref<boolean>(true)
+  const isHoverPaused = ref<boolean>(false)
+
+  watch(
+    () => selectedTarget.value,
+    (t) => {
+      activeServiceSubFilter.value = t?.service || ''
+    },
+    { immediate: true }
+  )
+
+  const effectiveNode = computed(() => {
+    const t = selectedTarget.value
+    return t.node || (t.type === 'node' ? t.id : undefined)
+  })
+
+  const effectiveService = computed(() => {
+    const t = selectedTarget.value
+    return activeServiceSubFilter.value || t.service || (t.type === 'service' ? t.id : undefined)
+  })
+
   async function runHistoricalQuery(isLoadMore = false) {
     if (mode.value !== 'historical') return
     queryError.value = null
@@ -37,7 +63,8 @@ export function useHistoricalLogSearch(
     const cfg = LOG_TIME_RANGES.find((r) => r.label === selectedTimeRange.value) || LOG_TIME_RANGES[1]
     const now = new Date()
     const kw = searchKeyword.value.trim()
-    const target = selectedTarget.value
+    const effNode = effectiveNode.value
+    const effService = effectiveService.value
 
     const filter: LogFilterParams = {
       start_time: new Date(now.getTime() - cfg.ms).toISOString(),
@@ -46,9 +73,10 @@ export function useHistoricalLogSearch(
       log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
       limit: selectedHistoricalLimit.value,
       offset: currentOffset.value,
-      container_name: target.type === 'service' ? target.id : undefined,
-      node: target.type === 'node' ? target.id : undefined,
-      attributes: target.type === 'node' ? { node: target.id } : undefined,
+      service: effService,
+      container_name: effService,
+      node: effNode,
+      attributes: effNode ? { node: effNode } : undefined,
     }
 
     try {
@@ -63,9 +91,10 @@ export function useHistoricalLogSearch(
           query: filter.query,
           log_level: filter.log_level,
           interval_seconds: cfg.interval,
-          container_name: filter.container_name,
-          node: target.type === 'node' ? target.id : undefined,
-          attributes: target.type === 'node' ? { node: target.id } : undefined,
+          service: effService,
+          container_name: effService,
+          node: effNode,
+          attributes: effNode ? { node: effNode } : undefined,
         }))
       }
       await Promise.all(promises)
@@ -88,7 +117,8 @@ export function useHistoricalLogSearch(
   async function handleHistogramFilterRange(range: { start: string; end: string }) {
     if (mode.value === 'live') mode.value = 'historical'
     const kw = searchKeyword.value.trim()
-    const target = selectedTarget.value
+    const effNode = effectiveNode.value
+    const effService = effectiveService.value
     currentOffset.value = 0
     const filter: LogFilterParams = {
       start_time: range.start,
@@ -97,9 +127,10 @@ export function useHistoricalLogSearch(
       log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
       limit: selectedHistoricalLimit.value,
       offset: 0,
-      container_name: target.type === 'service' ? target.id : undefined,
-      node: target.type === 'node' ? target.id : undefined,
-      attributes: target.type === 'node' ? { node: target.id } : undefined,
+      service: effService,
+      container_name: effService,
+      node: effNode,
+      attributes: effNode ? { node: effNode } : undefined,
     }
     try {
       isSearching.value = true
@@ -117,7 +148,8 @@ export function useHistoricalLogSearch(
   }
 
   const targetFilteredLogs = computed<LogEntry[]>(() => {
-    const target = selectedTarget.value
+    const effNode = effectiveNode.value
+    const effService = effectiveService.value
     const level = selectedLevel.value
     const rawKw = searchKeyword.value.trim()
     let reg: RegExp | null = null
@@ -125,9 +157,37 @@ export function useHistoricalLogSearch(
       try { reg = new RegExp(rawKw, 'i') } catch { reg = null }
     }
     const kw = rawKw.toLowerCase()
+    const mutedLower = mutedServices.value.map((s) => s.toLowerCase())
+    const cat = sourceCategory.value
 
     return logStore.logs.filter((log) => {
+      // 1. Filter out empty logs, '-- No entries --'
       if (!log.msg || log.msg === '-- No entries --' || log.msg.trim() === '-- No entries --') return false
+
+      const svc = log.service || log.container || log.attributes?.app || log.attributes?.service || log.attributes?.container_name || log.pod || ''
+
+      // 1b. Noise filtering (init.scope, session-*.scope, etc.)
+      if (svc && isNoiseLog(svc)) return false
+
+      // 2. Muted services exclusion
+      if (svc && mutedLower.includes(svc.toLowerCase())) return false
+
+      // 3. Category filtering (Apps Only vs SystemD Only)
+      if (cat === 'app' && isSystemdService(svc)) return false
+      if (cat === 'systemd' && !isSystemdService(svc)) return false
+
+      // 4. Effective Node matching
+      if (effNode) {
+        const nodeName = (log.node || log.attributes?.node || log.attributes?.node_name || '').toLowerCase()
+        if (nodeName && !nodeName.includes(effNode.toLowerCase())) return false
+      }
+
+      // 5. Effective Service matching
+      if (effService) {
+        if (!matchesTarget(log, { service: effService })) return false
+      }
+
+      // 6. Level matching
       if (level && level !== 'ALL') {
         const l = log.level.toUpperCase()
         const f = level.toUpperCase()
@@ -136,26 +196,16 @@ export function useHistoricalLogSearch(
           : l === f
         if (!match) return false
       }
-      if (mode.value === 'live') {
-        const q = target.id.toLowerCase()
-        if (target.type === 'node') {
-          const n = (log.node || log.attributes?.node || log.attributes?.node_name || log.pod || '').toLowerCase()
-          if (!n.includes(q)) return false
-        } else if (target.type === 'service') {
-          const s = (log.service || log.container || log.attributes?.app || log.attributes?.service || log.attributes?.container_name || log.pod || '').toLowerCase()
-          const matches = s.includes(q) ||
-            (q === 'postgres_db' && (s.includes('db') || s.includes('postgres'))) ||
-            (q === 'db' && s.includes('postgres'))
-          if (!matches) return false
-        }
-      }
-      if (rawKw && mode.value === 'live') {
+
+      // 7. Search keyword matching
+      if (rawKw) {
         if (reg) {
           if (!reg.test(log.msg) && !reg.test(log.pod) && !(log.traceId && reg.test(log.traceId))) return false
         } else {
           if (!log.msg.toLowerCase().includes(kw) && !log.pod.toLowerCase().includes(kw) && !log.traceId?.toLowerCase().includes(kw)) return false
         }
       }
+
       return true
     })
   })
@@ -167,6 +217,13 @@ export function useHistoricalLogSearch(
     isSearching,
     currentOffset,
     selectedHistoricalLimit,
+    activeServiceSubFilter,
+    sourceCategory,
+    mutedServices,
+    hoverPauseEnabled,
+    isHoverPaused,
+    effectiveNode,
+    effectiveService,
     timeRanges: LOG_TIME_RANGES,
     runHistoricalQuery,
     loadMoreHistorical,

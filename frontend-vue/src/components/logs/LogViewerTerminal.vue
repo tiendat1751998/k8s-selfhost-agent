@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref } from 'vue'
 import type { LogEntry } from '../../stores/logStore'
 import VirtualLogTerminal from './VirtualLogTerminal.vue'
@@ -12,6 +12,7 @@ interface Props {
   targetName: string
   latency?: number
   wrapLines?: boolean
+  hoverPauseEnabled?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
@@ -19,6 +20,7 @@ withDefaults(defineProps<Props>(), {
   isScrollLocked: false,
   wrapLines: true,
   latency: 0,
+  hoverPauseEnabled: true,
 })
 
 const emit = defineEmits<{
@@ -27,6 +29,9 @@ const emit = defineEmits<{
   (e: 'registerTerminal', el: HTMLElement | null): void
   (e: 'openTrace', traceId: string): void
   (e: 'openContext', entry: LogEntry): void
+  (e: 'filterService', payload: { node?: string; service: string }): void
+  (e: 'muteService', service: string): void
+  (e: 'hoverChange', hovering: boolean): void
 }>()
 
 const virtualTerminalRef = ref<InstanceType<typeof VirtualLogTerminal> | null>(null)
@@ -52,10 +57,14 @@ defineExpose({
     :target-name="targetName"
     :latency="latency"
     :wrap-lines="wrapLines"
+    :hover-pause-enabled="hoverPauseEnabled"
     @scroll="emit('scroll', $event)"
     @scroll-to-bottom="emit('scrollToBottom')"
     @register-terminal="emit('registerTerminal', $event)"
     @open-trace="emit('openTrace', $event)"
     @open-context="emit('openContext', $event)"
+    @filter-service="emit('filterService', $event)"
+    @mute-service="emit('muteService', $event)"
+    @hover-change="emit('hoverChange', $event)"
   />
 </template>

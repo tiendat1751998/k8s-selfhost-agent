@@ -39,7 +39,7 @@ export function matchesTarget(entry: LogEntry, opts: LogFilterOptions): boolean 
   if (opts.node) {
     const q = opts.node.toLowerCase()
     const n = (entry.node || entry.attributes?.node || entry.attributes?.node_name || entry.pod || '').toLowerCase()
-    return n.includes(q)
+    if (!n.includes(q)) return false
   }
   const q = (opts.service || opts.container || opts.pod || '').toLowerCase()
   if (!q) return true
@@ -140,9 +140,13 @@ export const useLogStore = defineStore('log', () => {
     const opts = normalizeOptions(options, podArg)
     activeFilter.value = opts
 
-    const hasMatchingLogs = logs.value.length > 0 && logs.value.some((l) => matchesTarget(l, opts))
-    if (!hasMatchingLogs) {
-      logs.value = []
+    if (!isReconnect) {
+      logs.value = logs.value.filter((l) => matchesTarget(l, opts))
+    } else {
+      const hasMatchingLogs = logs.value.length > 0 && logs.value.some((l) => matchesTarget(l, opts))
+      if (!hasMatchingLogs) {
+        logs.value = []
+      }
     }
 
     if (socket.value) {
@@ -337,15 +341,7 @@ export const useLogStore = defineStore('log', () => {
         combined.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
         logs.value = combined.slice(-maxBufferSize.value)
       } else {
-        if (logs.value.length === 0) {
-          logs.value = mapped.slice(-maxBufferSize.value)
-        } else {
-          const mappedFingerprints = new Set(mapped.map(getLogFingerprint))
-          const existingLiveLogs = logs.value.filter((entry) => !mappedFingerprints.has(getLogFingerprint(entry)))
-          const combined = [...mapped, ...existingLiveLogs]
-          combined.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
-          logs.value = combined.slice(-maxBufferSize.value)
-        }
+        logs.value = mapped.slice(-maxBufferSize.value)
       }
       totalHistoricalCount.value = res.total_count || 0
       hasMoreHistorical.value = res.has_more || false

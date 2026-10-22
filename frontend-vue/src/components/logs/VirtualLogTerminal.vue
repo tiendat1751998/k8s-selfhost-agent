@@ -17,11 +17,13 @@ interface Props {
   latency?: number
   wrapLines?: boolean
   rowHeight?: number
+  hoverPauseEnabled?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   isConnected: true, isPaused: false, autoScroll: true, isScrollLocked: false,
   targetName: 'cluster', latency: 0, wrapLines: true, rowHeight: 24,
+  hoverPauseEnabled: true,
 })
 
 const emit = defineEmits<{
@@ -30,6 +32,9 @@ const emit = defineEmits<{
   (e: 'registerTerminal', el: HTMLElement | null): void
   (e: 'openTrace', traceId: string): void
   (e: 'openContext', entry: LogEntry): void
+  (e: 'filterService', payload: { node?: string; service: string }): void
+  (e: 'muteService', service: string): void
+  (e: 'hoverChange', hovering: boolean): void
 }>()
 
 const logStore = useLogStore()
@@ -131,14 +136,46 @@ function scrollToBottom() {
   })
 }
 
+const isHovered = ref(false)
+const isHoverPaused = computed(() => !!props.hoverPauseEnabled && isHovered.value)
+
+function handleMouseEnter() {
+  isHovered.value = true
+  emit('hoverChange', true)
+}
+
+function handleMouseLeave() {
+  isHovered.value = false
+  emit('hoverChange', false)
+  if (props.autoScroll && isPinnedToBottom.value && !props.isScrollLocked) {
+    scrollToBottom()
+  }
+}
+
+function handleTargetClick(e: MouseEvent | KeyboardEvent, log: LogEntry) {
+  const svc = log.service || log.pod || log.container
+  if (!svc) return
+  if ('altKey' in e && e.altKey) {
+    emit('muteService', svc)
+    return
+  }
+  emit('filterService', { node: log.node, service: svc })
+}
+
+function handleMuteClick(log: LogEntry) {
+  const svc = log.service || log.pod || log.container
+  if (svc) emit('muteService', svc)
+}
+
 watch(
   () => props.logs.length,
   (newLen, oldLen) => {
     const diff = newLen - (oldLen || 0)
-    if (diff > 0 && !isPinnedToBottom.value) {
+    const isPausedReading = isHoverPaused.value || props.isScrollLocked || !isPinnedToBottom.value
+    if (diff > 0 && isPausedReading) {
       unpinnedNewLogsCount.value += diff
     }
-    if (props.autoScroll && isPinnedToBottom.value && !props.isScrollLocked) {
+    if (props.autoScroll && isPinnedToBottom.value && !props.isScrollLocked && !isHoverPaused.value) {
       nextTick(() => scrollToBottom())
     }
   }
@@ -157,6 +194,7 @@ function handleContextClick(entry: LogEntry) {
 defineExpose({
   scrollToBottom,
   viewportRef,
+  isHoverPaused,
 })
 </script>
 
@@ -170,6 +208,7 @@ defineExpose({
           {{ !isConnected ? 'RECONNECTING' : (isPaused ? 'PAUSED' : 'CONNECTED') }}
         </span>
         <span class="virtual-target-badge">{{ targetName }}</span>
+        <span v-if="isHoverPaused" class="virtual-hover-paused-badge">⏸ HOVER-LOCKED (Reading)</span>
         <span class="virtual-buffer-meta">({{ logs.length.toLocaleString() }} in buffer)</span>
       </div>
     </div>
@@ -180,6 +219,8 @@ defineExpose({
       class="virtual-viewport font-mono"
       tabindex="0"
       aria-label="Virtual log stream viewport"
+      @mouseenter="handleMouseEnter"
+      @mouseleave="handleMouseLeave"
     >
       <!-- Spacer providing the total virtual scroll height -->
       <div
@@ -202,8 +243,25 @@ defineExpose({
             <span class="virtual-badge-level" :class="'virtual-badge-' + item.log.level.toLowerCase()">
               [{{ item.log.level.padEnd(5) }}]
             </span>
-            <span class="virtual-badge-target" :title="getTargetBadge(item.log)">
-              [{{ getTargetBadge(item.log) }}]
+            <span
+              class="virtual-badge-target"
+              role="button"
+              tabindex="0"
+              :title="`Click to isolate ${item.log.service || item.log.pod || 'service'} • Alt+Click to mute`"
+              @click.stop="handleTargetClick($event, item.log)"
+              @keydown.enter="handleTargetClick($event, item.log)"
+              @keydown.space.prevent="handleTargetClick($event, item.log)"
+            >
+              <span>[{{ getTargetBadge(item.log) }}]</span>
+              <button
+                type="button"
+                class="virtual-target-mute-btn"
+                title="Mute this service"
+                aria-label="Mute this service"
+                @click.stop="handleMuteClick(item.log)"
+              >
+                &times;
+              </button>
             </span>
 
             <!-- Log Message & Stack Trace Section -->

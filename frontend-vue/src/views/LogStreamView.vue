@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useLogStreamer } from '../composables/useLogStreamer'
 import { useHistoricalLogSearch } from '../composables/useHistoricalLogSearch'
 import { useGlobalContext } from '../composables/useGlobalContext'
 import LogTargetTree, { type LogTarget } from '../components/logs/LogTargetTree.vue'
+import LogNodeServiceBar, { type AvailableServiceItem } from '../components/logs/LogNodeServiceBar.vue'
 import LogViewerTerminal from '../components/logs/LogViewerTerminal.vue'
 import LogVolumeHistogram from '../components/logs/LogVolumeHistogram.vue'
 import LogTraceDrawer from '../components/logs/LogTraceDrawer.vue'
@@ -12,6 +13,7 @@ import LogContextModal from '../components/logs/LogContextModal.vue'
 import LogStreamToolbar from '../components/logs/LogStreamToolbar.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { LogFilterParams } from '../api/logging'
+import { isNoiseLog, classifyLogTarget } from '../utils/logTargetCategorizer'
 import '../assets/styles/views/logstream.css'
 
 const { activeClusterId } = useGlobalContext()
@@ -32,26 +34,73 @@ const showDroppedAlert = ref(true)
 
 const {
   mode, selectedTimeRange, queryError, selectedHistoricalLimit, timeRanges,
+  activeServiceSubFilter, sourceCategory, mutedServices, hoverPauseEnabled, isHoverPaused,
+  effectiveNode, effectiveService,
   runHistoricalQuery, loadMoreHistorical, handleHistogramFilterRange, handleClearHistogramFilter,
   targetFilteredLogs,
 } = useHistoricalLogSearch(logStore, selectedTarget, searchKeyword, selectedLevel)
 
 let activeTargetId = ''
 
+const availableServices = computed<AvailableServiceItem[]>(() => {
+  const counts = new Map<string, { name: string; category: 'app' | 'systemd'; icon: string; count: number }>()
+  const effNode = effectiveNode.value?.toLowerCase()
+  for (const l of logStore.logs) {
+    if (effNode) {
+      const n = (l.node || l.attributes?.node || l.attributes?.node_name || '').toLowerCase()
+      if (n && !n.includes(effNode)) continue
+    }
+    const svc = l.service || l.container || l.attributes?.app || l.attributes?.service || l.attributes?.container_name || l.pod
+    if (!svc || isNoiseLog(svc)) continue
+    const lower = svc.toLowerCase()
+    const existing = counts.get(lower)
+    if (existing) {
+      existing.count++
+    } else {
+      const classified = classifyLogTarget(svc)
+      counts.set(lower, {
+        name: svc,
+        category: classified.category,
+        icon: classified.icon,
+        count: 1,
+      })
+    }
+  }
+  const result: AvailableServiceItem[] = []
+  for (const [id, item] of counts.entries()) {
+    result.push({
+      id,
+      name: item.name,
+      category: item.category,
+      icon: item.icon,
+      count: item.count,
+    })
+  }
+  result.sort((a, b) => {
+    if (a.category !== b.category) {
+      return a.category === 'app' ? -1 : 1
+    }
+    return b.count - a.count
+  })
+  return result
+})
+
 async function preloadRecentLogs(target: LogTarget) {
   if (!target || !target.id) return
   try {
     const kw = searchKeyword.value.trim()
     const ns = target.namespace || (route.query.namespace ? String(route.query.namespace) : undefined)
-    const filter: LogFilterParams & { service?: string; container?: string; namespace?: string } = {
+    const effNode = effectiveNode.value
+    const effService = effectiveService.value
+    const filter: LogFilterParams = {
       limit: 50,
       query: kw ? kw : undefined,
-      service: target.type === 'service' ? target.id : undefined,
-      container: target.type === 'service' ? target.id : undefined,
-      container_name: target.type === 'service' ? target.id : undefined,
+      service: effService,
+      container: effService,
+      container_name: effService,
       namespace: ns,
-      node: target.type === 'node' ? target.id : undefined,
-      attributes: target.type === 'node' ? { node: target.id } : undefined,
+      node: effNode,
+      attributes: effNode ? { node: effNode } : undefined,
       cluster_id: activeClusterId.value || undefined,
       log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
     }
@@ -64,12 +113,15 @@ async function preloadRecentLogs(target: LogTarget) {
 
 function connectTarget(target: LogTarget) {
   if (!target || !target.id) return
-  if (target.type === 'node') {
-    logStore.connect({ node: target.id })
-  } else {
-    const ns = target.namespace || (route.query.namespace ? String(route.query.namespace) : undefined)
-    logStore.connect({ service: target.id, container: target.id, namespace: ns })
-  }
+  const ns = target.namespace || (route.query.namespace ? String(route.query.namespace) : undefined)
+  const effNode = effectiveNode.value
+  const effService = effectiveService.value
+  logStore.connect({
+    node: effNode,
+    service: effService,
+    container: effService,
+    namespace: ns,
+  })
 }
 
 async function handleSelectTarget(target: LogTarget) {
@@ -84,6 +136,47 @@ async function handleSelectTarget(target: LogTarget) {
     runHistoricalQuery()
   }
 }
+
+function handleToggleMuteService(serviceId: string) {
+  const lower = serviceId.toLowerCase()
+  const idx = mutedServices.value.indexOf(lower)
+  if (idx >= 0) {
+    mutedServices.value.splice(idx, 1)
+  } else {
+    mutedServices.value.push(lower)
+    if (activeServiceSubFilter.value.toLowerCase() === lower) {
+      activeServiceSubFilter.value = ''
+    }
+  }
+}
+
+function handleClearMutedServices() {
+  mutedServices.value = []
+}
+
+function handleFilterServiceFromRow(payload: { node?: string; service: string }) {
+  if (payload.node && payload.node !== selectedTarget.value.node && payload.node !== selectedTarget.value.id) {
+    selectedTarget.value = {
+      type: 'node',
+      id: payload.node,
+      name: payload.node,
+      icon: 'server',
+      node: payload.node,
+      service: payload.service,
+    }
+  }
+  activeServiceSubFilter.value = payload.service
+}
+
+watch(activeServiceSubFilter, () => {
+  if (mode.value === 'live') {
+    connectTarget(selectedTarget.value)
+    preloadRecentLogs(selectedTarget.value)
+    fetchLiveHistogram()
+  } else {
+    runHistoricalQuery()
+  }
+})
 
 watch(selectedTarget, (t) => {
   if (t.id === activeTargetId) return
@@ -119,7 +212,20 @@ function syncTargetFromRoute(): boolean {
     searchKeyword.value = String(search)
   }
 
-  if (pod || app) {
+  if (node && (pod || app)) {
+    const targetId = String(pod || app)
+    selectedTarget.value = {
+      type: 'node',
+      id: String(node),
+      name: `${node} / ${targetId}`,
+      icon: 'server',
+      node: String(node),
+      service: targetId,
+      namespace: ns ? String(ns) : undefined,
+    }
+    activeServiceSubFilter.value = targetId
+    return true
+  } else if (pod || app) {
     const targetId = String(pod || app)
     const displayName = pod && app && pod !== app ? `${app} (${pod})` : targetId
     selectedTarget.value = {
@@ -162,14 +268,16 @@ watch(
 
 async function fetchLiveHistogram() {
   const now = new Date()
-  const target = selectedTarget.value
+  const effNode = effectiveNode.value
+  const effService = effectiveService.value
   await logStore.fetchHistogram({
     start_time: new Date(now.getTime() - 3600000).toISOString(),
     end_time: now.toISOString(),
     interval_seconds: 60,
-    container_name: target.type === 'service' ? target.id : undefined,
-    node: target.type === 'node' ? target.id : undefined,
-    attributes: target.type === 'node' ? { node: target.id } : undefined,
+    service: effService,
+    container_name: effService,
+    node: effNode,
+    attributes: effNode ? { node: effNode } : undefined,
   }).catch(() => {})
 }
 
@@ -304,6 +412,22 @@ function handleExport() {
       </div>
 
       <div class="explorer-right-col">
+        <!-- Interactive Node & Service Isolation Bar -->
+        <LogNodeServiceBar
+          :selected-target="selectedTarget"
+          :available-services="availableServices"
+          :active-service="activeServiceSubFilter"
+          :source-category="sourceCategory"
+          :muted-services="mutedServices"
+          :hover-pause-enabled="hoverPauseEnabled"
+          :is-hover-paused="isHoverPaused"
+          @update:active-service="activeServiceSubFilter = $event"
+          @update:source-category="sourceCategory = $event"
+          @toggle-mute-service="handleToggleMuteService"
+          @clear-muted-services="handleClearMutedServices"
+          @update:hover-pause-enabled="hoverPauseEnabled = $event"
+        />
+
         <LogViewerTerminal
           :logs="targetFilteredLogs"
           :is-connected="mode === 'live' ? isConnected : false"
@@ -313,11 +437,15 @@ function handleExport() {
           :target-name="selectedTarget.name"
           :latency="latency"
           :wrap-lines="wrapLines"
+          :hover-pause-enabled="hoverPauseEnabled"
           @scroll="handleScroll"
           @scroll-to-bottom="scrollToBottom"
           @register-terminal="setTerminalRef"
           @open-trace="logStore.openTraceDrawer"
           @open-context="logStore.openContextModal"
+          @filter-service="handleFilterServiceFromRow"
+          @mute-service="handleToggleMuteService"
+          @hover-change="isHoverPaused = $event && hoverPauseEnabled"
         />
       </div>
     </div>

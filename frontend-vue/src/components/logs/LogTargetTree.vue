@@ -26,10 +26,11 @@ const emit = defineEmits<{
   (e: 'select', target: LogTarget): void
 }>()
 
-const workloadsExpanded = ref(true)
-const appsExpanded = ref(true)
-const systemdExpanded = ref(true)
 const nodesExpanded = ref(true)
+const appsExpanded = ref(true)
+const workloadsExpanded = ref(true)
+const systemdExpanded = ref(true)
+const expandedNodes = ref<Record<string, boolean>>({})
 
 const {
   targetSearch,
@@ -39,8 +40,21 @@ const {
   filteredHostNodes,
   getNodeCount,
   getServiceCount,
+  getNodeServices,
+  getNodeServiceCount,
   selectTarget,
 } = useLogTargets(props, emit)
+
+function isNodeExpanded(nodeId: string): boolean {
+  if (expandedNodes.value[nodeId] !== undefined) {
+    return expandedNodes.value[nodeId]
+  }
+  return (props.modelValue.type === 'node' && props.modelValue.id === nodeId) || props.modelValue.node === nodeId
+}
+
+function toggleNodeExpand(nodeId: string) {
+  expandedNodes.value[nodeId] = !isNodeExpanded(nodeId)
+}
 </script>
 
 <template>
@@ -82,30 +96,63 @@ const {
         <span>No log targets discovered</span>
       </div>
 
-      <!-- Section 0: Kubernetes Workloads -->
-      <div v-if="filteredK8sWorkloads.length > 0" class="tree-section">
-        <div class="section-toggle" @click="workloadsExpanded = !workloadsExpanded">
-          <span class="section-caret" :class="{ 'caret-down': workloadsExpanded }">&#9656;</span>
-          <BaseIcon name="layers" size="xs" />
-          <span class="section-label">Kubernetes Workloads</span>
-          <span class="section-count font-mono">{{ filteredK8sWorkloads.length }}</span>
+      <!-- Section 1: Node Systems (Log Node) - Primary Top Focus -->
+      <div class="tree-section">
+        <div class="section-toggle" @click="nodesExpanded = !nodesExpanded">
+          <span class="section-caret" :class="{ 'caret-down': nodesExpanded }">&#9656;</span>
+          <BaseIcon name="server" size="xs" />
+          <span class="section-label">Node Systems (Log Node)</span>
+          <span class="section-count font-mono">{{ filteredHostNodes.length }}</span>
         </div>
-        <div v-show="workloadsExpanded" class="section-items">
-          <LogTargetItem
-            v-for="wl in filteredK8sWorkloads"
-            :key="wl.id"
-            :id="wl.id"
-            :name="wl.name"
-            :sub="wl.kind + (wl.namespace ? ' · ' + wl.namespace : '')"
-            :icon="wl.icon"
-            :count="getServiceCount(wl.id)"
-            :active="modelValue.type === 'service' && modelValue.id === wl.id"
-            @click="selectTarget({ type: 'service', id: wl.id, name: wl.name, icon: wl.icon, namespace: wl.namespace })"
-          />
+        <div v-show="nodesExpanded" class="section-items">
+          <div
+            v-for="node in filteredHostNodes"
+            :key="node.id"
+            class="tree-node-group"
+          >
+            <div class="tree-node-row">
+              <button
+                v-if="getNodeServices(node.id).length > 0"
+                type="button"
+                class="node-expand-btn"
+                :aria-label="isNodeExpanded(node.id) ? 'Collapse services' : 'Expand services'"
+                @click.stop="toggleNodeExpand(node.id)"
+              >
+                <span class="section-caret" :class="{ 'caret-down': isNodeExpanded(node.id) }">&#9656;</span>
+              </button>
+              <LogTargetItem
+                :id="node.id"
+                :name="node.name"
+                :sub="node.role"
+                :icon="node.icon || 'server'"
+                :count="getNodeCount(node.id)"
+                :active="modelValue.type === 'node' && modelValue.id === node.id && !modelValue.service"
+                class="node-item-flex"
+                @click="selectTarget({ type: 'node', id: node.id, name: node.name, icon: 'server' })"
+              />
+            </div>
+            <!-- Hierarchical Child Services on this Node -->
+            <div
+              v-show="isNodeExpanded(node.id) && getNodeServices(node.id).length > 0"
+              class="tree-node-children"
+            >
+              <LogTargetItem
+                v-for="svc in getNodeServices(node.id)"
+                :key="`${node.id}-${svc.id}`"
+                :id="`${node.id}-${svc.id}`"
+                :name="svc.name"
+                :sub="svc.category === 'app' ? 'App / Container' : 'SystemD'"
+                :icon="svc.icon"
+                :count="getNodeServiceCount(node.id, svc.id)"
+                :active="modelValue.node === node.id && (modelValue.service === svc.id || modelValue.id === svc.id)"
+                @click="selectTarget({ type: 'service', id: svc.id, name: `${node.name} / ${svc.name}`, icon: svc.icon, node: node.id, service: svc.id })"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Section 1: Running Apps (Containers) -->
+      <!-- Section 2: Running Apps (Containers) -->
       <div class="tree-section">
         <div class="section-toggle" @click="appsExpanded = !appsExpanded">
           <span class="section-caret" :class="{ 'caret-down': appsExpanded }">&#9656;</span>
@@ -122,13 +169,36 @@ const {
             :sub="svc.type"
             :icon="svc.icon || 'box'"
             :count="getServiceCount(svc.id)"
-            :active="modelValue.type === 'service' && modelValue.id === svc.id"
+            :active="modelValue.type === 'service' && modelValue.id === svc.id && !modelValue.node"
             @click="selectTarget({ type: 'service', id: svc.id, name: svc.name, icon: svc.icon })"
           />
         </div>
       </div>
 
-      <!-- Section 2: System Services (SystemD) -->
+      <!-- Section 3: Kubernetes Workloads -->
+      <div v-if="filteredK8sWorkloads.length > 0" class="tree-section">
+        <div class="section-toggle" @click="workloadsExpanded = !workloadsExpanded">
+          <span class="section-caret" :class="{ 'caret-down': workloadsExpanded }">&#9656;</span>
+          <BaseIcon name="layers" size="xs" />
+          <span class="section-label">Kubernetes Workloads</span>
+          <span class="section-count font-mono">{{ filteredK8sWorkloads.length }}</span>
+        </div>
+        <div v-show="workloadsExpanded" class="section-items">
+          <LogTargetItem
+            v-for="wl in filteredK8sWorkloads"
+            :key="wl.id"
+            :id="wl.id"
+            :name="wl.name"
+            :sub="wl.kind + (wl.namespace ? ' · ' + wl.namespace : '')"
+            :icon="wl.icon"
+            :count="getServiceCount(wl.id)"
+            :active="modelValue.type === 'service' && modelValue.id === wl.id && !modelValue.node"
+            @click="selectTarget({ type: 'service', id: wl.id, name: wl.name, icon: wl.icon, namespace: wl.namespace })"
+          />
+        </div>
+      </div>
+
+      <!-- Section 4: System Services (SystemD) -->
       <div class="tree-section">
         <div class="section-toggle" @click="systemdExpanded = !systemdExpanded">
           <span class="section-caret" :class="{ 'caret-down': systemdExpanded }">&#9656;</span>
@@ -145,31 +215,8 @@ const {
             :sub="svc.type"
             :icon="svc.icon || 'cpu'"
             :count="getServiceCount(svc.id)"
-            :active="modelValue.type === 'service' && modelValue.id === svc.id"
+            :active="modelValue.type === 'service' && modelValue.id === svc.id && !modelValue.node"
             @click="selectTarget({ type: 'service', id: svc.id, name: svc.name, icon: svc.icon })"
-          />
-        </div>
-      </div>
-
-      <!-- Section 3: Node Systems (Log Node) -->
-      <div class="tree-section">
-        <div class="section-toggle" @click="nodesExpanded = !nodesExpanded">
-          <span class="section-caret" :class="{ 'caret-down': nodesExpanded }">&#9656;</span>
-          <BaseIcon name="server" size="xs" />
-          <span class="section-label">Node Systems (Log Node)</span>
-          <span class="section-count font-mono">{{ filteredHostNodes.length }}</span>
-        </div>
-        <div v-show="nodesExpanded" class="section-items">
-          <LogTargetItem
-            v-for="node in filteredHostNodes"
-            :key="node.id"
-            :id="node.id"
-            :name="node.name"
-            :sub="node.role"
-            :icon="node.icon || 'server'"
-            :count="getNodeCount(node.id)"
-            :active="modelValue.type === 'node' && modelValue.id === node.id"
-            @click="selectTarget({ type: 'node', id: node.id, name: node.name, icon: 'server' })"
           />
         </div>
       </div>

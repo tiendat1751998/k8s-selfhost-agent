@@ -37,21 +37,49 @@ export function isNoiseLog(rawName?: string | null): boolean {
 
   // 2. Filter out OS maintenance / installer file noise (with or without .log extension)
   const baseName = lower.replace(/\.log$/, '')
-  return OS_NOISE_NAMES.has(lower) || OS_NOISE_NAMES.has(baseName)
+  if (OS_NOISE_NAMES.has(lower) || OS_NOISE_NAMES.has(baseName)) return true
+
+  // 3. Filter out systemd scope/slice/user slice noise
+  if (lower === 'init.scope' || lower.endsWith('.scope')) return true
+  if (lower.endsWith('.slice')) return true
+  if (lower.startsWith('user@') || lower.startsWith('user-runtime-dir@')) return true
+
+  return false
 }
 
 /**
- * Determines whether a service name represents a systemd service, socket, target, or slice.
+ * Determines whether a service name represents a systemd service, socket, target, slice, or system daemon.
  */
 export function isSystemdService(name?: string | null): boolean {
   if (!name) return false
   const lower = name.trim().toLowerCase()
-  return (
+  if (
     lower.endsWith('.service') ||
     lower.endsWith('.socket') ||
     lower.endsWith('.target') ||
-    lower.endsWith('.slice')
-  )
+    lower.endsWith('.slice') ||
+    lower.endsWith('.scope')
+  ) {
+    return true
+  }
+  if (
+    lower === 'journald' ||
+    lower === 'systemd' ||
+    lower.startsWith('systemd-') ||
+    lower.startsWith('systemd_') ||
+    lower === 'cron' ||
+    lower === 'sshd' ||
+    lower === 'dbus' ||
+    lower.startsWith('dbus-') ||
+    lower.startsWith('dbus_') ||
+    lower === 'sudo' ||
+    lower === 'su' ||
+    lower === 'kernel' ||
+    lower === 'init.scope'
+  ) {
+    return true
+  }
+  return false
 }
 
 /**
@@ -63,13 +91,7 @@ export function getServiceIcon(name?: string | null): string {
   const lower = name.trim().toLowerCase()
 
   // 1. SystemD services must return 'cpu' and never match substring rules like 'auth'
-  if (
-    lower.endsWith('.service') ||
-    lower.endsWith('.socket') ||
-    lower.endsWith('.target') ||
-    lower.endsWith('.slice') ||
-    lower.startsWith('vgauth')
-  ) {
+  if (isSystemdService(name) || lower.startsWith('vgauth')) {
     return 'cpu'
   }
 

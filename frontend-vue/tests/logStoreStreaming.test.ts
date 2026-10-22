@@ -228,6 +228,22 @@ describe('Log Store Realtime Streaming & Order Tests', () => {
     assert.equal(matchesTarget(entry, { service: 'postgres' }), true)
     assert.equal(matchesTarget(entry, { service: 'redis' }), false)
     assert.equal(matchesTarget(entry, { node: 'worker-1' }), false)
+
+    const nodeSvcEntry: LogEntry = {
+      time: '2026-09-16T06:00:00.000Z',
+      level: 'INFO',
+      namespace: 'default',
+      pod: 'postgres-0',
+      node: 'k8smater133',
+      service: 'postgres_db',
+      msg: 'ready'
+    }
+    // Matching both node and service
+    assert.equal(matchesTarget(nodeSvcEntry, { node: 'k8smater133', service: 'postgres_db' }), true)
+    // Matching node but different service -> must be false!
+    assert.equal(matchesTarget(nodeSvcEntry, { node: 'k8smater133', service: 'traefik' }), false)
+    // Matching service but different node -> must be false!
+    assert.equal(matchesTarget(nodeSvcEntry, { node: 'k8sworker', service: 'postgres_db' }), false)
   })
 
   it('useLogStreamer respects autoConnect option to prevent duplicate connections', () => {

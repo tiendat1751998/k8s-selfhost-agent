@@ -2,6 +2,7 @@ import { api } from './client'
 
 export interface LogFilterParams {
   query?: string
+  service?: string
   namespace?: string
   pod_name?: string
   container_name?: string
@@ -19,6 +20,7 @@ export interface LogFilterParams {
 
 export interface HistogramParams {
   query?: string
+  service?: string
   namespace?: string
   pod_name?: string
   container_name?: string
@@ -88,10 +90,16 @@ export interface LogContextParams {
 export async function searchLogs(filter: LogFilterParams = {}): Promise<LogSearchResult> {
   const params: Record<string, string | number> = {}
   if (filter.query) params.query = filter.query
+  if (filter.service) {
+    params.service = filter.service
+    params.container_name = filter.container_name || filter.service
+  } else if (filter.container_name) {
+    params.container_name = filter.container_name
+  } else if (filter.container) {
+    params.container_name = filter.container
+  }
   if (filter.namespace) params.namespace = filter.namespace
   if (filter.pod_name) params.pod_name = filter.pod_name
-  if (filter.container_name) params.container_name = filter.container_name
-  else if (filter.container) params.container_name = filter.container
   if (filter.node) params.node = filter.node
   if (filter.attributes?.node) params.node = filter.attributes.node
   if (filter.stream) params.stream = filter.stream
@@ -108,9 +116,14 @@ export async function searchLogs(filter: LogFilterParams = {}): Promise<LogSearc
 export async function getLogHistogram(params: HistogramParams = {}): Promise<LogAggregationBucket[]> {
   const queryParams: Record<string, string | number> = {}
   if (params.query) queryParams.query = params.query
+  if (params.service) {
+    queryParams.service = params.service
+    queryParams.container_name = params.container_name || params.service
+  } else if (params.container_name) {
+    queryParams.container_name = params.container_name
+  }
   if (params.namespace) queryParams.namespace = params.namespace
   if (params.pod_name) queryParams.pod_name = params.pod_name
-  if (params.container_name) queryParams.container_name = params.container_name
   if (params.node) queryParams.node = params.node
   if (params.attributes?.node) queryParams.node = params.attributes.node
   if (params.log_level) queryParams.log_level = params.log_level
