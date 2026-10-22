@@ -1,6 +1,7 @@
 package logengine
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 
@@ -85,6 +86,17 @@ func (b *BlockBuilder) Append(ts int64, serviceID, levelID uint16, msg []byte) {
 
 	Tokenize(msg, func(tok []byte) {
 		b.bloom.Add(tok)
+		if bytes.IndexByte(tok, '_') != -1 {
+			start := 0
+			for i := 0; i <= len(tok); i++ {
+				if i == len(tok) || tok[i] == '_' {
+					if i-start >= 2 {
+						b.bloom.Add(tok[start:i])
+					}
+					start = i + 1
+				}
+			}
+		}
 	})
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -163,4 +164,96 @@ func TestReader_StartsAtTargetedTimeRangeNotOldestChunkParts(t *testing.T) {
 			t.Fatalf("expected search without Since to start at newest chunk parts (>= 12:00), but got entry at %v (%s)", e.Timestamp, e.Message)
 		}
 	}
+}
+
+func TestReader_BlockCount_Over300Parts(t *testing.T) {
+	tmpDir := t.TempDir()
+	partsDir := filepath.Join(tmpDir, "parts")
+	if err := os.MkdirAll(partsDir, 0755); err != nil {
+		t.Fatalf("failed to create parts dir: %v", err)
+	}
+
+	// Create 305 fake part directories, each with a primary.idx containing 1 block (16 bytes)
+	entryBytes := make([]byte, 16)
+	for i := 1; i <= 305; i++ {
+		pDir := filepath.Join(partsDir, fmt.Sprintf("part_%016d", i))
+		if err := os.MkdirAll(pDir, 0755); err != nil {
+			t.Fatalf("failed to create part dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(pDir, "primary.idx"), entryBytes, 0644); err != nil {
+			t.Fatalf("failed to write primary.idx: %v", err)
+		}
+	}
+
+	reader, err := NewReader(tmpDir, nil)
+	if err != nil {
+		t.Fatalf("failed to create reader: %v", err)
+	}
+	defer reader.Close()
+
+	count := reader.BlockCount()
+	assert.Equal(t, 305, count, "BlockCount should not be capped at 256 parts and accurately count all 305 parts")
+}
+
+func TestReader_BloomPruning_SubTokenUnderscore(t *testing.T) {
+	InitEngineRuntime()
+	tmpDir := t.TempDir()
+	dict := NewLabelDictionary()
+	writer, err := NewWriter(tmpDir, dict, WithMaxRowsPerBlock(10))
+	if err != nil {
+		t.Fatalf("failed to create writer: %v", err)
+	}
+
+	now := time.Now().UTC()
+	err = writer.Write(Entry{
+		Timestamp: now,
+		Service:   "payment-svc",
+		Level:     "error",
+		Message:   "Transaction CRITICAL_PAYMENT_FAILURE_XYZ_999 encountered database timeout",
+	})
+	if err != nil {
+		t.Fatalf("failed to write entry: %v", err)
+	}
+	if err := writer.Flush(); err != nil {
+		t.Fatalf("failed to flush: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close: %v", err)
+	}
+
+	reader, err := NewReader(tmpDir, dict)
+	if err != nil {
+		t.Fatalf("failed to create reader: %v", err)
+	}
+	defer reader.Close()
+
+	// 1. Exact match with sub-token "PAYMENT_FAILURE"
+	results, err := reader.Search(context.Background(), QueryParams{
+		Query:      "PAYMENT_FAILURE",
+		ExactMatch: true,
+	})
+	if err != nil {
+		t.Fatalf("search error: %v", err)
+	}
+	assert.Len(t, results, 1, "sub-token 'PAYMENT_FAILURE' should be indexed in bloom and found via ExactMatch")
+
+	// 2. Exact match with sub-token "CRITICAL"
+	results2, err := reader.Search(context.Background(), QueryParams{
+		Query:      "CRITICAL",
+		ExactMatch: true,
+	})
+	if err != nil {
+		t.Fatalf("search error: %v", err)
+	}
+	assert.Len(t, results2, 1, "sub-token 'CRITICAL' should be indexed in bloom and found via ExactMatch")
+
+	// 3. Substring match with interior token bounded by spaces
+	results3, err := reader.Search(context.Background(), QueryParams{
+		Query:      "Transaction CRITICAL_PAYMENT_FAILURE_XYZ_999 encountered",
+		ExactMatch: false,
+	})
+	if err != nil {
+		t.Fatalf("search error: %v", err)
+	}
+	assert.Len(t, results3, 1, "interior bounded token should survive bloom stage and match")
 }

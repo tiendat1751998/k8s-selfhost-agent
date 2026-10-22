@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -34,6 +33,10 @@ type Writer struct {
 	activePartDir    string
 	activePartBlocks int
 	activePartBytes  int64
+	activeDataFile   *os.File
+	activeMarksFile  *os.File
+	activeBloomFile  *os.File
+	activePidxFile   *os.File
 	maxRetention      time.Duration
 	maxDiskBytes      int64
 	lastPruneTime     time.Time
@@ -138,6 +141,9 @@ func (w *Writer) flusherLoop() {
 			if err := w.flushCurrentBlock(); err != nil {
 				w.setLastError(err)
 			}
+			w.closedMu.Lock()
+			w.sealActivePartLocked()
+			w.closedMu.Unlock()
 			return
 
 		case req := <-w.flushReqCh:
@@ -230,7 +236,27 @@ func (w *Writer) SealActivePart() {
 	w.sealActivePartLocked()
 }
 
+func (w *Writer) closeActiveFiles() {
+	if w.activeDataFile != nil {
+		_ = w.activeDataFile.Close()
+		w.activeDataFile = nil
+	}
+	if w.activeMarksFile != nil {
+		_ = w.activeMarksFile.Close()
+		w.activeMarksFile = nil
+	}
+	if w.activeBloomFile != nil {
+		_ = w.activeBloomFile.Close()
+		w.activeBloomFile = nil
+	}
+	if w.activePidxFile != nil {
+		_ = w.activePidxFile.Close()
+		w.activePidxFile = nil
+	}
+}
+
 func (w *Writer) sealActivePartLocked() {
+	w.closeActiveFiles()
 	if w.activePartDir != "" {
 		w.nextPartID++
 		w.activePartDir = ""
@@ -346,6 +372,7 @@ func (w *Writer) flushCurrentBlock() error {
 	isNewPart := false
 	if w.activePartDir == "" || w.activePartBlocks >= maxBlocksPerPart || w.activePartBytes >= maxPartBytes {
 		if w.activePartDir != "" {
+			w.closeActiveFiles()
 			w.nextPartID++
 		}
 		partName := fmt.Sprintf("part_%016d", w.nextPartID)
@@ -359,6 +386,34 @@ func (w *Writer) flushCurrentBlock() error {
 		isNewPart = true
 	}
 	activeDir := w.activePartDir
+
+	if w.activeDataFile == nil {
+		var err error
+		w.activeDataFile, err = os.OpenFile(filepath.Join(activeDir, "data.bin"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			w.closeActiveFiles()
+			w.closedMu.Unlock()
+			return fmt.Errorf("failed to open data.bin: %w", err)
+		}
+		w.activeMarksFile, err = os.OpenFile(filepath.Join(activeDir, "marks.bin"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			w.closeActiveFiles()
+			w.closedMu.Unlock()
+			return fmt.Errorf("failed to open marks.bin: %w", err)
+		}
+		w.activeBloomFile, err = os.OpenFile(filepath.Join(activeDir, "bloom.bin"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			w.closeActiveFiles()
+			w.closedMu.Unlock()
+			return fmt.Errorf("failed to open bloom.bin: %w", err)
+		}
+		w.activePidxFile, err = os.OpenFile(filepath.Join(activeDir, "primary.idx"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			w.closeActiveFiles()
+			w.closedMu.Unlock()
+			return fmt.Errorf("failed to open primary.idx: %w", err)
+		}
+	}
 	w.closedMu.Unlock()
 
 	scratchBuf := GetBlockBuffer()
@@ -370,28 +425,12 @@ func (w *Writer) flushCurrentBlock() error {
 	compressed, uncompressedSize, minTime, maxTime, bloom, levelMask, serviceBloom := w.builder.PackAndCompress(scratchBuf, compBuf)
 
 	// 1. Append data.bin
-	dataPath := filepath.Join(activeDir, "data.bin")
-	df, err := os.OpenFile(dataPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open data.bin: %w", err)
-	}
-	offset, err := df.Seek(0, io.SeekEnd)
-	if err != nil {
-		_ = df.Close()
-		return fmt.Errorf("failed to seek data.bin: %w", err)
-	}
-	if _, err := df.Write(compressed); err != nil {
-		_ = df.Close()
+	offset := w.activePartBytes
+	if _, err := w.activeDataFile.Write(compressed); err != nil {
 		return fmt.Errorf("failed to append data.bin: %w", err)
 	}
-	_ = df.Close()
 
 	// 2. Append marks.bin
-	marksPath := filepath.Join(activeDir, "marks.bin")
-	mf, err := os.OpenFile(marksPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open marks.bin: %w", err)
-	}
 	mark := BlockMark{
 		CompressedOffset: uint64(offset),
 		CompressedLength: uint32(len(compressed)),
@@ -400,40 +439,24 @@ func (w *Writer) flushCurrentBlock() error {
 		LevelMask:        levelMask,
 		ServiceBloom:     serviceBloom,
 	}
-	markBytes := make([]byte, BlockMarkSize)
-	mark.Encode(markBytes)
-	if _, err := mf.Write(markBytes); err != nil {
-		_ = mf.Close()
+	var markBytes [BlockMarkSize]byte
+	mark.Encode(markBytes[:])
+	if _, err := w.activeMarksFile.Write(markBytes[:]); err != nil {
 		return fmt.Errorf("failed to append marks.bin: %w", err)
 	}
-	_ = mf.Close()
 
 	// 3. Append bloom.bin
-	bloomPath := filepath.Join(activeDir, "bloom.bin")
-	bf, err := os.OpenFile(bloomPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open bloom.bin: %w", err)
-	}
-	if _, err := bf.Write(bloom.Bytes()); err != nil {
-		_ = bf.Close()
+	if _, err := w.activeBloomFile.Write(bloom.Bytes()); err != nil {
 		return fmt.Errorf("failed to append bloom.bin: %w", err)
 	}
-	_ = bf.Close()
 
 	// 4. Append primary.idx
-	pidxPath := filepath.Join(activeDir, "primary.idx")
-	pf, err := os.OpenFile(pidxPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open primary.idx: %w", err)
-	}
-	idxBytes := make([]byte, 16)
+	var idxBytes [16]byte
 	binary.LittleEndian.PutUint64(idxBytes[0:8], uint64(minTime))
 	binary.LittleEndian.PutUint64(idxBytes[8:16], uint64(maxTime))
-	if _, err := pf.Write(idxBytes); err != nil {
-		_ = pf.Close()
+	if _, err := w.activePidxFile.Write(idxBytes[:]); err != nil {
 		return fmt.Errorf("failed to append primary.idx: %w", err)
 	}
-	_ = pf.Close()
 
 	w.closedMu.Lock()
 	w.activePartBlocks++
@@ -475,9 +498,12 @@ func (w *Writer) Close() error {
 	}
 	w.closed = true
 	close(w.closeCh)
-	w.sealActivePartLocked()
 	w.closedMu.Unlock()
 
 	w.wg.Wait()
+
+	w.closedMu.Lock()
+	w.sealActivePartLocked()
+	w.closedMu.Unlock()
 	return w.LastError()
 }

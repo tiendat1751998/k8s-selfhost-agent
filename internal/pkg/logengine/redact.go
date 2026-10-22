@@ -150,12 +150,22 @@ func (r *InStreamRedactor) MaskString(s string) string {
 	if len(s) == 0 {
 		return s
 	}
+	hasTrigger := false
 	for i := range r.rules {
 		if ruleTriggeredString(&r.rules[i], s) {
-			return string(r.MaskBytes([]byte(s)))
+			hasTrigger = true
+			break
 		}
 	}
-	return s
+	if !hasTrigger {
+		return s
+	}
+	b := []byte(s)
+	masked := r.MaskBytes(b)
+	if bytes.Equal(b, masked) {
+		return s
+	}
+	return string(masked)
 }
 
 var (
@@ -410,6 +420,26 @@ func indexFoldBytes(s []byte, sub string) int {
 	return -1
 }
 
+func hasPasswordKeyTrigger(b []byte) bool {
+	if bytes.IndexByte(b, '"') == -1 || bytes.IndexByte(b, ':') == -1 {
+		return false
+	}
+	for _, key := range passwordKeys {
+		if containsFoldBytes(b, key) { return true }
+	}
+	return false
+}
+
+func hasPasswordKeyTriggerString(s string) bool {
+	if strings.IndexByte(s, '"') == -1 || strings.IndexByte(s, ':') == -1 {
+		return false
+	}
+	for _, key := range passwordKeys {
+		if containsFoldString(s, key) { return true }
+	}
+	return false
+}
+
 func ruleTriggeredBytes(rule *RedactionRule, b []byte) bool {
 	switch rule.Type {
 	case PatternConnectionString:
@@ -417,7 +447,7 @@ func ruleTriggeredBytes(rule *RedactionRule, b []byte) bool {
 	case PatternPrivateKey:
 		return bytes.Contains(b, triggerBegin)
 	case PatternPasswordKeyValue:
-		return bytes.IndexByte(b, '"') != -1 && bytes.IndexByte(b, ':') != -1
+		return hasPasswordKeyTrigger(b)
 	case PatternBearerToken:
 		return containsFoldBytes(b, "bearer")
 	case PatternAPIKey:
@@ -437,7 +467,7 @@ func ruleTriggeredString(rule *RedactionRule, s string) bool {
 	case PatternPrivateKey:
 		return strings.Contains(s, "BEGIN")
 	case PatternPasswordKeyValue:
-		return strings.IndexByte(s, '"') != -1 && strings.IndexByte(s, ':') != -1
+		return hasPasswordKeyTriggerString(s)
 	case PatternBearerToken:
 		return containsFoldString(s, "bearer")
 	case PatternAPIKey:
