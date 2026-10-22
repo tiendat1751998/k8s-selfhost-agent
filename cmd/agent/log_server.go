@@ -151,22 +151,6 @@ func (s *LogServer) AddSource(src LogSource) {
 	}
 }
 
-// BlockCount returns total indexed blocks in the embedded columnar log engine.
-func (e *EngineLogSource) BlockCount() int {
-	if e == nil || e.reader == nil {
-		return 0
-	}
-	return e.reader.BlockCount()
-}
-
-// HasBlocks returns true if the embedded columnar log engine has any blocks.
-func (e *EngineLogSource) HasBlocks() bool {
-	if e == nil || e.reader == nil {
-		return false
-	}
-	return e.reader.HasBlocks()
-}
-
 // HandleEngineStatus handles GET /logs/status reporting columnar engine health and blocks.
 func (s *LogServer) HandleEngineStatus(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
