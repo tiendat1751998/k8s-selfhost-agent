@@ -18,6 +18,7 @@ func TestIsK8sUnavailable_ClientManagerErrors(t *testing.T) {
 		{"host is not kubernetes api server", true},
 		{"invalid configuration for cluster context", true},
 		{"fleet repository not initialized", true},
+		{"kubernetes cluster \"default\" is not connected or configured", true},
 		{"some random database query error", false},
 	}
 
