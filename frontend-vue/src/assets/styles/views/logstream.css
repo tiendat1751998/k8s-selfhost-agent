@@ -311,7 +311,7 @@
     max-height: calc(100vh - 48px - 50px - var(--sab, 0px));
     overflow: hidden;
   }
-  .desktop-only { display: none !important; }
+  .logs-toolbar-sleek.desktop-only, .desktop-only { display: none !important; }
   .mobile-only { display: flex !important; }
   .mobile-tree-toggle-btn {
     display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px;

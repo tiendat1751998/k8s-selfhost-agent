@@ -78,17 +78,17 @@ export function useLogTargets(
       workloads.push({ id: name, name, icon: 'layers', kind, namespace })
     }
 
-    // 1. Try GET /logs/targets or /logs/services
+    // 1. Try GET /logs/services (canonical endpoint) or /logs/targets
     try {
-      const res = await api.get<{ targets?: string[]; services?: string[] } | string[]>('/logs/targets')
-      const rawList = Array.isArray(res) ? res : (res?.targets || res?.services || [])
+      const res = await api.get<{ services?: string[]; targets?: string[] } | string[]>('/logs/services')
+      const rawList = Array.isArray(res) ? res : (res?.services || res?.targets || [])
       for (const item of rawList) {
         addService(typeof item === 'string' ? item : (item as { name?: string })?.name || String(item))
       }
     } catch {
       try {
-        const res = await api.get<{ services?: string[] } | string[]>('/logs/services')
-        const rawList = Array.isArray(res) ? res : (res?.services || [])
+        const res = await api.get<{ targets?: string[]; services?: string[] } | string[]>('/logs/targets')
+        const rawList = Array.isArray(res) ? res : (res?.targets || res?.services || [])
         for (const item of rawList) {
           addService(typeof item === 'string' ? item : (item as { name?: string })?.name || String(item))
         }

@@ -114,4 +114,60 @@ describe('useHistoricalLogSearch targetFilteredLogs isolation', () => {
     assert.equal(filteredService.length, 1)
     assert.equal(filteredService[0].service, 'postgres_db')
   })
+
+  it('excludes logs without matching node or pod when effNode is selected', () => {
+    const logs = ref<LogEntry[]>([
+      {
+        time: '2026-10-22T00:00:01Z',
+        level: 'INFO',
+        node: 'k8smater133',
+        service: 'api-service',
+        msg: 'master log'
+      },
+      {
+        time: '2026-10-22T00:00:02Z',
+        level: 'INFO',
+        // No node, but pod matches node name
+        pod: 'k8smater133-worker-pod',
+        service: 'api-service',
+        msg: 'pod matching log'
+      },
+      {
+        time: '2026-10-22T00:00:03Z',
+        level: 'INFO',
+        // Neither node nor pod nor attributes
+        service: 'api-service',
+        msg: 'unattributed log'
+      }
+    ])
+
+    const mockStore: any = {
+      get logs() { return logs.value },
+      fetchHistoricalLogs: async () => ({}),
+      fetchHistogram: async () => ([]),
+      histogram: ref([]),
+      isHistoricalLoading: ref(false),
+      isHistogramLoading: ref(false),
+      totalHistoricalCount: ref(0),
+      hasMoreHistorical: ref(false),
+    }
+
+    const selectedTarget = ref<LogTarget>({
+      type: 'node',
+      id: 'k8smater133',
+      name: 'k8smater133',
+    })
+
+    const searchComposable = useHistoricalLogSearch(
+      mockStore,
+      selectedTarget,
+      ref(''),
+      ref('ALL')
+    )
+
+    const filtered = searchComposable.targetFilteredLogs.value
+    // Should include log 1 (node: k8smater133) and log 2 (pod: k8smater133-worker-pod), but NOT log 3 (unattributed)
+    assert.equal(filtered.length, 2)
+    assert.equal(filtered.some(l => l.msg === 'unattributed log'), false)
+  })
 })

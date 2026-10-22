@@ -178,8 +178,8 @@ export function useHistoricalLogSearch(
 
       // 4. Effective Node matching
       if (effNode) {
-        const nodeName = (log.node || log.attributes?.node || log.attributes?.node_name || '').toLowerCase()
-        if (nodeName && !nodeName.includes(effNode.toLowerCase())) return false
+        const nodeName = (log.node || log.attributes?.node || log.attributes?.node_name || log.pod || '').toLowerCase()
+        if (!nodeName.includes(effNode.toLowerCase())) return false
       }
 
       // 5. Effective Service matching
