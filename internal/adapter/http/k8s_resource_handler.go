@@ -85,6 +85,8 @@ func isK8sUnavailable(err error) bool {
 		strings.Contains(msg, "not kubernetes") ||
 		strings.Contains(msg, "invalid configuration") ||
 		strings.Contains(msg, "fleet repository not initialized") ||
+		strings.Contains(msg, "not connected or configured") ||
+		strings.Contains(msg, "is not connected") ||
 		strings.Contains(msg, "kubernetes not connected") ||
 		strings.Contains(msg, "kubernetes cluster not connected") ||
 		strings.Contains(msg, "kubernetes client not initialized") ||
