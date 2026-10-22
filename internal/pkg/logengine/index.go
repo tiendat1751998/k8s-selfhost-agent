@@ -305,25 +305,44 @@ func matchLevel(actual, filter string) bool {
 }
 
 func bytesContainsFold(b []byte, subLower string) bool {
-	if len(subLower) == 0 {
+	n := len(subLower)
+	if n == 0 {
 		return true
 	}
-	if len(b) < len(subLower) {
+	if len(b) < n {
 		return false
 	}
-	if bytes.Contains(b, []byte(subLower)) {
-		return true
+	f0L, f0U := subLower[0], subLower[0]
+	if f0L >= 'a' && f0L <= 'z' {
+		f0U -= 32
+	} else if f0L >= 'A' && f0L <= 'Z' {
+		f0L += 32
 	}
-	subLen := len(subLower)
-	maxI := len(b) - subLen
-	for i := 0; i <= maxI; i++ {
+	limit := len(b) - n
+	for offset := 0; offset <= limit; {
+		i1, i2 := bytes.IndexByte(b[offset:], f0L), -1
+		if f0L != f0U {
+			i2 = bytes.IndexByte(b[offset:], f0U)
+		}
+		cand := i1
+		if i1 == -1 || (i2 != -1 && i2 < i1) {
+			cand = i2
+		}
+		if cand == -1 || offset+cand > limit {
+			return false
+		}
+		pos := offset + cand
 		match := true
-		for j := 0; j < subLen; j++ {
-			c := b[i+j]
+		for j := 1; j < n; j++ {
+			c := b[pos+j]
 			if c >= 'A' && c <= 'Z' {
 				c += 32
 			}
-			if c != subLower[j] {
+			sc := subLower[j]
+			if sc >= 'A' && sc <= 'Z' {
+				sc += 32
+			}
+			if c != sc {
 				match = false
 				break
 			}
@@ -331,6 +350,7 @@ func bytesContainsFold(b []byte, subLower string) bool {
 		if match {
 			return true
 		}
+		offset = pos + 1
 	}
 	return false
 }

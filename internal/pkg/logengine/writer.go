@@ -218,12 +218,21 @@ func (w *Writer) flusherLoop() {
 
 func (w *Writer) drainToBuilder(batch []Entry) int {
 	n := w.ringBuf.DrainBatch(batch)
+	var lastSvc string
+	var lastSvcID uint16
 	for i := 0; i < n; i++ {
 		e := &batch[i]
-		svcID := w.dict.GetOrInsert(e.Service)
+		var svcID uint16
+		if e.Service == lastSvc && lastSvc != "" {
+			svcID = lastSvcID
+		} else {
+			svcID = w.dict.GetOrInsert(e.Service)
+			lastSvc = e.Service
+			lastSvcID = svcID
+		}
 		lvlID := ParseLevelID(e.Level)
 		ts := e.Timestamp.UnixNano()
-		w.builder.Append(ts, svcID, lvlID, []byte(e.Message))
+		w.builder.AppendString(ts, svcID, lvlID, e.Message)
 		batch[i] = Entry{}
 	}
 	return n

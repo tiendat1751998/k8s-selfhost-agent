@@ -165,6 +165,7 @@ func setupHandler(collector *SystemCollector, authToken string, opts ...any) htt
 	}
 
 	mux.HandleFunc("/logs/status", authEndpoint(http.MethodGet, ls.HandleEngineStatus))
+	mux.HandleFunc("/logs/errors", authEndpoint(http.MethodGet, ls.HandleLogsErrors))
 	mux.HandleFunc("/logs/services", authEndpoint(http.MethodGet, ls.HandleGetServices))
 	mux.HandleFunc("/logs/search", authEndpoint(http.MethodPost, ls.HandleSearchLogs))
 	mux.HandleFunc("/logs", authEndpoint(http.MethodGet, ls.HandleGetLogs))

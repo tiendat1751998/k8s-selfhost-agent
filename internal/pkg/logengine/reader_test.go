@@ -257,3 +257,143 @@ func TestReader_BloomPruning_SubTokenUnderscore(t *testing.T) {
 	}
 	assert.Len(t, results3, 1, "interior bounded token should survive bloom stage and match")
 }
+
+func TestReader_TimeRange_ReturnsNewestLimitInWindow(t *testing.T) {
+	tmpDir := t.TempDir()
+	dict := NewLabelDictionary()
+
+	writer, err := NewWriter(tmpDir, dict, WithMaxRowsPerBlock(4), WithFlushInterval(50*time.Millisecond))
+	if err != nil {
+		t.Fatalf("failed to create writer: %v", err)
+	}
+
+	baseTime := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	// Write 30 entries across multiple parts
+	for i := 0; i < 30; i++ {
+		ts := baseTime.Add(time.Duration(i) * time.Minute)
+		err := writer.Write(Entry{
+			Timestamp: ts,
+			Service:   "api-server",
+			Level:     "info",
+			Message:   fmt.Sprintf("log message number %02d", i),
+		})
+		if err != nil {
+			t.Fatalf("write failed: %v", err)
+		}
+		if (i+1)%5 == 0 {
+			if err := writer.Flush(); err != nil {
+				t.Fatalf("flush failed: %v", err)
+			}
+			writer.SealActivePart()
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close failed: %v", err)
+	}
+
+	reader, err := NewReader(tmpDir, dict)
+	if err != nil {
+		t.Fatalf("reader creation failed: %v", err)
+	}
+	defer reader.Close()
+
+	// Query window [minute 5 .. minute 25], limit 5
+	// Inside [5..25], logs are 05..25 (21 logs total).
+	// Limit 5 must return the NEWEST 5 in that window: 21, 22, 23, 24, 25 in chronological order.
+	since := baseTime.Add(5 * time.Minute)
+	until := baseTime.Add(25 * time.Minute)
+	results, err := reader.Search(context.Background(), QueryParams{
+		Since: since,
+		Until: until,
+		Limit: 5,
+	})
+	if err != nil {
+		t.Fatalf("search failed: %v", err)
+	}
+
+	assert.Len(t, results, 5)
+	expectedMsgs := []string{
+		"log message number 21",
+		"log message number 22",
+		"log message number 23",
+		"log message number 24",
+		"log message number 25",
+	}
+	for i, r := range results {
+		assert.Equal(t, expectedMsgs[i], r.Message)
+	}
+}
+
+func TestReader_SummarizeErrors_BlindDiscovery(t *testing.T) {
+	tmpDir := t.TempDir()
+	dict := NewLabelDictionary()
+
+	writer, err := NewWriter(tmpDir, dict, WithMaxRowsPerBlock(100), WithFlushInterval(50*time.Millisecond))
+	if err != nil {
+		t.Fatalf("failed to create writer: %v", err)
+	}
+
+	baseTime := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	// 1. Write 2000 normal INFO logs (should not be in error groups)
+	for i := 0; i < 2000; i++ {
+		_ = writer.Write(Entry{
+			Timestamp: baseTime.Add(time.Duration(i) * time.Millisecond),
+			Service:   "web-frontend",
+			Level:     "info",
+			Message:   fmt.Sprintf("HTTP 200 GET /items/%d", i),
+		})
+	}
+	_ = writer.Flush()
+	writer.SealActivePart()
+
+	// 2. Write 50 repeated connection timeout errors with varying latency & IPs
+	for i := 0; i < 50; i++ {
+		_ = writer.Write(Entry{
+			Timestamp: baseTime.Add(time.Duration(2000+i) * time.Millisecond),
+			Service:   "payment-svc",
+			Level:     "error",
+			Message:   fmt.Sprintf("connection timeout after %dms to 10.0.0.%d:5432", 100+i, 10+i),
+		})
+	}
+	_ = writer.Flush()
+	writer.SealActivePart()
+
+	// 3. Write 1 rare DEADLOCK error
+	_ = writer.Write(Entry{
+		Timestamp: baseTime.Add(3000 * time.Millisecond),
+		Service:   "billing-db",
+		Level:     "fatal",
+		Message:   "CRITICAL: DEADLOCK_TX_999999 detected in isolation level SERIALIZABLE transaction_id=999999",
+	})
+	_ = writer.Flush()
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close failed: %v", err)
+	}
+
+	reader, err := NewReader(tmpDir, dict)
+	if err != nil {
+		t.Fatalf("reader creation failed: %v", err)
+	}
+	defer reader.Close()
+
+	// Call SummarizeErrors with NO keyword query
+	groups, err := reader.SummarizeErrors(context.Background(), QueryParams{})
+	if err != nil {
+		t.Fatalf("SummarizeErrors failed: %v", err)
+	}
+
+	assert.Len(t, groups, 2, "must discover exactly 2 error groups across all parts")
+
+	// Group 1: 50 connection timeouts
+	assert.Equal(t, "payment-svc", groups[0].Service)
+	assert.Equal(t, "error", groups[0].Level)
+	assert.Equal(t, 50, groups[0].Count)
+	assert.Contains(t, groups[0].Fingerprint, "connection timeout after * to *.*.*.*:*")
+
+	// Group 2: 1 rare deadlock
+	assert.Equal(t, "billing-db", groups[1].Service)
+	assert.Equal(t, "fatal", groups[1].Level)
+	assert.Equal(t, 1, groups[1].Count)
+	assert.Contains(t, groups[1].Fingerprint, "DEADLOCK_TX_*")
+}
