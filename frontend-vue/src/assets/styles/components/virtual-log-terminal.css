@@ -307,10 +307,17 @@
   border-radius: 3px;
   flex-shrink: 0;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: opacity 0.15s ease, background 0.12s ease;
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.virtual-log-row:hover .virtual-btn-context {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .virtual-btn-context:hover {

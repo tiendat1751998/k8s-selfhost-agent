@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import { getErrorRadar, type ErrorRadarGroup } from '../../api/logging'
 import { isNoiseLog } from '../../utils/logTargetCategorizer'
+import { cleanFingerprint } from './virtualLogUtils'
 import '../../assets/styles/components/log-error-radar.css'
 
 interface Props {
@@ -172,7 +173,7 @@ onMounted(() => fetchRadar())
             </span>
             <div class="radar-pattern-block">
               <span class="radar-fingerprint" :title="group.fingerprint">
-                {{ group.fingerprint }}
+                {{ cleanFingerprint(group.fingerprint) }}
               </span>
               <div class="radar-sample-subline">
                 <span :title="group.sample_message">Sample: {{ group.sample_message }}</span>

@@ -79,10 +79,6 @@ function setLevel(val: string) {
         >
           <BaseIcon name="sidebar" size="xs" />
         </button>
-        <span class="toolbar-target-badge font-mono" :title="selectedTarget.name">
-          <BaseIcon :name="selectedTarget.type === 'node' ? 'server' : (selectedTarget.icon || 'box')" size="xs" />
-          <span>{{ selectedTarget.name }}</span>
-        </span>
         <div class="toolbar-search-wrap">
           <BaseIcon name="search" size="xs" class="search-icon" />
           <input
@@ -102,12 +98,24 @@ function setLevel(val: string) {
       <div class="toolbar-zone-mode">
         <div class="toolbar-nav-pills font-mono" role="tablist" aria-label="Stream Mode">
           <button type="button" role="tab" :aria-selected="mode === 'live'" class="toolbar-pill-btn" :class="{ active: mode === 'live' }" @click="emit('update:mode', 'live')">
-            <BaseIcon name="zap" size="xs" /> <span>Live Tail</span>
+            <BaseIcon name="zap" size="xs" /> <span>Live</span>
           </button>
           <button type="button" role="tab" :aria-selected="mode === 'historical'" class="toolbar-pill-btn" :class="{ active: mode === 'historical' }" @click="emit('update:mode', 'historical')">
-            <BaseIcon name="search" size="xs" /> <span>Historical Search</span>
+            <BaseIcon name="clock" size="xs" /> <span>History</span>
           </button>
         </div>
+
+        <!-- In Live mode: compact Pause/Resume right beside mode tabs -->
+        <button
+          v-if="mode === 'live'"
+          type="button"
+          class="toolbar-btn btn-tail-toggle font-mono"
+          :class="{ 'btn-tail-active': autoScroll && !isScrollLocked, 'btn-tail-paused': !autoScroll || isScrollLocked }"
+          :title="autoScroll && !isScrollLocked ? 'Pause stream auto-scroll' : 'Resume stream auto-scroll'"
+          @click="emit('toggleLiveTail')"
+        >
+          <span class="tail-dot" /> <span>{{ autoScroll && !isScrollLocked ? 'Pause' : 'Resume' }}</span>
+        </button>
 
         <!-- In Live Tail mode: 28px quick severity filter pills -->
         <div v-if="mode === 'live'" class="toolbar-severity-pills font-mono" role="group" aria-label="Filter by Severity">
@@ -141,9 +149,9 @@ function setLevel(val: string) {
           </select>
           <button
             type="button" class="toolbar-btn btn-secondary" :disabled="isHistoricalLoading"
-            title="Query ClickHouse" @click="emit('runHistoricalQuery')"
+            title="Run Query" @click="emit('runHistoricalQuery')"
           >
-            <BaseIcon name="search" size="xs" /> <span>{{ isHistoricalLoading ? 'Searching...' : 'Query ClickHouse' }}</span>
+            <BaseIcon name="refresh-cw" size="xs" :class="{ 'spin-icon': isHistoricalLoading }" /> <span>{{ isHistoricalLoading ? 'Searching...' : 'Run' }}</span>
           </button>
           <button
             v-if="hasMoreHistorical || totalHistoricalCount > currentLogsCount"
@@ -155,27 +163,20 @@ function setLevel(val: string) {
         </div>
       </div>
 
-      <!-- Zone 4 (Right - Stream Actions Group) -->
+      <!-- Zone 4 (Right - Stream Actions Group: Error Radar, Volume, Wrap, Clear, Export) -->
       <div class="toolbar-actions-group">
-        <button
-          type="button" class="toolbar-btn btn-secondary"
-          :class="{ 'btn-tail-active': autoScroll && !isScrollLocked, 'btn-tail-paused': !autoScroll || isScrollLocked }"
-          @click="emit('toggleLiveTail')"
-        >
-          <span class="tail-dot" /> <span>{{ autoScroll && !isScrollLocked ? 'Live Tail' : 'Paused' }}</span>
-        </button>
-        <button type="button" class="toolbar-btn btn-secondary" :class="{ active: wrapLines }" title="Toggle Line Wrap" @click="emit('update:wrapLines', !wrapLines)">
-          <span>Wrap</span>
-        </button>
-        <button type="button" class="toolbar-btn btn-secondary" :class="{ active: showHistogram }" title="Toggle Volume Histogram" @click="emit('update:showHistogram', !showHistogram)">
-          <BaseIcon name="bar-chart-2" size="xs" /> <span>Volume</span>
-        </button>
         <button
           type="button" class="toolbar-btn btn-error-radar" :class="{ active: showErrorRadar }"
           title="Blind Error Radar — Auto-discover & group errors across 10GB+ logs"
           @click="emit('update:showErrorRadar', !showErrorRadar)"
         >
           <BaseIcon name="alert-triangle" size="xs" /> <span>Error Radar</span>
+        </button>
+        <button type="button" class="toolbar-btn btn-secondary" :class="{ active: showHistogram }" title="Toggle Volume Histogram" @click="emit('update:showHistogram', !showHistogram)">
+          <BaseIcon name="bar-chart-2" size="xs" /> <span>Volume</span>
+        </button>
+        <button type="button" class="toolbar-btn btn-secondary" :class="{ active: wrapLines }" title="Toggle Line Wrap" @click="emit('update:wrapLines', !wrapLines)">
+          <span>Wrap</span>
         </button>
         <button type="button" class="toolbar-btn btn-secondary" title="Clear Buffer" aria-label="Clear Buffer" @click="emit('clearBuffer')">
           <BaseIcon name="trash" size="xs" />
