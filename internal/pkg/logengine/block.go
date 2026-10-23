@@ -2,7 +2,7 @@ package logengine
 
 import (
 	"encoding/binary"
-	"fmt"
+	"time"
 
 	"github.com/klauspost/compress/zstd"
 )
@@ -42,54 +42,45 @@ type BlockBuilder struct {
 	levelIDs     []uint16
 	msgLengths   []uint32
 	messages     []byte
+	namespaceIDs []uint16
+	podIDs       []uint16
+	containerIDs []uint16
+	streamIDs    []uint8
 	bloom        BlockBloomFilter
 	minTime      int64
 	maxTime      int64
 	levelMask    uint16
 	serviceBloom uint64
+	reservedMask uint16
 }
 
 // NewBlockBuilder initializes a block builder pre-allocated for ~2048 rows.
 func NewBlockBuilder() *BlockBuilder {
 	return &BlockBuilder{
-		timestamps: make([]int64, 0, 2048),
-		serviceIDs: make([]uint16, 0, 2048),
-		levelIDs:   make([]uint16, 0, 2048),
-		msgLengths: make([]uint32, 0, 2048),
-		messages:   make([]byte, 0, 128*1024),
+		timestamps:   make([]int64, 0, 2048),
+		serviceIDs:   make([]uint16, 0, 2048),
+		levelIDs:     make([]uint16, 0, 2048),
+		msgLengths:   make([]uint32, 0, 2048),
+		messages:     make([]byte, 0, 128*1024),
+		namespaceIDs: make([]uint16, 0, 2048),
+		podIDs:       make([]uint16, 0, 2048),
+		containerIDs: make([]uint16, 0, 2048),
+		streamIDs:    make([]uint8, 0, 2048),
 	}
 }
 
 // Append adds a row to the staging block builder.
 func (b *BlockBuilder) Append(ts int64, serviceID, levelID uint16, msg []byte) {
-	if len(b.timestamps) == 0 {
-		b.minTime = ts
-		b.maxTime = ts
-	} else {
-		if ts < b.minTime {
-			b.minTime = ts
-		}
-		if ts > b.maxTime {
-			b.maxTime = ts
-		}
-	}
-
-	b.timestamps = append(b.timestamps, ts)
-	b.serviceIDs = append(b.serviceIDs, serviceID)
-	b.levelIDs = append(b.levelIDs, levelID)
-	b.msgLengths = append(b.msgLengths, uint32(len(msg)))
-	b.messages = append(b.messages, msg...)
-
-	b.levelMask |= LevelToBit(LevelIDToString(levelID))
-	b.serviceBloom |= ServiceBloomBit(serviceID)
-
-	Tokenize(msg, func(tok []byte) {
-		b.bloom.Add(tok)
-	})
+	b.AppendWithMeta(ts, serviceID, levelID, 0, 0, 0, 0, string(msg))
 }
 
 // AppendString appends a row with a string message avoiding heap allocation.
 func (b *BlockBuilder) AppendString(ts int64, serviceID, levelID uint16, msg string) {
+	b.AppendWithMeta(ts, serviceID, levelID, 0, 0, 0, 0, msg)
+}
+
+// AppendWithMeta appends a row with full multi-dimensional K8s metadata.
+func (b *BlockBuilder) AppendWithMeta(ts int64, serviceID, levelID, nsID, podID, contID uint16, streamID uint8, msg string) {
 	if len(b.timestamps) == 0 {
 		b.minTime = ts
 		b.maxTime = ts
@@ -108,11 +99,27 @@ func (b *BlockBuilder) AppendString(ts int64, serviceID, levelID uint16, msg str
 	b.msgLengths = append(b.msgLengths, uint32(len(msg)))
 	b.messages = append(b.messages, msg...)
 
+	b.namespaceIDs = append(b.namespaceIDs, nsID)
+	b.podIDs = append(b.podIDs, podID)
+	b.containerIDs = append(b.containerIDs, contID)
+	b.streamIDs = append(b.streamIDs, streamID)
+
 	b.levelMask |= LevelToBit(LevelIDToString(levelID))
 	b.serviceBloom |= ServiceBloomBit(serviceID)
 
+	if streamID == StreamStdout {
+		b.reservedMask |= StreamBitStdout
+	} else if streamID == StreamStderr {
+		b.reservedMask |= StreamBitStderr
+	} else if streamID != 0 {
+		b.reservedMask |= StreamBitOther
+	}
+
 	TokenizeString(msg, func(tok []byte) {
 		b.bloom.Add(tok)
+		if len(tok) >= 4 {
+			b.bloom.AddNGrams4(tok)
+		}
 	})
 }
 
@@ -123,7 +130,7 @@ func (b *BlockBuilder) RowCount() int {
 
 // EstimatedSize returns approximate uncompressed bytes of the block.
 func (b *BlockBuilder) EstimatedSize() int {
-	return len(b.timestamps)*8 + len(b.serviceIDs)*2 + len(b.levelIDs)*2 + len(b.msgLengths)*4 + len(b.messages) + 36
+	return len(b.timestamps)*15 + len(b.serviceIDs)*2 + len(b.levelIDs)*2 + len(b.msgLengths)*4 + len(b.messages) + 36
 }
 
 // Reset clears the builder for reuse without reallocating slices.
@@ -133,20 +140,22 @@ func (b *BlockBuilder) Reset() {
 	b.levelIDs = b.levelIDs[:0]
 	b.msgLengths = b.msgLengths[:0]
 	b.messages = b.messages[:0]
+	b.namespaceIDs = b.namespaceIDs[:0]
+	b.podIDs = b.podIDs[:0]
+	b.containerIDs = b.containerIDs[:0]
+	b.streamIDs = b.streamIDs[:0]
 	b.bloom.Reset()
 	b.minTime = 0
 	b.maxTime = 0
 	b.levelMask = 0
 	b.serviceBloom = 0
+	b.reservedMask = 0
 }
 
-func (b *BlockBuilder) LevelMask() uint16 {
-	return b.levelMask
-}
-
-func (b *BlockBuilder) ServiceBloom() uint64 {
-	return b.serviceBloom
-}
+func (b *BlockBuilder) LevelMask() uint16    { return b.levelMask }
+func (b *BlockBuilder) ServiceBloom() uint64 { return b.serviceBloom }
+func (b *BlockBuilder) ReservedMask() uint16 { return b.reservedMask }
+func (b *BlockBuilder) AddReservedBits(mask uint16) { b.reservedMask |= mask }
 
 // Pack encodes the columnar components safely into dst, growing dst if capacity is exceeded.
 func (b *BlockBuilder) Pack(dst []byte) (uncompressed []byte, minTime, maxTime int64, bloom *BlockBloomFilter) {
@@ -155,7 +164,7 @@ func (b *BlockBuilder) Pack(dst []byte) (uncompressed []byte, minTime, maxTime i
 		return nil, 0, 0, &b.bloom
 	}
 
-	needed := 36 + (count * 18) + len(b.messages)
+	needed := 36 + (count * 25) + len(b.messages)
 	if cap(dst) < needed {
 		dst = make([]byte, needed)
 	} else {
@@ -169,15 +178,10 @@ func (b *BlockBuilder) Pack(dst []byte) (uncompressed []byte, minTime, maxTime i
 	for i := 0; i < count; i++ {
 		binary.LittleEndian.PutUint16(dst[offset:offset+2], b.serviceIDs[i])
 		binary.LittleEndian.PutUint16(dst[offset+2:offset+4], b.levelIDs[i])
-		offset += 4
+		binary.LittleEndian.PutUint32(dst[offset+4:offset+8], b.msgLengths[i])
+		offset += 8
 	}
-	labelsLen := count * 4
-
-	for i := 0; i < count; i++ {
-		binary.LittleEndian.PutUint32(dst[offset:offset+4], b.msgLengths[i])
-		offset += 4
-	}
-	offsetsLen := count * 4
+	offset += PackK8sMeta(dst[offset:], count, b.namespaceIDs, b.podIDs, b.containerIDs, b.streamIDs)
 
 	if offset+len(b.messages) > cap(dst) {
 		grown := make([]byte, offset+len(b.messages))
@@ -191,10 +195,9 @@ func (b *BlockBuilder) Pack(dst []byte) (uncompressed []byte, minTime, maxTime i
 	binary.LittleEndian.PutUint64(dst[4:12], uint64(b.minTime))
 	binary.LittleEndian.PutUint64(dst[12:20], uint64(b.maxTime))
 	binary.LittleEndian.PutUint32(dst[20:24], uint32(ddBytes))
-	binary.LittleEndian.PutUint32(dst[24:28], uint32(labelsLen))
-	binary.LittleEndian.PutUint32(dst[28:32], uint32(offsetsLen))
+	binary.LittleEndian.PutUint32(dst[24:28], uint32(count*4))
+	binary.LittleEndian.PutUint32(dst[28:32], uint32(count*4))
 	binary.LittleEndian.PutUint32(dst[32:36], uint32(len(b.messages)))
-
 	return dst[:offset], b.minTime, b.maxTime, &b.bloom
 }
 
@@ -205,7 +208,7 @@ func (b *BlockBuilder) PackAndCompress(scratchBuf, compBuf []byte) (compressed [
 		return nil, 0, 0, 0, &b.bloom, 0, 0
 	}
 
-	neededMeta := 24 + (count * 18)
+	neededMeta := 24 + (count * 25)
 	if cap(scratchBuf) < neededMeta {
 		scratchBuf = make([]byte, neededMeta)
 	} else {
@@ -226,6 +229,9 @@ func (b *BlockBuilder) PackAndCompress(scratchBuf, compBuf []byte) (compressed [
 		binary.LittleEndian.PutUint32(scratchBuf[offset:offset+4], b.msgLengths[i])
 		offset += 4
 	}
+
+	k8sBytes := PackK8sMeta(scratchBuf[offset:], count, b.namespaceIDs, b.podIDs, b.containerIDs, b.streamIDs)
+	offset += k8sBytes
 
 	binary.LittleEndian.PutUint32(scratchBuf[0:4], uint32(count))
 	binary.LittleEndian.PutUint64(scratchBuf[4:12], uint64(b.minTime))
@@ -270,6 +276,10 @@ type BlockView struct {
 	ServiceIDs   []uint16
 	LevelIDs     []uint16
 	MsgLengths   []uint32
+	NamespaceIDs []uint16
+	PodIDs       []uint16
+	ContainerIDs []uint16
+	StreamIDs    []uint8
 	rawMsgs      []byte
 	msgIndices   []int
 	compMsgSlice []byte
@@ -279,202 +289,62 @@ type BlockView struct {
 // NewBlockView creates a reusable BlockView.
 func NewBlockView() *BlockView {
 	return &BlockView{
-		Timestamps: make([]int64, 0, 2048),
-		ServiceIDs: make([]uint16, 0, 2048),
-		LevelIDs:   make([]uint16, 0, 2048),
-		MsgLengths: make([]uint32, 0, 2048),
-		msgIndices: make([]int, 0, 2048),
+		Timestamps:   make([]int64, 0, 2048),
+		ServiceIDs:   make([]uint16, 0, 2048),
+		LevelIDs:     make([]uint16, 0, 2048),
+		MsgLengths:   make([]uint32, 0, 2048),
+		NamespaceIDs: make([]uint16, 0, 2048),
+		PodIDs:       make([]uint16, 0, 2048),
+		ContainerIDs: make([]uint16, 0, 2048),
+		StreamIDs:    make([]uint8, 0, 2048),
+		msgIndices:   make([]int, 0, 2048),
 	}
 }
 
-// UnpackMeta decompresses and unpacks ONLY metadata columns for Late Materialization.
-func (v *BlockView) UnpackMeta(data []byte, scratch []byte) error {
-	v.msgsReady = false
-	v.compMsgSlice = nil
-
-	if len(data) >= 24 && binary.LittleEndian.Uint32(data[0:4]) == BlockMagic {
-		metaCompLen := int(binary.LittleEndian.Uint32(data[4:8]))
-		msgCompLen := int(binary.LittleEndian.Uint32(data[8:12]))
-
-		if len(data) < 24+metaCompLen+msgCompLen {
-			return fmt.Errorf("block truncated: expected %d bytes, got %d", 24+metaCompLen+msgCompLen, len(data))
-		}
-
-		compMeta := data[24 : 24+metaCompLen]
-		v.compMsgSlice = data[24+metaCompLen : 24+metaCompLen+msgCompLen]
-
-		uncompMeta, err := zstdDecoder.DecodeAll(compMeta, scratch[:0])
-		if err != nil {
-			return fmt.Errorf("decompressing meta frame: %w", err)
-		}
-
-		if len(uncompMeta) < 24 {
-			return fmt.Errorf("meta frame too short (%d bytes)", len(uncompMeta))
-		}
-
-		count := int(binary.LittleEndian.Uint32(uncompMeta[0:4]))
-		v.RowCount = count
-		v.MinTime = int64(binary.LittleEndian.Uint64(uncompMeta[4:12]))
-		v.MaxTime = int64(binary.LittleEndian.Uint64(uncompMeta[12:20]))
-		ddLen := int(binary.LittleEndian.Uint32(uncompMeta[20:24]))
-
-		offset := 24
-		if cap(v.Timestamps) < count {
-			v.Timestamps = make([]int64, count)
-		} else {
-			v.Timestamps = v.Timestamps[:count]
-		}
-		DecodeDoubleDelta(uncompMeta[offset:offset+ddLen], count, v.Timestamps)
-		offset += ddLen
-
-		if cap(v.ServiceIDs) < count {
-			v.ServiceIDs = make([]uint16, count)
-			v.LevelIDs = make([]uint16, count)
-		} else {
-			v.ServiceIDs = v.ServiceIDs[:count]
-			v.LevelIDs = v.LevelIDs[:count]
-		}
-		for i := 0; i < count; i++ {
-			v.ServiceIDs[i] = binary.LittleEndian.Uint16(uncompMeta[offset : offset+2])
-			v.LevelIDs[i] = binary.LittleEndian.Uint16(uncompMeta[offset+2 : offset+4])
-			offset += 4
-		}
-
-		if cap(v.MsgLengths) < count {
-			v.MsgLengths = make([]uint32, count)
-			v.msgIndices = make([]int, count)
-		} else {
-			v.MsgLengths = v.MsgLengths[:count]
-			v.msgIndices = v.msgIndices[:count]
-		}
-		for i := 0; i < count; i++ {
-			v.MsgLengths[i] = binary.LittleEndian.Uint32(uncompMeta[offset : offset+4])
-			offset += 4
-		}
-
+// SnapshotEntries extracts all rows currently staged in b as domain Entry values.
+func (b *BlockBuilder) SnapshotEntries(dict *LabelDictionary, metaDict *MetaDictionary) []Entry {
+	count := len(b.timestamps)
+	if count == 0 {
 		return nil
 	}
-
-	return v.Unpack(data)
-}
-
-// EnsureMessagesDecompressed decompresses the messages frame if not already decompressed.
-func (v *BlockView) EnsureMessagesDecompressed(scratch []byte) error {
-	if v.msgsReady {
-		return nil
-	}
-	if len(v.compMsgSlice) == 0 {
-		v.rawMsgs = nil
-		v.msgsReady = true
-		return nil
-	}
-
-	uncomp, err := zstdDecoder.DecodeAll(v.compMsgSlice, scratch[:0])
-	if err != nil {
-		return fmt.Errorf("decompressing messages frame: %w", err)
-	}
-
-	if cap(v.rawMsgs) < len(uncomp) {
-		v.rawMsgs = make([]byte, len(uncomp))
-	} else {
-		v.rawMsgs = v.rawMsgs[:len(uncomp)]
-	}
-	copy(v.rawMsgs, uncomp)
-
-	cur := 0
-	for i := 0; i < v.RowCount; i++ {
-		v.msgIndices[i] = cur
-		cur += int(v.MsgLengths[i])
-	}
-	v.msgsReady = true
-	return nil
-}
-
-// Unpack decodes an uncompressed block buffer into the view.
-func (v *BlockView) Unpack(data []byte) error {
-	if len(data) >= 24 && binary.LittleEndian.Uint32(data[0:4]) == BlockMagic {
-		scratch := GetBlockBuffer()
-		defer PutBlockBuffer(scratch)
-		if err := v.UnpackMeta(data, scratch); err != nil {
-			return err
-		}
-		return v.EnsureMessagesDecompressed(scratch)
-	}
-
-	if len(data) < 36 {
-		return fmt.Errorf("block data too short (%d bytes)", len(data))
-	}
-
-	count := int(binary.LittleEndian.Uint32(data[0:4]))
-	v.RowCount = count
-	v.MinTime = int64(binary.LittleEndian.Uint64(data[4:12]))
-	v.MaxTime = int64(binary.LittleEndian.Uint64(data[12:20]))
-	ddLen := int(binary.LittleEndian.Uint32(data[20:24]))
-	labelsLen := int(binary.LittleEndian.Uint32(data[24:28]))
-	offsetsLen := int(binary.LittleEndian.Uint32(data[28:32]))
-	msgLen := int(binary.LittleEndian.Uint32(data[32:36]))
-
-	totalExpected := 36 + ddLen + labelsLen + offsetsLen + msgLen
-	if len(data) < totalExpected {
-		return fmt.Errorf("corrupted block: expected %d bytes, got %d", totalExpected, len(data))
-	}
-
-	offset := 36
-	if cap(v.Timestamps) < count {
-		v.Timestamps = make([]int64, count)
-	} else {
-		v.Timestamps = v.Timestamps[:count]
-	}
-	DecodeDoubleDelta(data[offset:offset+ddLen], count, v.Timestamps)
-	offset += ddLen
-
-	if cap(v.ServiceIDs) < count {
-		v.ServiceIDs = make([]uint16, count)
-		v.LevelIDs = make([]uint16, count)
-	} else {
-		v.ServiceIDs = v.ServiceIDs[:count]
-		v.LevelIDs = v.LevelIDs[:count]
-	}
+	entries := make([]Entry, count)
+	curMsgOffset := 0
 	for i := 0; i < count; i++ {
-		v.ServiceIDs[i] = binary.LittleEndian.Uint16(data[offset : offset+2])
-		v.LevelIDs[i] = binary.LittleEndian.Uint16(data[offset+2 : offset+4])
-		offset += 4
-	}
+		ts := time.Unix(0, b.timestamps[i]).UTC()
+		var svc string
+		if dict != nil {
+			svc, _ = dict.Lookup(b.serviceIDs[i])
+		}
+		lvl := LevelIDToString(b.levelIDs[i])
 
-	if cap(v.MsgLengths) < count {
-		v.MsgLengths = make([]uint32, count)
-		v.msgIndices = make([]int, count)
-	} else {
-		v.MsgLengths = v.MsgLengths[:count]
-		v.msgIndices = v.msgIndices[:count]
-	}
-	for i := 0; i < count; i++ {
-		v.MsgLengths[i] = binary.LittleEndian.Uint32(data[offset : offset+4])
-		offset += 4
-	}
+		var ns, pod, cont string
+		if metaDict != nil && i < len(b.namespaceIDs) {
+			ns, pod, cont = metaDict.Lookup(b.namespaceIDs[i], b.podIDs[i], b.containerIDs[i])
+		}
+		var stream string
+		if i < len(b.streamIDs) {
+			stream = StreamIDToString(b.streamIDs[i])
+		}
 
-	v.rawMsgs = data[offset : offset+msgLen]
-	cur := 0
-	for i := 0; i < count; i++ {
-		v.msgIndices[i] = cur
-		cur += int(v.MsgLengths[i])
+		msgLen := int(b.msgLengths[i])
+		msgEnd := curMsgOffset + msgLen
+		var msg string
+		if msgEnd <= len(b.messages) {
+			msg = string(b.messages[curMsgOffset:msgEnd])
+		}
+		curMsgOffset = msgEnd
+
+		entries[i] = Entry{
+			Timestamp:     ts,
+			Service:       svc,
+			Level:         lvl,
+			Message:       msg,
+			Namespace:     ns,
+			PodName:       pod,
+			ContainerName: cont,
+			Stream:        stream,
+		}
 	}
-	v.msgsReady = true
-	return nil
+	return entries
 }
 
-// MessageAt returns the raw message bytes of row i without allocations.
-func (v *BlockView) MessageAt(i int) []byte {
-	if i < 0 || i >= v.RowCount || !v.msgsReady {
-		return nil
-	}
-	if i >= len(v.msgIndices) || i >= len(v.MsgLengths) {
-		return nil
-	}
-	start := v.msgIndices[i]
-	end := start + int(v.MsgLengths[i])
-	if end > len(v.rawMsgs) {
-		return nil
-	}
-	return v.rawMsgs[start:end]
-}

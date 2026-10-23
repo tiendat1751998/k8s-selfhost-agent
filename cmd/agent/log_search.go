@@ -11,11 +11,17 @@ import (
 )
 
 // QueryLogs queries logs across sources matching the given filters.
-func (s *LogServer) QueryLogs(ctx context.Context, app string, tail int, sinceStr, untilStr, query, level string) ([]LogEntry, error) {
+func (s *LogServer) QueryLogs(ctx context.Context, app string, tail int, sinceStr, untilStr, query, level string, k8sMeta ...string) ([]LogEntry, error) {
 	s.mu.RLock()
 	eng := s.engineSrc
 	sources := s.sources
 	s.mu.RUnlock()
+
+	var ns, pod, cont, stream string
+	if len(k8sMeta) > 0 { ns = k8sMeta[0] }
+	if len(k8sMeta) > 1 { pod = k8sMeta[1] }
+	if len(k8sMeta) > 2 { cont = k8sMeta[2] }
+	if len(k8sMeta) > 3 { stream = k8sMeta[3] }
 
 	sinceTime, err := parseTimeParam(sinceStr)
 	if err != nil {
@@ -29,7 +35,7 @@ func (s *LogServer) QueryLogs(ctx context.Context, app string, tail int, sinceSt
 
 	// Instant retrieval via embedded columnar engine using Bloom filter & sparse primary index
 	if eng != nil {
-		entries, err := eng.GetLogs(ctx, app, tail, sinceTime, untilTime, query, level)
+		entries, err := eng.GetLogsWithK8s(ctx, app, tail, sinceTime, untilTime, query, level, ns, pod, cont, stream)
 		if err == nil {
 			hasOtherSources := false
 			for _, src := range sources {
@@ -62,6 +68,18 @@ func (s *LogServer) QueryLogs(ctx context.Context, app string, tail int, sinceSt
 		allEntries = append(allEntries, entries...)
 	}
 
+	if ns != "" || pod != "" || cont != "" || stream != "" {
+		filtered := make([]LogEntry, 0, len(allEntries))
+		for _, e := range allEntries {
+			if ns != "" && !strings.EqualFold(e.Namespace, ns) { continue }
+			if pod != "" && !strings.EqualFold(e.PodName, pod) { continue }
+			if cont != "" && !strings.EqualFold(e.ContainerName, cont) { continue }
+			if stream != "" && !strings.EqualFold(e.Stream, stream) { continue }
+			filtered = append(filtered, e)
+		}
+		allEntries = filtered
+	}
+
 	// Sort chronologically
 	sort.SliceStable(allEntries, func(i, j int) bool {
 		return allEntries[i].Timestamp.Before(allEntries[j].Timestamp)
@@ -82,10 +100,30 @@ func (s *LogServer) SearchLogs(ctx context.Context, req LogSearchRequest) ([]Log
 		limit = 100
 	}
 
-	// Query with limit and then ensure capped
-	entries, err := s.QueryLogs(ctx, req.App, limit, req.Since, req.Until, req.Query, req.Level)
+	// Query with limit and K8s parameters so pruning happens before tail
+	entries, err := s.QueryLogs(ctx, req.App, limit, req.Since, req.Until, req.Query, req.Level, req.Namespace, req.PodName, req.ContainerName, req.Stream)
 	if err != nil {
 		return nil, err
+	}
+
+	if req.Namespace != "" || req.PodName != "" || req.ContainerName != "" || req.Stream != "" {
+		filtered := make([]LogEntry, 0, len(entries))
+		for _, e := range entries {
+			if req.Namespace != "" && !strings.EqualFold(e.Namespace, req.Namespace) {
+				continue
+			}
+			if req.PodName != "" && !strings.EqualFold(e.PodName, req.PodName) {
+				continue
+			}
+			if req.ContainerName != "" && !strings.EqualFold(e.ContainerName, req.ContainerName) {
+				continue
+			}
+			if req.Stream != "" && !strings.EqualFold(e.Stream, req.Stream) {
+				continue
+			}
+			filtered = append(filtered, e)
+		}
+		entries = filtered
 	}
 
 	if len(entries) > limit {

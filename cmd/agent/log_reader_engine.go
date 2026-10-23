@@ -33,7 +33,7 @@ func NewEngineLogSource(engineDir string) (*EngineLogSource, error) {
 	if err != nil {
 		return nil, err
 	}
-	r, err := logengine.NewReader(engineDir, dict)
+	r, err := logengine.NewReader(engineDir, dict, logengine.WithLiveWriter(w))
 	if err != nil {
 		_ = w.Close()
 		return nil, err
@@ -75,6 +75,11 @@ func (e *EngineLogSource) ListServices(_ context.Context) ([]string, error) {
 }
 
 func (e *EngineLogSource) GetLogs(ctx context.Context, app string, tail int, sinceTime, untilTime *time.Time, query string, level string) ([]LogEntry, error) {
+	return e.GetLogsWithK8s(ctx, app, tail, sinceTime, untilTime, query, level, "", "", "", "")
+}
+
+// GetLogsWithK8s executes search with full K8s metadata pruning before tail truncation.
+func (e *EngineLogSource) GetLogsWithK8s(ctx context.Context, app string, tail int, sinceTime, untilTime *time.Time, query string, level string, ns, pod, cont, stream string) ([]LogEntry, error) {
 	if e.reader == nil {
 		return nil, nil
 	}
@@ -87,7 +92,16 @@ func (e *EngineLogSource) GetLogs(ctx context.Context, app string, tail int, sin
 	}
 
 	params := logengine.QueryParams{
-		Service: app, Level: level, Query: query, Since: since, Until: until, Limit: tail,
+		Service:       app,
+		Level:         level,
+		Query:         query,
+		Since:         since,
+		Until:         until,
+		Limit:         tail,
+		Namespace:     ns,
+		PodName:       pod,
+		ContainerName: cont,
+		Stream:        stream,
 	}
 
 	trimmedQuery := strings.TrimSpace(query)
@@ -97,13 +111,21 @@ func (e *EngineLogSource) GetLogs(ctx context.Context, app string, tail int, sin
 	}
 
 	entries, err := e.reader.Search(ctx, params)
-
 	if err != nil {
 		return nil, err
 	}
 	results := make([]LogEntry, len(entries))
 	for i, en := range entries {
-		le := LogEntry{Timestamp: en.Timestamp, Service: en.Service, Level: en.Level, Message: en.Message}
+		le := LogEntry{
+			Timestamp:     en.Timestamp,
+			Service:       en.Service,
+			Level:         en.Level,
+			Message:       en.Message,
+			Namespace:     en.Namespace,
+			PodName:       en.PodName,
+			ContainerName: en.ContainerName,
+			Stream:        en.Stream,
+		}
 		le.Raw = formatLogEntry(le)
 		results[i] = le
 	}

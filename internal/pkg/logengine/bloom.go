@@ -134,3 +134,39 @@ func TokenizeString(msg string, onToken func([]byte)) {
 		}
 	}
 }
+
+// AddNGrams4 indexes all contiguous 4-grams of a token into the Bloom filter.
+func (b *BlockBloomFilter) AddNGrams4(token []byte) {
+	if len(token) < 4 {
+		return
+	}
+	for i := 0; i <= len(token)-4; i++ {
+		b.Add(token[i : i+4])
+	}
+}
+
+// ExtractNGrams4 extracts distinct lowercase 4-grams from contiguous alphanumeric segments of length >= 4.
+func ExtractNGrams4(s string) [][]byte {
+	var grams [][]byte
+	seen := make(map[uint64]struct{})
+	TokenizeString(s, func(tok []byte) {
+		if len(tok) < 4 {
+			return
+		}
+		for i := 0; i <= len(tok)-4; i++ {
+			gram := tok[i : i+4]
+			h := hashToken(gram)
+			if _, ok := seen[h]; !ok {
+				seen[h] = struct{}{}
+				gramCopy := make([]byte, 4)
+				copy(gramCopy, gram)
+				grams = append(grams, gramCopy)
+				if len(grams) >= 16 {
+					return
+				}
+			}
+		}
+	})
+	return grams
+}
+

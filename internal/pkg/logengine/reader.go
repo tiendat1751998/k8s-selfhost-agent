@@ -1,7 +1,6 @@
 package logengine
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -16,13 +15,30 @@ import (
 
 // QueryParams specifies search filters for the columnar log engine.
 type QueryParams struct {
-	Service    string
-	Level      string
-	Query      string
-	Since      time.Time
-	Until      time.Time
-	Limit      int
-	ExactMatch bool // If true, treats query as exact tokens allowing Bloom filter block pruning.
+	Service       string
+	Level         string
+	Query         string
+	Since         time.Time
+	Until         time.Time
+	Limit         int
+	ExactMatch    bool // If true, treats query as exact tokens allowing Bloom filter block pruning.
+	Namespace     string
+	PodName       string
+	ContainerName string
+	Stream        string
+}
+
+// ReaderOption configures the Reader.
+type ReaderOption func(*Reader)
+
+// WithLiveWriter configures Reader with a live Writer for real-time 0ms visibility.
+func WithLiveWriter(w *Writer) ReaderOption {
+	return func(r *Reader) {
+		r.liveWriter = w
+		if w != nil && w.MetaDictionary() != nil {
+			r.metaDict = w.MetaDictionary()
+		}
+	}
 }
 
 // Reader executes search queries across columnar parts with 3-stage pruning.
@@ -31,12 +47,29 @@ type Reader struct {
 	dir                string
 	partsDir           string
 	dict               *LabelDictionary
+	metaDict           *MetaDictionary
+	liveWriter         *Writer
 	cachedBlockCount   int
 	blockCountCachedAt time.Time
 }
 
+// SetLiveWriter updates the live Writer source for real-time snapshot querying.
+func (r *Reader) SetLiveWriter(w *Writer) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.liveWriter = w
+	if w != nil && w.MetaDictionary() != nil {
+		r.metaDict = w.MetaDictionary()
+	}
+}
+
+// SetLiveSource is an alias for SetLiveWriter.
+func (r *Reader) SetLiveSource(w *Writer) {
+	r.SetLiveWriter(w)
+}
+
 // NewReader initializes a Reader for the given engine directory.
-func NewReader(dir string, dict *LabelDictionary) (*Reader, error) {
+func NewReader(dir string, dict *LabelDictionary, opts ...ReaderOption) (*Reader, error) {
 	if dict == nil {
 		dict = NewLabelDictionary()
 		dictPath := filepath.Join(dir, "dict.json")
@@ -47,7 +80,22 @@ func NewReader(dir string, dict *LabelDictionary) (*Reader, error) {
 			}
 		}
 	}
-	return &Reader{dir: dir, partsDir: filepath.Join(dir, "parts"), dict: dict}, nil
+
+	metaDict := NewMetaDictionary()
+	_ = metaDict.Load(filepath.Join(dir, "meta_dict.json"))
+
+	r := &Reader{
+		dir:      dir,
+		partsDir: filepath.Join(dir, "parts"),
+		dict:     dict,
+		metaDict: metaDict,
+	}
+
+	for _, opt := range opts {
+		opt(r)
+	}
+
+	return r, nil
 }
 
 func readPartTimeBounds(pDir string) (minTime, maxTime int64, ok bool) {
@@ -95,52 +143,55 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 		untilUnix = params.Until.UnixNano()
 	}
 
-	var bloomTokens [][]byte
-	if params.ExactMatch && strings.TrimSpace(params.Query) != "" {
-		Tokenize([]byte(params.Query), func(tok []byte) {
-			if bytes.IndexByte(tok, '_') != -1 {
-				start := 0
-				for i := 0; i <= len(tok); i++ {
-					if i == len(tok) || tok[i] == '_' {
-						if i-start >= 2 {
-							bloomTokens = append(bloomTokens, tok[start:i])
-						}
-						start = i + 1
+	bloomTokens := ExtractBloomTokens(params.Query, params.ExactMatch)
+	queryLower := strings.ToLower(strings.TrimSpace(params.Query))
+
+	if r.liveWriter != nil && r.liveWriter.MetaDictionary() != nil {
+		r.metaDict = r.liveWriter.MetaDictionary()
+	} else if r.metaDict == nil || r.metaDict.Size() <= 1 {
+		if r.metaDict == nil {
+			r.metaDict = NewMetaDictionary()
+		}
+		_ = r.metaDict.Load(filepath.Join(r.dir, "meta_dict.json"))
+	}
+
+	var results []Entry
+	seenKeys := make(map[string]struct{})
+
+	// 1. Hot In-Memory Buffer Snapshot (MemTable / Real-Time 0ms Visibility)
+	if r.liveWriter != nil {
+		liveEntries := r.liveWriter.SnapshotUncommitted()
+		for i := len(liveEntries) - 1; i >= 0; i-- {
+			e := liveEntries[i]
+			if MatchEntry(e, params, queryLower, sinceUnix, untilUnix) {
+				key := EntryDedupeKey(e.Timestamp, e.Service, e.Message, e.Stream)
+				if _, seen := seenKeys[key]; !seen {
+					seenKeys[key] = struct{}{}
+					results = append(results, e)
+					if len(results) >= limit {
+						break
 					}
-				}
-			} else {
-				bloomTokens = append(bloomTokens, tok)
-			}
-		})
-	} else if !params.ExactMatch && params.Query != "" {
-		q := []byte(params.Query)
-		n := len(q)
-		i := 0
-		for i < n {
-			for i < n && !isAlphaNum(q[i]) {
-				i++
-			}
-			if i >= n {
-				break
-			}
-			start := i
-			for i < n && isAlphaNum(q[i]) {
-				i++
-			}
-			end := i
-			if start > 0 && end < n && !isAlphaNum(q[start-1]) && !isAlphaNum(q[end]) {
-				tok := q[start:end]
-				if len(tok) >= 2 {
-					bloomTokens = append(bloomTokens, tok)
 				}
 			}
 		}
 	}
-	queryLower := strings.ToLower(strings.TrimSpace(params.Query))
+
+	if len(results) >= limit {
+		sort.SliceStable(results, func(i, j int) bool {
+			return results[i].Timestamp.Before(results[j].Timestamp)
+		})
+		return results, nil
+	}
 
 	partEntries, err := os.ReadDir(r.partsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
+			if len(results) > 0 {
+				sort.SliceStable(results, func(i, j int) bool {
+					return results[i].Timestamp.Before(results[j].Timestamp)
+				})
+				return results, nil
+			}
 			return nil, nil
 		}
 		return nil, err
@@ -170,11 +221,16 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 	})
 
 	if len(parts) == 0 {
+		if len(results) > 0 {
+			sort.SliceStable(results, func(i, j int) bool {
+				return results[i].Timestamp.Before(results[j].Timestamp)
+			})
+			return results, nil
+		}
 		return nil, nil
 	}
 
 	view := NewBlockView()
-	var results []Entry
 
 	startIdx := 0
 	if sinceUnix > 0 && len(parts) > 8 {
@@ -222,7 +278,7 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 		if len(candidates) == 0 {
 			continue
 		}
-		results = r.scanPartBlocks(parts[i].dir, candidates, bloomTokens, view, results, limit, sinceUnix, untilUnix, queryLower, params, true)
+		results = r.scanPartBlocks(parts[i].dir, candidates, bloomTokens, view, results, seenKeys, limit, sinceUnix, untilUnix, queryLower, params, true)
 	}
 
 	sort.SliceStable(results, func(i, j int) bool {
@@ -232,173 +288,7 @@ func (r *Reader) Search(ctx context.Context, params QueryParams) ([]Entry, error
 	return results, nil
 }
 
-func (r *Reader) scanPartBlocks(pDir string, candidateBlocks []int, bloomTokens [][]byte, view *BlockView, results []Entry, limit int, sinceUnix, untilUnix int64, queryLower string, params QueryParams, reverse bool) []Entry {
-	marksData, err := os.ReadFile(filepath.Join(pDir, "marks.bin"))
-	if err != nil {
-		return results
-	}
 
-	var bloomFile *os.File
-	var bloomOpened bool
-	defer func() {
-		if bloomFile != nil {
-			_ = bloomFile.Close()
-		}
-	}()
-
-	var dataFile *os.File
-	var dataOpened bool
-	defer func() {
-		if dataFile != nil {
-			_ = dataFile.Close()
-		}
-	}()
-
-	blocks := candidateBlocks
-	if reverse {
-		blocks = make([]int, len(candidateBlocks))
-		for i, b := range candidateBlocks {
-			blocks[len(candidateBlocks)-1-i] = b
-		}
-	}
-
-	targetLevelMask := LevelFilterMask(params.Level)
-	var targetServiceBit uint64
-	if params.Service != "" {
-		if svcID, ok := r.dict.LookupID(params.Service); ok {
-			targetServiceBit = ServiceBloomBit(svcID)
-		}
-	}
-
-	compBuf := GetBlockBuffer()
-	defer PutBlockBuffer(compBuf)
-
-	scratch := GetBlockBuffer()
-	defer PutBlockBuffer(scratch)
-
-	for _, bIdx := range blocks {
-		if len(results) >= limit {
-			break
-		}
-		markOffset := bIdx * BlockMarkSize
-		if markOffset+BlockMarkSize > len(marksData) {
-			continue
-		}
-
-		var mark BlockMark
-		mark.Decode(marksData[markOffset : markOffset+BlockMarkSize])
-
-		// 1. Bitmask Pruning (Stage 1 in RAM): skip block if level bitmask or service bloom doesn't match
-		if targetLevelMask != 0xFFFF && mark.LevelMask != 0 && (mark.LevelMask&targetLevelMask) == 0 {
-			continue // 0 extra syscalls, 0 disk reads
-		}
-		if targetServiceBit != 0 && mark.ServiceBloom != 0 && (mark.ServiceBloom&targetServiceBit) != targetServiceBit {
-			continue // 0 extra syscalls, 0 disk reads
-		}
-
-		// 2. Bloom Filter Pruning (Stage 2: 1KB stack ReadAt)
-		if len(bloomTokens) > 0 {
-			if !bloomOpened {
-				bloomOpened = true
-				bloomFile, _ = os.Open(filepath.Join(pDir, "bloom.bin"))
-			}
-			if bloomFile != nil {
-				var bf BlockBloomFilter
-				if _, err := bloomFile.ReadAt(bf[:], int64(bIdx)*BloomFilterSize); err == nil {
-					hasAll := true
-					for _, tok := range bloomTokens {
-						if !bf.Contains(tok) {
-							hasAll = false
-							break
-						}
-					}
-					if !hasAll {
-						continue // missing token in block bloom filter; skip block!
-					}
-				}
-			}
-		}
-
-		// 3. Late Materialization & Decompression (Stage 3: lazy data.bin open)
-		if !dataOpened {
-			dataOpened = true
-			dataFile, err = os.Open(filepath.Join(pDir, "data.bin"))
-			if err != nil || dataFile == nil {
-				return results
-			}
-		}
-
-		readLen := int(mark.CompressedLength)
-		if readLen > cap(compBuf) {
-			compBuf = make([]byte, readLen)
-		}
-		compressedSlice := compBuf[:readLen]
-		if _, err := dataFile.ReadAt(compressedSlice, int64(mark.CompressedOffset)); err != nil {
-			continue
-		}
-
-		if err := view.UnpackMeta(compressedSlice, scratch); err != nil {
-			continue
-		}
-
-		start, end, step := 0, view.RowCount, 1
-		if reverse {
-			start, end, step = view.RowCount-1, -1, -1
-		}
-
-		hasMatchingRow := false
-		for i := start; i != end; i += step {
-			ts := view.Timestamps[i]
-			if (sinceUnix > 0 && ts < sinceUnix) || (untilUnix > 0 && ts > untilUnix) {
-				continue
-			}
-			svc, _ := r.dict.Lookup(view.ServiceIDs[i])
-			if params.Service != "" && !matchFilter(svc, params.Service) {
-				continue
-			}
-			lvl := LevelIDToString(view.LevelIDs[i])
-			if params.Level != "" && !matchLevel(lvl, params.Level) {
-				continue
-			}
-			hasMatchingRow = true
-			break
-		}
-
-		if !hasMatchingRow {
-			continue // zero message decompression!
-		}
-
-		if err := view.EnsureMessagesDecompressed(scratch); err != nil {
-			continue
-		}
-
-		for i := start; i != end && len(results) < limit; i += step {
-			ts := view.Timestamps[i]
-			if (sinceUnix > 0 && ts < sinceUnix) || (untilUnix > 0 && ts > untilUnix) {
-				continue
-			}
-			svc, _ := r.dict.Lookup(view.ServiceIDs[i])
-			if params.Service != "" && !matchFilter(svc, params.Service) {
-				continue
-			}
-			lvl := LevelIDToString(view.LevelIDs[i])
-			if params.Level != "" && !matchLevel(lvl, params.Level) {
-				continue
-			}
-			msg := view.MessageAt(i)
-			if queryLower != "" && !bytesContainsFold(msg, queryLower) {
-				continue
-			}
-			results = append(results, Entry{
-				Timestamp: time.Unix(0, ts).UTC(),
-				Service:   svc,
-				Level:     lvl,
-				Message:   string(msg),
-			})
-		}
-	}
-	return results
-}
 
 func loadPrimaryIndex(path string) (*PrimaryIndex, error) {
 	f, err := os.Open(path)

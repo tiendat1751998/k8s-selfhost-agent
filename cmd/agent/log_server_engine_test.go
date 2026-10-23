@@ -3,11 +3,15 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
 )
@@ -225,3 +229,65 @@ func TestLogServer_HandleLogsErrors(t *testing.T) {
 		t.Errorf("expected service 'payment-svc', got %q", resp.Groups[0].Service)
 	}
 }
+
+func TestLogServer_HandleGetLogs_K8sPruningBeforeTail(t *testing.T) {
+	tempDir := t.TempDir()
+	engineSrc, err := NewEngineLogSource(tempDir)
+	require.NoError(t, err)
+	defer engineSrc.Close()
+
+	now := time.Now().UTC()
+	// Write 5 older logs for namespace "prod"
+	for i := 0; i < 5; i++ {
+		err := engineSrc.Writer().Write(logengine.Entry{
+			Timestamp:     now.Add(time.Duration(i) * time.Millisecond),
+			Service:       "api-service",
+			Level:         "info",
+			Message:       fmt.Sprintf("prod message %d", i),
+			Namespace:     "prod",
+			PodName:       "api-pod-1",
+			ContainerName: "main",
+			Stream:        "stdout",
+		})
+		require.NoError(t, err)
+	}
+
+	// Write 120 newer logs for namespace "default" (exceeding tail=20)
+	for i := 0; i < 120; i++ {
+		err := engineSrc.Writer().Write(logengine.Entry{
+			Timestamp:     now.Add(time.Duration(100+i) * time.Millisecond),
+			Service:       "worker-service",
+			Level:         "info",
+			Message:       fmt.Sprintf("default worker message %d", i),
+			Namespace:     "default",
+			PodName:       "worker-pod-2",
+			ContainerName: "worker",
+			Stream:        "stdout",
+		})
+		require.NoError(t, err)
+	}
+	require.NoError(t, engineSrc.Writer().Flush())
+
+	srv := NewLogServer(WithLogSource(engineSrc))
+
+	// Query for namespace=prod with tail=20.
+	// If pruning runs BEFORE tail, all 5 older prod logs are returned.
+	// If tail truncation runs before namespace filtering, the 120 newer default logs
+	// displace all prod logs from the tail of 20, returning 0 logs.
+	req := httptest.NewRequest(http.MethodGet, "/logs?namespace=prod&tail=20&format=json", nil)
+	rec := httptest.NewRecorder()
+	srv.HandleGetLogs(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "expected 200 OK")
+
+	var resp LogsResponse
+	err = json.NewDecoder(rec.Body).Decode(&resp)
+	require.NoError(t, err)
+
+	assert.Equal(t, 5, resp.Count, "older matching logs for namespace=prod must be returned even when newer non-matching logs exceed tail")
+	assert.Len(t, resp.Lines, 5)
+	for _, line := range resp.Lines {
+		assert.Contains(t, line, "prod message")
+	}
+}
+
