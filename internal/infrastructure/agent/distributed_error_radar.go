@@ -53,6 +53,16 @@ func (r *DistributedAgentLogRepo) SummarizeErrors(ctx context.Context, filter do
 			}
 		}
 		hosts = filtered
+	} else if len(hosts) > 0 {
+		var online []docker.ComputeHost
+		for _, h := range hosts {
+			if strings.EqualFold(h.Status, "connected") || strings.EqualFold(h.Status, "online") || strings.EqualFold(h.Status, "healthy") {
+				online = append(online, h)
+			}
+		}
+		if len(online) > 0 {
+			hosts = online
+		}
 	}
 
 	service := filter.ContainerName
@@ -70,7 +80,7 @@ func (r *DistributedAgentLogRepo) SummarizeErrors(ctx context.Context, filter do
 	groupMap := make(map[string]*ErrorRadarGroup)
 
 	addEntry := func(node, svc, lvl, msg string, ts time.Time) {
-		if strings.HasSuffix(svc, ".scope") || strings.HasSuffix(svc, ".slice") || svc == "init.scope" { return }
+		if isNoiseService(svc) { return }
 		fp := logengine.FingerprintError([]byte(msg))
 		key := fmt.Sprintf("%s|%s|%s|%s", node, svc, lvl, fp)
 		mu.Lock()
@@ -124,7 +134,7 @@ func (r *DistributedAgentLogRepo) SummarizeErrors(ctx context.Context, filter do
 						if decErr == nil {
 							mu.Lock()
 							for _, g := range parsed.Groups {
-								if strings.HasSuffix(g.Service, ".scope") || strings.HasSuffix(g.Service, ".slice") || g.Service == "init.scope" {
+								if isNoiseService(g.Service) {
 									continue
 								}
 								key := fmt.Sprintf("%s|%s|%s|%s", host.Name, g.Service, g.Level, g.Fingerprint)
@@ -190,3 +200,8 @@ func (r *DistributedAgentLogRepo) SummarizeErrors(ctx context.Context, filter do
 	if filter.Limit > 0 && len(result) > filter.Limit { result = result[:filter.Limit] }
 	return result, nil
 }
+
+func isNoiseService(svc string) bool {
+	return logengine.IsNoiseService(svc)
+}
+

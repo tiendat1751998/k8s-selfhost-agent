@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
@@ -93,7 +92,7 @@ func (h *LogHandler) HandleErrorsRadar(w http.ResponseWriter, r *http.Request) {
 		if res != nil {
 			groupMap := make(map[string]*agent.ErrorRadarGroup)
 			for _, e := range res.Entries {
-				if strings.HasSuffix(e.ContainerName, ".scope") || strings.HasSuffix(e.ContainerName, ".slice") || e.ContainerName == "init.scope" {
+				if logengine.IsNoiseService(e.ContainerName) {
 					continue
 				}
 				nodeName := ""

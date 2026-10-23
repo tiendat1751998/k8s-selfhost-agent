@@ -1,4 +1,4 @@
-﻿package agent
+package agent
 
 import (
 	"context"
@@ -87,6 +87,16 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 			}
 		}
 		hosts = filtered
+	} else if len(hosts) > 0 {
+		var online []docker.ComputeHost
+		for _, h := range hosts {
+			if strings.EqualFold(h.Status, "connected") || strings.EqualFold(h.Status, "online") || strings.EqualFold(h.Status, "healthy") {
+				online = append(online, h)
+			}
+		}
+		if len(online) > 0 {
+			hosts = online
+		}
 	}
 
 	// Prepare remote search request

@@ -134,6 +134,24 @@ func TestHandleErrorsRadar_FallbackLoggingService(t *testing.T) {
 					Message:       "noise scope log",
 					Timestamp:     now,
 				},
+				{
+					ContainerName: "user@1000.service",
+					LogLevel:      domainLogging.LogLevelError,
+					Message:       "user unit session error",
+					Timestamp:     now,
+				},
+				{
+					ContainerName: "user-runtime-dir@1000.service",
+					LogLevel:      domainLogging.LogLevelError,
+					Message:       "user runtime dir failed",
+					Timestamp:     now,
+				},
+				{
+					ContainerName: "-- no entries --",
+					LogLevel:      domainLogging.LogLevelError,
+					Message:       "placeholder",
+					Timestamp:     now,
+				},
 			},
 		},
 	}
