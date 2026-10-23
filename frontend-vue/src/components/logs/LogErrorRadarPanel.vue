@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import { getErrorRadar, type ErrorRadarGroup } from '../../api/logging'
+import { isNoiseLog } from '../../utils/logTargetCategorizer'
 import '../../assets/styles/components/log-error-radar.css'
 
 interface Props {
@@ -14,7 +15,7 @@ const props = defineProps<Props>()
 
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'inspectGroup', group: ErrorRadarGroup): void
+  (e: 'inspectGroup', group: ErrorRadarGroup, activeRange: string): void
 }>()
 
 const isLoading = ref(false)
@@ -53,7 +54,8 @@ async function fetchRadar() {
       since,
       limit: 50,
     })
-    groups.value = res?.groups || []
+    const rawList = res?.groups || []
+    groups.value = rawList.filter((g) => !g.service || !isNoiseLog(g.service))
     totalGroups.value = res?.total_groups ?? groups.value.length
     totalOccurrences.value = res?.total_occurrences ?? groups.value.reduce((acc, g) => acc + g.count, 0)
     tookMs.value = res?.took_ms ?? 0
@@ -183,7 +185,7 @@ onMounted(() => fetchRadar())
             type="button"
             class="radar-inspect-btn font-mono"
             title="Inspect matching logs in terminal"
-            @click="emit('inspectGroup', group)"
+            @click="emit('inspectGroup', group, activeTimeRange)"
           >
             <BaseIcon name="search" size="xs" />
             <span>Inspect</span>
