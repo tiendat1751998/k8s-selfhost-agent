@@ -21,6 +21,7 @@ interface Props {
   wrapLines: boolean
   showHistogram: boolean
   showMobileTree: boolean
+  showErrorRadar?: boolean
 }
 
 const props = defineProps<Props>()
@@ -35,6 +36,7 @@ const emit = defineEmits<{
   (e: 'update:wrapLines', val: boolean): void
   (e: 'update:showHistogram', val: boolean): void
   (e: 'update:showMobileTree', val: boolean): void
+  (e: 'update:showErrorRadar', val: boolean): void
   (e: 'runHistoricalQuery'): void
   (e: 'loadMoreHistorical'): void
   (e: 'toggleLiveTail'): void
@@ -168,6 +170,13 @@ function setLevel(val: string) {
         <button type="button" class="toolbar-btn btn-secondary" :class="{ active: showHistogram }" title="Toggle Volume Histogram" @click="emit('update:showHistogram', !showHistogram)">
           <BaseIcon name="bar-chart-2" size="xs" /> <span>Volume</span>
         </button>
+        <button
+          type="button" class="toolbar-btn btn-error-radar" :class="{ active: showErrorRadar }"
+          title="Blind Error Radar — Auto-discover & group errors across 10GB+ logs"
+          @click="emit('update:showErrorRadar', !showErrorRadar)"
+        >
+          <BaseIcon name="alert-triangle" size="xs" /> <span>Error Radar</span>
+        </button>
         <button type="button" class="toolbar-btn btn-secondary" title="Clear Buffer" aria-label="Clear Buffer" @click="emit('clearBuffer')">
           <BaseIcon name="trash" size="xs" />
         </button>
@@ -202,6 +211,13 @@ function setLevel(val: string) {
         </button>
         <button type="button" class="mobile-btn font-mono" :class="{ active: showHistogram }" aria-label="Toggle Volume Histogram" @click="emit('update:showHistogram', !showHistogram)">
           <BaseIcon name="bar-chart-2" size="xs" />
+        </button>
+        <button
+          type="button" class="mobile-btn font-mono" :class="{ active: showErrorRadar }"
+          title="Error Radar" aria-label="Error Radar"
+          @click="emit('update:showErrorRadar', !showErrorRadar)"
+        >
+          <BaseIcon name="alert-triangle" size="xs" />
         </button>
         <button type="button" class="mobile-btn font-mono" title="Clear Buffer" aria-label="Clear Buffer" @click="emit('clearBuffer')">
           <BaseIcon name="trash" size="xs" />

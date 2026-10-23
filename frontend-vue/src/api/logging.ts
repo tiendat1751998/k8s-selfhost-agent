@@ -149,3 +149,39 @@ export async function getContextLogs(params: LogContextParams): Promise<LogSearc
 
   return api.get<LogSearchResult>('/logs/context', queryParams)
 }
+
+export interface ErrorRadarGroup {
+  node?: string
+  service: string
+  level: string
+  fingerprint: string
+  sample_message: string
+  count: number
+  first_seen: string
+  last_seen: string
+}
+
+export interface ErrorRadarResponse {
+  groups: ErrorRadarGroup[]
+  total_groups: number
+  total_occurrences: number
+  took_ms: number
+}
+
+export async function getErrorRadar(params: {
+  node?: string
+  service?: string
+  level?: string
+  since?: string
+  until?: string
+  limit?: number
+} = {}): Promise<ErrorRadarResponse> {
+  const query: Record<string, string | number> = {}
+  if (params.node) query.node = params.node
+  if (params.service) query.service = params.service
+  if (params.level) query.level = params.level
+  if (params.since) query.since = params.since
+  if (params.until) query.until = params.until
+  if (params.limit) query.limit = params.limit
+  return api.get<ErrorRadarResponse>('/logs/errors', query)
+}
