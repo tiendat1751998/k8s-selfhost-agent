@@ -179,6 +179,10 @@ func (h *HelmHandler) ListReleases(w http.ResponseWriter, r *http.Request) {
 
 	releases, err := h.releaseManager.ListReleases(r.Context(), clusterID, namespace)
 	if err != nil {
+		if shouldFallbackGracefully(clusterID, err) {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"data": []interface{}{}, "k8s_degraded": true})
+			return
+		}
 		h.handleReleaseError(w, "failed to list releases", err)
 		return
 	}

@@ -195,6 +195,12 @@ func (j *JournalTailer) parseJournalLine(line string) (LogEntry, bool) {
 		}
 
 		lvl := priorityToLevel(je.Priority)
+		if lvl == "info" {
+			detected := detectLogLevel(je.Message)
+			if detected != "info" {
+				lvl = detected
+			}
+		}
 
 		return LogEntry{
 			Timestamp: ts,

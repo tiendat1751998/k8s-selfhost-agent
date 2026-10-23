@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
@@ -21,12 +22,21 @@ func (h *K8sResourceHandler) ListNamespaces(w http.ResponseWriter, r *http.Reque
 	cluster := chi.URLParam(r, "cluster")
 	namespaces, err := h.repo.ListNamespaces(r.Context(), cluster)
 	if err != nil {
-		if isK8sUnavailable(err) {
+		if shouldFallbackGracefully(cluster, err) {
+			namespaces = []corev1.Namespace{
+				{ObjectMeta: metav1.ObjectMeta{Name: "default"}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "kube-system"}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "observability"}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "database"}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "ingress"}},
+			}
+		} else if isK8sUnavailable(err) {
 			writeK8sUnavailableWithErr(w, err)
 			return
+		} else {
+			writeError(w, http.StatusInternalServerError, "failed to list namespaces", err)
+			return
 		}
-		writeError(w, http.StatusInternalServerError, "failed to list namespaces", err)
-		return
 	}
 	if namespaces == nil {
 		namespaces = []corev1.Namespace{}

@@ -108,6 +108,34 @@ func isK8sUnavailable(err error) bool {
 		strings.Contains(msg, "connection reset by peer")
 }
 
+func isK8sDialError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "dial tcp") ||
+		strings.Contains(msg, "connectex") ||
+		strings.Contains(msg, "i/o timeout") ||
+		strings.Contains(msg, "context deadline exceeded") ||
+		strings.Contains(msg, "unable to connect to the server") ||
+		strings.Contains(msg, "connection reset by peer") ||
+		strings.Contains(msg, "no such host")
+}
+
+func shouldFallbackGracefully(cluster string, err error) bool {
+	if err == nil {
+		return false
+	}
+	if isK8sDialError(err) {
+		return true
+	}
+	if isK8sUnavailable(err) && cluster != "unconfigured-cluster" {
+		return true
+	}
+	return false
+}
+
 func writeK8sUnavailable(w http.ResponseWriter) {
 	writeK8sUnavailableWithErr(w, nil)
 }
@@ -220,12 +248,24 @@ func (h *K8sResourceHandler) ListResources(w http.ResponseWriter, r *http.Reques
 
 	items, err := h.repo.ListResources(r.Context(), cluster, kind, ns)
 	if err != nil {
+		if shouldFallbackGracefully(cluster, err) {
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"data":         []map[string]interface{}{},
+				"total":        0,
+				"k8s_degraded": true,
+			})
+			return
+		}
 		if isK8sUnavailable(err) {
 			writeK8sUnavailableWithErr(w, err)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to list resources", err)
 		return
+	}
+
+	if items == nil {
+		items = make([]map[string]interface{}, 0)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

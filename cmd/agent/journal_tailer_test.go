@@ -165,3 +165,45 @@ func (s *stringCloser) Close() error {
 	return nil
 }
 
+func TestParseJournaldJSON_LevelDetection(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expLevel string
+	}{
+		{
+			name:     "traefik json error on stdout with priority 6",
+			input:    `{"MESSAGE":"{\"level\":\"error\",\"msg\":\"Command error\",\"time\":\"2026-10-23T08:00:00Z\"}","__REALTIME_TIMESTAMP":"1726315200000000","_SYSTEMD_UNIT":"traefik.service","PRIORITY":"6"}`,
+			expLevel: "error",
+		},
+		{
+			name:     "traefik json warn on stdout with priority 6",
+			input:    `{"MESSAGE":"{\"level\":\"warning\",\"msg\":\"certificate expiring soon\"}","__REALTIME_TIMESTAMP":"1726315200000000","_SYSTEMD_UNIT":"traefik.service","PRIORITY":"6"}`,
+			expLevel: "warn",
+		},
+		{
+			name:     "logfmt error on stdout with priority 6",
+			input:    `{"MESSAGE":"time=\"2026-10-23\" level=error msg=\"dial tcp failed\"","__REALTIME_TIMESTAMP":"1726315200000000","_SYSTEMD_UNIT":"app.service","PRIORITY":"6"}`,
+			expLevel: "error",
+		},
+		{
+			name:     "normal info on stdout with priority 6",
+			input:    `{"MESSAGE":"Configuration loaded successfully","__REALTIME_TIMESTAMP":"1726315200000000","_SYSTEMD_UNIT":"nginx.service","PRIORITY":"6"}`,
+			expLevel: "info",
+		},
+	}
+
+	tailer := NewJournalTailer(nil, nil)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			entry, ok := tailer.parseJournalLine(tc.input)
+			if !ok {
+				t.Fatalf("expected parseJournalLine to return true")
+			}
+			if entry.Level != tc.expLevel {
+				t.Errorf("expected level %q, got %q", tc.expLevel, entry.Level)
+			}
+		})
+	}
+}
+

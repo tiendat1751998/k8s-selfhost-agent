@@ -49,8 +49,12 @@ CREATE INDEX IF NOT EXISTS idx_promotions_tenant_id ON promotions(tenant_id);
 ALTER TABLE reports ADD COLUMN IF NOT EXISTS tenant_id UUID;
 CREATE INDEX IF NOT EXISTS idx_reports_tenant_id ON reports(tenant_id);
 
-ALTER TABLE reporting ADD COLUMN IF NOT EXISTS tenant_id UUID;
-CREATE INDEX IF NOT EXISTS idx_reporting_tenant_id ON reporting(tenant_id);
+DO $$ BEGIN 
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'reporting') THEN 
+        ALTER TABLE reporting ADD COLUMN IF NOT EXISTS tenant_id UUID; 
+        CREATE INDEX IF NOT EXISTS idx_reporting_tenant_id ON reporting(tenant_id); 
+    END IF; 
+END $$;
 
 ALTER TABLE tags ADD COLUMN IF NOT EXISTS tenant_id UUID;
 CREATE INDEX IF NOT EXISTS idx_tags_tenant_id ON tags(tenant_id);

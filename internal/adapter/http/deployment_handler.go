@@ -44,6 +44,9 @@ func (h *DeploymentHandler) ListDeployments(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, "failed to list deployments", err)
 		return
 	}
+	if apps == nil {
+		apps = []deployment.Application{}
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": apps})
 }
 
