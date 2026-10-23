@@ -11,8 +11,9 @@ import LogVolumeHistogram from '../components/logs/LogVolumeHistogram.vue'
 import LogTraceDrawer from '../components/logs/LogTraceDrawer.vue'
 import LogContextModal from '../components/logs/LogContextModal.vue'
 import LogStreamToolbar from '../components/logs/LogStreamToolbar.vue'
+import LogErrorRadarPanel from '../components/logs/LogErrorRadarPanel.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
-import type { LogFilterParams } from '../api/logging'
+import type { LogFilterParams, ErrorRadarGroup } from '../api/logging'
 import { isNoiseLog, classifyLogTarget } from '../utils/logTargetCategorizer'
 import '../assets/styles/views/logstream.css'
 
@@ -31,6 +32,7 @@ const isSidebarCollapsed = ref(false)
 const showHistogram = ref(false)
 const wrapLines = ref(true)
 const showDroppedAlert = ref(true)
+const showErrorRadar = ref(false)
 
 const {
   mode, selectedTimeRange, queryError, selectedHistoricalLimit, timeRanges,
@@ -93,14 +95,8 @@ async function preloadRecentLogs(target: LogTarget) {
     const effNode = effectiveNode.value
     const effService = effectiveService.value
     const filter: LogFilterParams = {
-      limit: 50,
-      query: kw ? kw : undefined,
-      service: effService,
-      container: effService,
-      container_name: effService,
-      namespace: ns,
-      node: effNode,
-      attributes: effNode ? { node: effNode } : undefined,
+      limit: 50, query: kw || undefined, service: effService, container: effService, container_name: effService,
+      namespace: ns, node: effNode, attributes: effNode ? { node: effNode } : undefined,
       cluster_id: activeClusterId.value || undefined,
       log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
     }
@@ -114,14 +110,7 @@ async function preloadRecentLogs(target: LogTarget) {
 function connectTarget(target: LogTarget) {
   if (!target || !target.id) return
   const ns = target.namespace || (route.query.namespace ? String(route.query.namespace) : undefined)
-  const effNode = effectiveNode.value
-  const effService = effectiveService.value
-  logStore.connect({
-    node: effNode,
-    service: effService,
-    container: effService,
-    namespace: ns,
-  })
+  logStore.connect({ node: effectiveNode.value, service: effectiveService.value, container: effectiveService.value, namespace: ns })
 }
 
 async function handleSelectTarget(target: LogTarget) {
@@ -330,6 +319,24 @@ function handleExport() {
     URL.revokeObjectURL(url)
   }
 }
+
+function handleInspectErrorGroup(group: ErrorRadarGroup) {
+  if (group.node && selectedTarget.value.type === 'node' && selectedTarget.value.id !== group.node) {
+    selectedTarget.value = { type: 'node', id: group.node, name: group.node, icon: 'server' }
+  }
+  if (group.service) {
+    activeServiceSubFilter.value = group.service
+  }
+  selectedLevel.value = 'ERROR'
+  const rawPattern = group.fingerprint || group.sample_message || ''
+  const cleanKw = rawPattern.replace(/^\*+|\*+$/g, '').trim()
+  searchKeyword.value = cleanKw.length > 3 ? cleanKw : ''
+  if (mode.value === 'historical') {
+    runHistoricalQuery()
+  } else {
+    mode.value = 'historical'
+  }
+}
 </script>
 
 <template>
@@ -345,6 +352,7 @@ function handleExport() {
       v-model:wrap-lines="wrapLines"
       v-model:show-histogram="showHistogram"
       v-model:show-mobile-tree="showMobileTree"
+      v-model:show-error-radar="showErrorRadar"
       :selected-target="selectedTarget"
       :time-ranges="timeRanges"
       :is-historical-loading="logStore.isHistoricalLoading"
@@ -412,6 +420,16 @@ function handleExport() {
       </div>
 
       <div class="explorer-right-col">
+        <!-- Blind Error Radar Discovery & Grouping Panel -->
+        <LogErrorRadarPanel
+          v-if="showErrorRadar"
+          :node="effectiveNode"
+          :service="effectiveService"
+          :selected-time-range="selectedTimeRange"
+          @close="showErrorRadar = false"
+          @inspect-group="handleInspectErrorGroup"
+        />
+
         <!-- Interactive Node & Service Isolation Bar -->
         <LogNodeServiceBar
           :selected-target="selectedTarget"
