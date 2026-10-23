@@ -4,9 +4,9 @@ import { useRoute } from 'vue-router'
 import { useLogStreamer } from '../composables/useLogStreamer'
 import { useHistoricalLogSearch } from '../composables/useHistoricalLogSearch'
 import { useGlobalContext } from '../composables/useGlobalContext'
-import LogTargetTree, { type LogTarget } from '../components/logs/LogTargetTree.vue'
-import LogNodeServiceBar, { type AvailableServiceItem } from '../components/logs/LogNodeServiceBar.vue'
+import LogTargetTree, { type LogTarget, type AvailableServiceItem } from '../components/logs/LogTargetTree.vue'
 import LogViewerTerminal from '../components/logs/LogViewerTerminal.vue'
+
 import LogVolumeHistogram from '../components/logs/LogVolumeHistogram.vue'
 import LogTraceDrawer from '../components/logs/LogTraceDrawer.vue'
 import LogContextModal from '../components/logs/LogContextModal.vue'
@@ -363,6 +363,12 @@ function handleInspectErrorGroup(group: ErrorRadarGroup, radarRange?: string) {
       :current-logs-count="logStore.logs.length"
       :auto-scroll="autoScroll"
       :is-scroll-locked="isScrollLocked"
+      :active-service="activeServiceSubFilter"
+      :hover-pause-enabled="hoverPauseEnabled"
+      :is-hover-paused="isHoverPaused"
+      @clear-active-service="activeServiceSubFilter = ''"
+      @update:active-service="activeServiceSubFilter = $event"
+      @update:hover-pause-enabled="hoverPauseEnabled = $event"
       @run-historical-query="runHistoricalQuery"
       @load-more-historical="loadMoreHistorical"
       @toggle-live-tail="toggleLiveTail"
@@ -418,7 +424,20 @@ function handleInspectErrorGroup(group: ErrorRadarGroup, radarRange?: string) {
           <span class="drawer-title font-mono"><BaseIcon name="layers" size="xs" /> <span>Select Target</span></span>
           <button type="button" class="drawer-close-btn" aria-label="Close targets drawer" @click="showMobileTree = false">&times;</button>
         </div>
-        <LogTargetTree v-model="selectedTarget" :logs="logStore.logs" :cluster="activeClusterId" @select="handleSelectTarget" />
+        <LogTargetTree
+          v-model="selectedTarget"
+          :logs="logStore.logs"
+          :cluster="activeClusterId"
+          :available-services="availableServices"
+          :active-service="activeServiceSubFilter"
+          :source-category="sourceCategory"
+          :muted-services="mutedServices"
+          @select="handleSelectTarget"
+          @update:active-service="activeServiceSubFilter = $event"
+          @update:source-category="sourceCategory = $event"
+          @toggle-mute-service="handleToggleMuteService"
+          @clear-muted-services="handleClearMutedServices"
+        />
       </div>
 
       <div class="explorer-right-col">
@@ -432,22 +451,6 @@ function handleInspectErrorGroup(group: ErrorRadarGroup, radarRange?: string) {
           @inspect-group="handleInspectErrorGroup"
         />
 
-        <!-- Interactive Node & Service Isolation Bar -->
-        <LogNodeServiceBar
-          :selected-target="selectedTarget"
-          :available-services="availableServices"
-          :active-service="activeServiceSubFilter"
-          :source-category="sourceCategory"
-          :muted-services="mutedServices"
-          :hover-pause-enabled="hoverPauseEnabled"
-          :is-hover-paused="isHoverPaused"
-          @update:active-service="activeServiceSubFilter = $event"
-          @update:source-category="sourceCategory = $event"
-          @toggle-mute-service="handleToggleMuteService"
-          @clear-muted-services="handleClearMutedServices"
-          @update:hover-pause-enabled="hoverPauseEnabled = $event"
-        />
-
         <LogViewerTerminal
           :logs="targetFilteredLogs"
           :is-connected="mode === 'live' ? isConnected : true"
@@ -458,6 +461,7 @@ function handleInspectErrorGroup(group: ErrorRadarGroup, radarRange?: string) {
           :latency="latency"
           :wrap-lines="wrapLines"
           :hover-pause-enabled="hoverPauseEnabled"
+          :hide-service-badge="Boolean(effectiveService)"
           @scroll="handleScroll"
           @scroll-to-bottom="scrollToBottom"
           @register-terminal="setTerminalRef"
@@ -469,6 +473,7 @@ function handleInspectErrorGroup(group: ErrorRadarGroup, radarRange?: string) {
         />
       </div>
     </div>
+
 
     <!-- Transaction Trace Waterfall Drawer -->
     <LogTraceDrawer />

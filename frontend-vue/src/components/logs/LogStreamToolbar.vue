@@ -22,6 +22,9 @@ interface Props {
   showHistogram: boolean
   showMobileTree: boolean
   showErrorRadar?: boolean
+  activeService?: string
+  hoverPauseEnabled?: boolean
+  isHoverPaused?: boolean
 }
 
 const props = defineProps<Props>()
@@ -37,12 +40,16 @@ const emit = defineEmits<{
   (e: 'update:showHistogram', val: boolean): void
   (e: 'update:showMobileTree', val: boolean): void
   (e: 'update:showErrorRadar', val: boolean): void
+  (e: 'update:activeService', val: string): void
+  (e: 'clearActiveService'): void
+  (e: 'update:hoverPauseEnabled', val: boolean): void
   (e: 'runHistoricalQuery'): void
   (e: 'loadMoreHistorical'): void
   (e: 'toggleLiveTail'): void
   (e: 'clearBuffer'): void
   (e: 'exportLogs'): void
 }>()
+
 
 const severityFilters = [
   { label: 'ALL', value: '' },
@@ -79,6 +86,19 @@ function setLevel(val: string) {
         >
           <BaseIcon name="sidebar" size="xs" />
         </button>
+        <!-- Active Service Filter Pill -->
+        <div v-if="activeService" class="toolbar-service-pill font-mono" title="Filtered by service — click × to clear">
+          <span class="pill-icon">📦</span>
+          <span class="pill-name">{{ activeService }}</span>
+          <button
+            type="button"
+            class="pill-close-btn"
+            aria-label="Clear active service filter"
+            @click="emit('clearActiveService'); emit('update:activeService', '')"
+          >
+            &times;
+          </button>
+        </div>
         <div class="toolbar-search-wrap">
           <BaseIcon name="search" size="xs" class="search-icon" />
           <input
@@ -163,7 +183,7 @@ function setLevel(val: string) {
         </div>
       </div>
 
-      <!-- Zone 4 (Right - Stream Actions Group: Error Radar, Volume, Wrap, Clear, Export) -->
+      <!-- Zone 4 (Right - Stream Actions Group: Error Radar, Volume, Wrap, Hover, Clear, Export) -->
       <div class="toolbar-actions-group">
         <button
           type="button" class="toolbar-btn btn-error-radar" :class="{ active: showErrorRadar }"
@@ -178,6 +198,16 @@ function setLevel(val: string) {
         <button type="button" class="toolbar-btn btn-secondary" :class="{ active: wrapLines }" title="Toggle Line Wrap" @click="emit('update:wrapLines', !wrapLines)">
           <span>Wrap</span>
         </button>
+        <button
+          type="button"
+          class="toolbar-btn btn-secondary"
+          :class="{ active: hoverPauseEnabled, 'btn-tail-paused': isHoverPaused }"
+          :title="hoverPauseEnabled ? (isHoverPaused ? 'Stream hover-paused' : 'Hover-pause enabled') : 'Hover-pause disabled'"
+          aria-label="Toggle hover pause"
+          @click="emit('update:hoverPauseEnabled', !hoverPauseEnabled)"
+        >
+          <span>⏸ Hover</span>
+        </button>
         <button type="button" class="toolbar-btn btn-secondary" title="Clear Buffer" aria-label="Clear Buffer" @click="emit('clearBuffer')">
           <BaseIcon name="trash" size="xs" />
         </button>
@@ -185,6 +215,7 @@ function setLevel(val: string) {
           <BaseIcon name="download" size="xs" />
         </button>
       </div>
+
     </div>
 
     <!-- Mobile Command Bar (<768px) -->

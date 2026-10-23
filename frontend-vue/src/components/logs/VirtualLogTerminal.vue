@@ -4,7 +4,7 @@ import type { LogEntry } from '../../stores/logStore'
 import { useLogStore } from '../../stores/logStore'
 import { calculateVirtualWindow } from '../../utils/virtualWindow'
 import { detectStackTrace, type StackTraceInfo } from '../../utils/stackTraceParser'
-import { formatTime, getTargetBadge } from './virtualLogUtils'
+import { formatTime, getTargetBadge, cleanLogMessage } from './virtualLogUtils'
 import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
@@ -18,13 +18,15 @@ interface Props {
   wrapLines?: boolean
   rowHeight?: number
   hoverPauseEnabled?: boolean
+  hideServiceBadge?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   isConnected: true, isPaused: false, autoScroll: true, isScrollLocked: false,
   targetName: 'cluster', latency: 0, wrapLines: true, rowHeight: 24,
-  hoverPauseEnabled: true,
+  hoverPauseEnabled: true, hideServiceBadge: false,
 })
+
 
 const emit = defineEmits<{
   (e: 'scroll', event: Event): void
@@ -48,6 +50,21 @@ const effectiveRowHeight = computed(() => isMobile.value ? 58 : props.rowHeight)
 
 // Expanded stack traces map: index -> boolean
 const expandedStackTraces = ref<Record<number, boolean>>({})
+const expandedRowIndex = ref<number | null>(null)
+
+function toggleRowExpand(index: number) {
+  expandedRowIndex.value = expandedRowIndex.value === index ? null : index
+}
+
+function formatLevelBadge(lvl: string): string {
+  const upper = (lvl || '').toUpperCase()
+  if (upper === 'ERROR' || upper === 'ERR') return 'ERR'
+  if (upper === 'WARNING' || upper === 'WARN') return 'WARN'
+  if (upper === 'INFO') return 'INFO'
+  if (upper === 'DEBUG' || upper === 'DBG') return 'DBG'
+  return upper.slice(0, 4)
+}
+
 
 onMounted(() => {
   emit('registerTerminal', viewportRef.value)
@@ -225,12 +242,12 @@ defineExpose({
             class="virtual-log-row"
             :class="['log-' + item.log.level.toLowerCase()]"
           >
-            <span class="virtual-log-idx">{{ item.actualIndex + 1 }}</span>
             <span class="virtual-badge-time">[{{ formatTime(item.log.time) }}]</span>
             <span class="virtual-badge-level" :class="'virtual-badge-' + item.log.level.toLowerCase()">
-              [{{ item.log.level.padEnd(5) }}]
+              {{ formatLevelBadge(item.log.level) }}
             </span>
             <span
+              v-if="!hideServiceBadge"
               class="virtual-badge-target"
               role="button"
               tabindex="0"
@@ -252,10 +269,13 @@ defineExpose({
             </span>
 
             <!-- Log Message & Stack Trace Section -->
-            <div class="virtual-log-body">
+            <div class="virtual-log-body" @click="toggleRowExpand(item.actualIndex)">
               <span class="virtual-msg-line" :class="{ 'virtual-msg-nowrap': !wrapLines }">
-                {{ item.stackInfo.isStackTrace ? item.stackInfo.firstLine : item.log.msg }}
+                {{ cleanLogMessage(item.stackInfo.isStackTrace ? item.stackInfo.firstLine : item.log.msg) }}
               </span>
+
+              <!-- Expanded Raw Log Detail Preview -->
+              <pre v-if="expandedRowIndex === item.actualIndex" class="virtual-raw-expanded font-mono" @click.stop>{{ item.log.msg }}</pre>
 
               <!-- Stack Trace Interactive Toggle -->
               <div v-if="item.stackInfo.isStackTrace">
@@ -263,20 +283,21 @@ defineExpose({
                   type="button"
                   class="stack-toggle-btn"
                   :aria-expanded="item.isExpanded"
-                  @click="toggleStackTrace(item.actualIndex)"
+                  @click.stop="toggleStackTrace(item.actualIndex)"
                 >
                   <BaseIcon :name="item.isExpanded ? 'chevron-down' : 'chevron-right'" size="xs" />
                   <span>
                     {{ item.isExpanded ? '[- Collapse Stack Trace]' : `[+ Expand Stack Trace (${item.stackInfo.linesCount} lines)]` }}
                   </span>
                 </button>
-                <div v-if="item.isExpanded" class="stack-trace-expanded font-mono">
+                <div v-if="item.isExpanded" class="stack-trace-expanded font-mono" @click.stop>
                   <div v-for="(sLine, sIdx) in item.stackInfo.stackLines" :key="sIdx">
                     {{ sLine }}
                   </div>
                 </div>
               </div>
             </div>
+
 
             <!-- Action Badges (Trace & Context) -->
             <button

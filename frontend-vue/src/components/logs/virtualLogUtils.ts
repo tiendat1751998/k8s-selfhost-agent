@@ -50,3 +50,56 @@ export function cleanFingerprint(fp?: string): string {
   return cleaned || fp
 }
 
+const JSON_IGNORED_KEYS = new Set([
+  'level', 'time', 'timestamp', 'ts', 'severity',
+  'msg', 'message', 'error', 'log', 'caller', 'logger',
+])
+
+/**
+ * Cleans single-line log message preview by extracting primary text from raw JSON
+ * or stripping redundant timestamps and severity prefixes from database logs.
+ */
+export function cleanLogMessage(rawMsg?: string): string {
+  if (!rawMsg) return ''
+  const trimmed = rawMsg.trim()
+  if (!trimmed) return ''
+
+  // 1. JSON-encoded structured log detection
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const obj = JSON.parse(trimmed)
+      if (typeof obj === 'object' && obj !== null && !Array.isArray(obj)) {
+        const primary = obj.msg || obj.message || obj.error || obj.log
+        if (typeof primary === 'string' && primary.trim()) {
+          const extras: string[] = []
+          for (const [k, v] of Object.entries(obj)) {
+            if (!JSON_IGNORED_KEYS.has(k.toLowerCase()) && v !== undefined && v !== null && v !== '') {
+              extras.push(`${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`)
+            }
+          }
+          return extras.length > 0 ? `${primary.trim()} ${extras.join(' ')}` : primary.trim()
+        }
+      }
+    } catch {
+      // Fall through to regex cleans
+    }
+  }
+
+  // 2. Postgres / UTC timestamp + PID + Level prefix clean
+  const pgMatch = trimmed.match(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+(?:UTC|GMT)\s+(?:(\[\d+\])\s+)?(?:ERROR|LOG|WARNING|FATAL|INFO|DEBUG|NOTICE):\s*(.*)$/i)
+  if (pgMatch) {
+    const pid = pgMatch[1] ? `${pgMatch[1]} ` : ''
+    const msg = pgMatch[2] ? pgMatch[2].trim() : ''
+    return `${pid}${msg}`
+  }
+
+  // 3. Leading UTC/GMT timestamp without level prefix
+  const tsOnlyMatch = trimmed.match(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+(?:UTC|GMT)\s+(.*)$/i)
+  if (tsOnlyMatch && tsOnlyMatch[1]) {
+    return tsOnlyMatch[1].trim()
+  }
+
+  return trimmed
+}
+
+

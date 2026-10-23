@@ -13,6 +13,7 @@ interface Props {
   latency?: number
   wrapLines?: boolean
   hoverPauseEnabled?: boolean
+  hideServiceBadge?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
@@ -21,7 +22,9 @@ withDefaults(defineProps<Props>(), {
   wrapLines: true,
   latency: 0,
   hoverPauseEnabled: true,
+  hideServiceBadge: false,
 })
+
 
 const emit = defineEmits<{
   (e: 'scroll', event: Event): void
@@ -58,7 +61,9 @@ defineExpose({
     :latency="latency"
     :wrap-lines="wrapLines"
     :hover-pause-enabled="hoverPauseEnabled"
+    :hide-service-badge="hideServiceBadge"
     @scroll="emit('scroll', $event)"
+
     @scroll-to-bottom="emit('scrollToBottom')"
     @register-terminal="emit('registerTerminal', $event)"
     @open-trace="emit('openTrace', $event)"

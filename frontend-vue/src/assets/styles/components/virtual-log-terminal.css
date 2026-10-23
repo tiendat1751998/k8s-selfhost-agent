@@ -278,6 +278,22 @@
   line-height: 1.5;
 }
 
+.virtual-raw-expanded {
+  background: var(--color-surface-elevated, rgba(15, 23, 42, 0.95));
+  border-left: 2px solid #38bdf8;
+  padding: 6px 10px;
+  margin-top: 4px;
+  margin-bottom: 2px;
+  border-radius: 0 4px 4px 0;
+  font-size: 11px;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.45;
+  user-select: text;
+}
+
+
 /* Badges & Actions */
 .virtual-badge-trace {
   font-size: 10px;
