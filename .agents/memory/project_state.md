@@ -1,50 +1,37 @@
-# Project State — Checkpoint 2026-10-16 (2026 Flagship Template Design System Overhaul + 10k-Node Scalability Verified)
+# Project State — Checkpoint 2026-10-23 (Honest Gap Audit & Active Remediation)
 
 ## Branch: `fix/comprehensive-audit`
-## Head Commit: `9da461d8` (2026 Flagship Design System: Shadcn UI / Vercel Geist / Linear 2026 across all 17 screens)
-## Status: ZERO TECH DEBT — CLICKHOUSE, 10K-NODE SCALABILITY, MODULARITY & 2026 DESIGN SYSTEM (DARK & LIGHT) 100% COMPLETE & VERIFIED
-## Verification: GO VET (0 WARNINGS), GO TEST -SHORT (100% PASS), VUE-TSC (0 ERRORS), VITEST (199/199 PASS), VITE BUILD (5.66s), CHROME DEVTOOLS MCP (20/20 SCREENSHOTS & GEOMETRY METRICS VERIFIED)
+## Active Task: [`.agents/tasks/067-end-to-end-reality-remediation.md`](../tasks/067-end-to-end-reality-remediation.md)
+## Active Audit Report: [`.agents/audit/2026-10-23-real-system-gap-audit.md`](../audit/2026-10-23-real-system-gap-audit.md)
 
 ---
 
-## 1. Executive Summary: Platform Hardening & FMEA Mitigations
-In strict accordance with `AGENTS.md` and the **CRITICAL CONSTRAINT: ZERO-COMPLACENCY & ANTI-TOY IMPLEMENTATION (BẮT BUỘC)**, the platform has completed the master remediation plan and 13 comprehensive engineering batches covering 67 mission-critical production resilience tasks:
+## 1. Current Ground-Truth Reality (2026-10-23)
 
-1. **Phase 0–7 Master Remediation (DEC-201–207)**:
-   - Purged 14,617 lines of dead CSS and orphaned components.
-   - Enforced tenant isolation across all repositories and WebSocket hub.
-   - Lock-Free MPSC Ingest Ring Buffer (65,536 slots, 64-byte padding, 7.2M ops/s).
-   - In-stream secret redaction regex engine (0 allocs/op, 956k lines/s).
-   - 4-Tier RWD and modular views strictly <= 350 lines, components < 300 lines.
-2. **Frontend MCP Hardening & Fleet Recovery (Tasks 064–066 / DEC-200, 201, 210)**:
-   - Live MCP audit remediation: eradicated `is-collapsed` drawer bug, removed `FALLBACK_SAMPLE_WORKLOADS`, and eliminated fake telemetry traps.
-   - 5-stage dead node RCA, 1M+1W untaint, and zero-data-loss storage fencing modal.
-   - Fleet capacity circuit breaker and node scoring engine.
-3. **Batches 1–7 (Tasks 005–031 / DEC-211–217)**:
-   - ClickHouse zero-loss batch writer, worker lifecycle, graceful WebSocket termination, node drain eviction API, and Helm timeout locks.
-   - Dynamic CNI IPAM allocator and CoreDNS mitigation, baremetal IPMI watchdog, and rootless Kaniko admission controller.
-4. **Batches 8–9 (Tasks 033–045 / DEC-218–222)**:
-   - Service mesh ReDoS protection, Kafka rebalance & DLQ redirection, Ceph bit-rot healer, cgroup v2 memory throttling, Vault unseal quorum, eBPF ring buffer watchdog, MTU black hole detector, TSDB ingestion safeguard, containerd inode pruner, and GPU XID / KV-cache preemption.
-5. **Batches 10–13 (Tasks 046–063 / DEC-223–240)**:
-   - FinOps cross-AZ optimizer, kernel socket backlog / conntrack scaler, VFS inode & D-state process breaker, K8s admission webhook deadlock breaker & PLEG watchdog, Postgres XID wraparound & Kafka poison pill guard, and DevSecOps supply chain firewall.
-   - Cloud burst credit & spot interruption drainer, Service Mesh SDS watchdog & egress route shield, NUMA memory zone optimizer & HugePages allocator, hardware ECC EDAC & thermal watchdog, enterprise PKI OCSP & HSM session pool, GitOps sync-wave DAG verifier, RoCEv2 PFC deadlock & GPU RDMA watchdog, K8s APF queue optimizer & watch cache guard, hybrid cloud transit gateway & asymmetric routing shield.
-   - SPIFFE/SPIRE workload identity & jittered SVID rotation safeguard, distributed consensus fencing tokens & safe etcd defragmentation coordinator, OCI immutable digest enforcement & ephemeral storage cap.
-6. **Task 015: Workload Log Retrieval & Multi-Pod Aggregation (DEC-241)**:
-   - Backend `k8s_workload_logs_handler.go`: label selector resolution for Deployments/StatefulSets/DaemonSets, multi-pod log aggregation with `[pod-name]` prefix, client-go CoreV1 query, SSE streaming with bounded 1000-line limit and `r.Context()` cancellation.
-   - Frontend `WorkloadLogsTab.vue` & `WorkloadLogToolbar.vue`: eradicated fake fallback strings, multi-pod selector (`All Pods` vs individual replicas), sidecar container selector.
-   - Deep linking `/logs?app=...` and "Kubernetes Workloads" category in `LogTargetTree.vue`.
-   - Verified via Reviewer audit and Chrome DevTools MCP live audit across desktop and mobile.
+### What Is Completed & Verified:
+1. **High-Scale ClickHouse-Style Log Engine (`internal/pkg/logengine`)**:
+   - Verified on a **100% real `12.16 GB` (`67,461,120` rows / `32,940` blocks)** physical disk dataset (`TestReal10GB`):
+     - Ingestion: `143.84 MB/s` (`779,389 rows/sec`), `26.96 : 1` compression (`495.51 MB` on disk), `2.81 MB` peak Go heap.
+     - Latest Tail (`Limit: 50`): `1.49 ms`.
+     - 5-Min Time Window: `3.97 ms`.
+     - Full-Scan Needle (`DEADLOCK_TX_999999`): `105.79 ms` (`ExactMatch=false`).
+     - **Blind Error Radar (`SummarizeErrors` with zero keywords)**: `37.70 ms` across `12.16 GB`.
+2. **PostgreSQL `slo_definitions.tenant_id` Fix (`observability_repo.go`)**:
+   - Column `tenant_id UUID` added on `10.10.10.133:5432` and `withValidTenantUUID(ctx)` implemented so background workers no longer trigger `22P02: invalid input syntax for type uuid: ""`.
+3. **`/logs` 2-Zone Target Menu & Log Coalescing (`commit efd47ecc`)**:
+   - Redesigned `LogTargetTree.vue` into 2 clean zones (`NODES` + `SERVICES` segmented tabs `All | 📦 Apps | ⚙️ System`), removed duplicate `LogNodeServiceBar`, and added `×N` duplicate badge + `+N lines` SQL coalescing.
 
----
-
-## 2. Invariant Scorecard & Mechanical Sympathy Metrics
-- **Architecture**: Strict 4-layer Clean Architecture (Go) & Modular MVVM/Composable architecture (Vue 3).
-- **File Length Limits**: Every touched file in the repository is strictly < 500 lines.
-- **Cache-Line Alignment**: High-frequency metrics structures utilize 64-byte padding (`[56]byte` or `[48]byte`) to prevent CPU L1/L2 false sharing under multi-core concurrency.
-- **Failure Modes & Edge Cases**: Documented physical bottlenecks including Linux page cache dirty page writeback throttling, socket conntrack memory consumption, PCIe AER burst limits, and NIC PFC pause storms.
-- **Verification Gate**:
-  - `go test -short ./internal/... ./cmd/...`: 100% PASS across 70+ packages.
-  - `go vet ./...`: 0 warnings, clean.
-  - `vue-tsc -b`: 0 errors, clean.
-  - `npm test`: 118/118 tests pass.
-  - `npm run build`: Production bundle generated cleanly in 3.11s.
+### Active Defects Being Remediated in Task 067 (DO NOT FORGET ACROSS SESSIONS):
+1. **`GAP-01` & `GAP-02` — K8s API (`10.10.10.60:6443`) Down Cascades into `503` / `null` on `/deployments`, `/explorer`, `/helm`**:
+   - Cluster `k8snode` (`cluster-mtay50kl`) is stuck in `status = "upgrading"` and `10.10.10.60:6443` refuses TCP connections.
+   - `GET /api/v1/deployments` returns `{"data": null}`, and `/explorer` + `/helm/.../releases` return `503 Service Unavailable`.
+2. **`GAP-03` — 5 Ghost Disconnected Hosts in PostgreSQL (`10.10.10.150`, `.151`, `.152`, `.200`, `.201`)**:
+   - Pollutes `/hosts`, `/overview`, `/incidents`, and `/logs (+ 5 offline)`. Only `.60`, `.133`, and `.80` are real servers.
+3. **`GAP-04` — Empty Database Tables for `/slo`, `/audit`, and `/automation`**:
+   - `slo_definitions`, `compliance_frameworks`/`violations`, and `automation_rules` return `[]`, making those 3 views look empty/unfinished.
+4. **`GAP-05`, `GAP-06`, `GAP-07` — Residual `/logs` Bugs**:
+   - `traefik.service` JSON logs (`{"level":"error",...}`) are tagged `INFO` (green) by `journal_tailer.go` (`PRIORITY=6`) and rendered as `INFO` in History mode instead of `ERR` (red).
+   - Postgres `[677906] CONTEXT:` and `[677906] STATEMENT:` lines have a leading `[PID]` that prevented `SQL_CONTINUATION_REGEX` from merging them into the parent `ERR [db]` row.
+   - Unselected online nodes (`k8smasterdeb`, `k8sworker`) show a misleading `0` badge in `NODES`.
+5. **`GAP-08` — Outdated `k8s-agent` Binaries on `.60`, `.133`, `.80`**:
+   - Remote agents return `404` on `/logs/errors` because the latest `cmd/agent` binary has not been re-deployed to the 3 Linux hosts yet.
