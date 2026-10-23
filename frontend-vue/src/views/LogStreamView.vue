@@ -30,7 +30,7 @@ const selectedTarget = ref<LogTarget>({ type: 'service', id: '', name: 'Select T
 const showMobileTree = ref(false)
 const isSidebarCollapsed = ref(false)
 const showHistogram = ref(false)
-const wrapLines = ref(true)
+const wrapLines = ref(false)
 const showDroppedAlert = ref(true)
 const showErrorRadar = ref(false)
 
@@ -321,6 +321,7 @@ function handleExport() {
 }
 
 function handleInspectErrorGroup(group: ErrorRadarGroup, radarRange?: string) {
+  showErrorRadar.value = false
   if (group.node && selectedTarget.value.type === 'node' && selectedTarget.value.id !== group.node) {
     activeTargetId = group.node
     selectedTarget.value = { type: 'node', id: group.node, name: group.node, icon: 'server' }
@@ -404,7 +405,7 @@ function handleInspectErrorGroup(group: ErrorRadarGroup, radarRange?: string) {
     </div>
 
     <!-- Collapsible Log Volume Histogram (70px height above grid) -->
-    <div v-if="showHistogram || mode === 'historical'" class="histogram-wrapper">
+    <div v-if="showHistogram" class="histogram-wrapper">
       <LogVolumeHistogram :buckets="logStore.histogram" :height="70" @filter-range="handleHistogramFilterRange" @clear-filter="handleClearHistogramFilter" />
     </div>
 

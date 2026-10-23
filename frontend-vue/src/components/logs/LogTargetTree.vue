@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { LogEntry } from '../../stores/logStore'
 import BaseIcon from '../ui/BaseIcon.vue'
 import LogTargetItem from './LogTargetItem.vue'
@@ -27,10 +27,11 @@ const emit = defineEmits<{
 }>()
 
 const nodesExpanded = ref(true)
-const appsExpanded = ref(true)
+const appsExpanded = ref(props.modelValue.type !== 'node')
 const workloadsExpanded = ref(true)
 const systemdExpanded = ref(true)
 const expandedNodes = ref<Record<string, boolean>>({})
+const showIdleNodes = ref(false)
 
 const {
   targetSearch,
@@ -44,6 +45,38 @@ const {
   getNodeServiceCount,
   selectTarget,
 } = useLogTargets(props, emit)
+
+const activeHostNodes = computed(() => {
+  return filteredHostNodes.value.filter((node) => {
+    const count = getNodeCount(node.id)
+    const isSelected = (props.modelValue.type === 'node' && props.modelValue.id === node.id) || props.modelValue.node === node.id
+    return count > 0 || isSelected
+  })
+})
+
+const idleHostNodes = computed(() => {
+  return filteredHostNodes.value.filter((node) => {
+    const count = getNodeCount(node.id)
+    const isSelected = (props.modelValue.type === 'node' && props.modelValue.id === node.id) || props.modelValue.node === node.id
+    return count === 0 && !isSelected
+  })
+})
+
+const visibleHostNodes = computed(() => {
+  if (showIdleNodes.value || activeHostNodes.value.length === 0) {
+    return filteredHostNodes.value
+  }
+  return activeHostNodes.value
+})
+
+watch(
+  () => props.modelValue.type,
+  (newType) => {
+    if (newType === 'node') {
+      appsExpanded.value = false
+    }
+  }
+)
 
 function isNodeExpanded(nodeId: string): boolean {
   if (expandedNodes.value[nodeId] !== undefined) {
@@ -106,7 +139,7 @@ function toggleNodeExpand(nodeId: string) {
         </div>
         <div v-show="nodesExpanded" class="section-items">
           <div
-            v-for="node in filteredHostNodes"
+            v-for="node in visibleHostNodes"
             :key="node.id"
             class="tree-node-group"
           >
@@ -149,6 +182,17 @@ function toggleNodeExpand(nodeId: string) {
               />
             </div>
           </div>
+
+          <!-- Collapse idle nodes under a clean toggle button -->
+          <button
+            v-if="activeHostNodes.length > 0 && idleHostNodes.length > 0"
+            type="button"
+            class="idle-nodes-toggle-btn font-mono"
+            :title="showIdleNodes ? 'Hide idle nodes' : 'Show idle nodes'"
+            @click="showIdleNodes = !showIdleNodes"
+          >
+            <span>{{ showIdleNodes ? '▾ Hide' : '+' }} {{ idleHostNodes.length }} idle/offline {{ idleHostNodes.length === 1 ? 'node' : 'nodes' }}</span>
+          </button>
         </div>
       </div>
 

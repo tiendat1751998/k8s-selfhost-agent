@@ -200,19 +200,6 @@ defineExpose({
 
 <template>
   <div class="virtual-terminal-window glass-panel" role="region" aria-label="Virtual Kubernetes Terminal Log Stream">
-    <!-- Stream Status Bar -->
-    <div class="virtual-terminal-titlebar font-mono">
-      <div class="virtual-terminal-status">
-        <span class="pulse-dot" :class="!isConnected ? 'pulse-dot-rose' : (isPaused ? 'pulse-dot-amber' : 'pulse-dot-emerald')"></span>
-        <span :class="isConnected ? (isPaused ? 'text-amber' : 'text-emerald') : 'text-rose'">
-          {{ !isConnected ? 'RECONNECTING' : (isPaused ? 'PAUSED' : 'CONNECTED') }}
-        </span>
-        <span class="virtual-target-badge">{{ targetName }}</span>
-        <span v-if="isHoverPaused" class="virtual-hover-paused-badge">⏸ HOVER-LOCKED (Reading)</span>
-        <span class="virtual-buffer-meta">({{ logs.length.toLocaleString() }} in buffer)</span>
-      </div>
-    </div>
-
     <!-- Virtual Viewport Container -->
     <div
       ref="viewportRef"
@@ -252,7 +239,7 @@ defineExpose({
               @keydown.enter="handleTargetClick($event, item.log)"
               @keydown.space.prevent="handleTargetClick($event, item.log)"
             >
-              <span>[{{ getTargetBadge(item.log) }}]</span>
+              <span>[{{ getTargetBadge(item.log, targetName) }}]</span>
               <button
                 type="button"
                 class="virtual-target-mute-btn"
