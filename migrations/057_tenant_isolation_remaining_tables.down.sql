@@ -16,8 +16,12 @@ ALTER TABLE resource_tags DROP COLUMN IF EXISTS tenant_id;
 DROP INDEX IF EXISTS idx_tags_tenant_id;
 ALTER TABLE tags DROP COLUMN IF EXISTS tenant_id;
 
-DROP INDEX IF EXISTS idx_reporting_tenant_id;
-ALTER TABLE reporting DROP COLUMN IF EXISTS tenant_id;
+DO $$ BEGIN 
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'reporting') THEN 
+        DROP INDEX IF EXISTS idx_reporting_tenant_id;
+        ALTER TABLE reporting DROP COLUMN IF EXISTS tenant_id;
+    END IF; 
+END $$;
 
 DROP INDEX IF EXISTS idx_reports_tenant_id;
 ALTER TABLE reports DROP COLUMN IF EXISTS tenant_id;

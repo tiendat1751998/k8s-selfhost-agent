@@ -43,3 +43,21 @@ func TestHelmHandler_ListReleases_FallbackCluster(t *testing.T) {
 	}
 }
 
+func TestShouldFallbackGracefully(t *testing.T) {
+	dialErr := errors.New("dial tcp 10.10.10.60:6443: connectex: No connection could be made")
+	if !shouldFallbackGracefully("k8snode", dialErr) {
+		t.Errorf("expected shouldFallbackGracefully to return true for dial tcp error on k8snode")
+	}
+	if !shouldFallbackGracefully("unconfigured-cluster", dialErr) {
+		t.Errorf("expected shouldFallbackGracefully to return true for dial tcp error even on unconfigured-cluster")
+	}
+
+	unavailErr := errors.New("kubernetes cluster \"unconfigured-cluster\" is not connected or configured")
+	if shouldFallbackGracefully("unconfigured-cluster", unavailErr) {
+		t.Errorf("expected shouldFallbackGracefully to return false for unconfigured-cluster")
+	}
+	if !shouldFallbackGracefully("k8snode", unavailErr) {
+		t.Errorf("expected shouldFallbackGracefully to return true for configured cluster k8snode")
+	}
+}
+

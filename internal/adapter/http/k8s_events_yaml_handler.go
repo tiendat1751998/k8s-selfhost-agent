@@ -92,6 +92,14 @@ func (h *K8sResourceHandler) ListEvents(w http.ResponseWriter, r *http.Request) 
 
 	items, err := h.repo.ListResources(r.Context(), cluster, "events", ns)
 	if err != nil {
+		if shouldFallbackGracefully(cluster, err) {
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"data":         []map[string]interface{}{},
+				"total":        0,
+				"k8s_degraded": true,
+			})
+			return
+		}
 		if isK8sUnavailable(err) {
 			writeK8sUnavailable(w)
 			return

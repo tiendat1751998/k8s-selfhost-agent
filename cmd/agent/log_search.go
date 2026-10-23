@@ -176,15 +176,18 @@ func detectLogLevel(line string) string {
 	if strings.Contains(lower, "error") || strings.Contains(lower, "err") ||
 		strings.Contains(lower, "fatal") || strings.Contains(lower, "crit") ||
 		strings.Contains(lower, "panic") || strings.Contains(lower, "level=error") ||
-		strings.Contains(lower, `"level":"error"`) {
+		strings.Contains(lower, `"level":"error"`) || strings.Contains(lower, `"level": "error"`) {
 		return "error"
 	}
 	if strings.Contains(lower, "warn") || strings.Contains(lower, "warning") ||
-		strings.Contains(lower, "level=warn") || strings.Contains(lower, `"level":"warn"`) {
+		strings.Contains(lower, "level=warn") || strings.Contains(lower, "level=warning") ||
+		strings.Contains(lower, `"level":"warn"`) || strings.Contains(lower, `"level":"warning"`) ||
+		strings.Contains(lower, `"level": "warn"`) || strings.Contains(lower, `"level": "warning"`) {
 		return "warn"
 	}
 	if strings.Contains(lower, "debug") || strings.Contains(lower, "trace") ||
-		strings.Contains(lower, "level=debug") || strings.Contains(lower, `"level":"debug"`) {
+		strings.Contains(lower, "level=debug") || strings.Contains(lower, "level=trace") ||
+		strings.Contains(lower, `"level":"debug"`) || strings.Contains(lower, `"level": "debug"`) {
 		return "debug"
 	}
 	return "info"
