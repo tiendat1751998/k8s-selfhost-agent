@@ -320,17 +320,18 @@ function handleExport() {
   }
 }
 
-function handleInspectErrorGroup(group: ErrorRadarGroup) {
+function handleInspectErrorGroup(group: ErrorRadarGroup, radarRange?: string) {
   if (group.node && selectedTarget.value.type === 'node' && selectedTarget.value.id !== group.node) {
+    activeTargetId = group.node
     selectedTarget.value = { type: 'node', id: group.node, name: group.node, icon: 'server' }
   }
   if (group.service) {
     activeServiceSubFilter.value = group.service
   }
+  const r = (radarRange || '').toLowerCase()
+  selectedTimeRange.value = (r === 'all' || !radarRange) ? '7d' : radarRange
   selectedLevel.value = 'ERROR'
-  const rawPattern = group.fingerprint || group.sample_message || ''
-  const cleanKw = rawPattern.replace(/^\*+|\*+$/g, '').trim()
-  searchKeyword.value = cleanKw.length > 3 ? cleanKw : ''
+  searchKeyword.value = ''
   if (mode.value === 'historical') {
     runHistoricalQuery()
   } else {
@@ -448,7 +449,7 @@ function handleInspectErrorGroup(group: ErrorRadarGroup) {
 
         <LogViewerTerminal
           :logs="targetFilteredLogs"
-          :is-connected="mode === 'live' ? isConnected : false"
+          :is-connected="mode === 'live' ? isConnected : true"
           :is-paused="isPaused"
           :auto-scroll="autoScroll"
           :is-scroll-locked="isScrollLocked"
