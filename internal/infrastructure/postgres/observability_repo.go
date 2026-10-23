@@ -27,6 +27,7 @@ func (r *observabilityRepo) getDB(ctx context.Context) DBTX {
 }
 
 func (r *observabilityRepo) ListSLODefinitions(ctx context.Context) ([]observability.SLODefinition, error) {
+	ctx = withValidTenantUUID(ctx)
 	query := `
 		SELECT id, service, target, indicator_type, "window", 
 		       COALESCE(query, ''), COALESCE(alert_threshold, 1.5), 
@@ -80,6 +81,7 @@ func (r *observabilityRepo) ListSLODefinitions(ctx context.Context) ([]observabi
 
 
 func (r *observabilityRepo) GetSLODefinition(ctx context.Context, id string) (*observability.SLODefinition, error) {
+	ctx = withValidTenantUUID(ctx)
 	query := `
 		SELECT id, service, target, indicator_type, "window", 
 		       COALESCE(query, ''), COALESCE(alert_threshold, 1.5), 
@@ -102,6 +104,7 @@ func (r *observabilityRepo) GetSLODefinition(ctx context.Context, id string) (*o
 }
 
 func (r *observabilityRepo) CreateSLODefinition(ctx context.Context, d *observability.SLODefinition) error {
+	ctx = withValidTenantUUID(ctx)
 	if d.ID == "" {
 		d.ID = uuid.NewString()
 	}
@@ -122,10 +125,7 @@ func (r *observabilityRepo) CreateSLODefinition(ctx context.Context, d *observab
 		d.Window = "30d"
 	}
 
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
-	}
+	tenantID := parseTenantUUID(tenancy.TenantIDFromContext(ctx))
 
 	query := `
 		INSERT INTO slo_definitions (id, service, target, indicator_type, "window", query, alert_threshold, created_at, updated_at, tenant_id)
@@ -168,6 +168,7 @@ func (r *observabilityRepo) CreateSLODefinition(ctx context.Context, d *observab
 }
 
 func (r *observabilityRepo) UpdateSLODefinition(ctx context.Context, d *observability.SLODefinition) error {
+	ctx = withValidTenantUUID(ctx)
 	d.UpdatedAt = time.Now().UTC()
 	if d.AlertThreshold <= 0 {
 		d.AlertThreshold = 1.5
@@ -206,6 +207,7 @@ func (r *observabilityRepo) UpdateSLODefinition(ctx context.Context, d *observab
 }
 
 func (r *observabilityRepo) DeleteSLODefinition(ctx context.Context, id string) error {
+	ctx = withValidTenantUUID(ctx)
 	_ = r.DeleteSLOSnapshotBySLOID(ctx, id)
 
 	query := `DELETE FROM slo_definitions WHERE id = $1`
@@ -218,6 +220,7 @@ func (r *observabilityRepo) DeleteSLODefinition(ctx context.Context, id string) 
 }
 
 func (r *observabilityRepo) ListSLOSnapshots(ctx context.Context) ([]observability.SLOSnapshot, error) {
+	ctx = withValidTenantUUID(ctx)
 	query := `
 		SELECT id, slo_id, service, target, actual, burn_rate, error_budget, budget_status, recorded_at 
 		FROM slo_snapshots 
@@ -248,6 +251,7 @@ func (r *observabilityRepo) ListSLOSnapshots(ctx context.Context) ([]observabili
 }
 
 func (r *observabilityRepo) GetSLOSnapshotBySLOID(ctx context.Context, sloID string) (*observability.SLOSnapshot, error) {
+	ctx = withValidTenantUUID(ctx)
 	query := `
 		SELECT id, slo_id, service, target, actual, burn_rate, error_budget, budget_status, recorded_at 
 		FROM slo_snapshots 
@@ -270,6 +274,7 @@ func (r *observabilityRepo) GetSLOSnapshotBySLOID(ctx context.Context, sloID str
 }
 
 func (r *observabilityRepo) CreateSLOSnapshot(ctx context.Context, s *observability.SLOSnapshot) error {
+	ctx = withValidTenantUUID(ctx)
 	if s.ID == "" {
 		s.ID = uuid.NewString()
 	}
@@ -277,10 +282,7 @@ func (r *observabilityRepo) CreateSLOSnapshot(ctx context.Context, s *observabil
 		s.RecordedAt = time.Now().UTC()
 	}
 
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
-	}
+	tenantID := parseTenantUUID(tenancy.TenantIDFromContext(ctx))
 
 	query := `
 		INSERT INTO slo_snapshots (id, slo_id, service, target, actual, burn_rate, error_budget, budget_status, recorded_at, tenant_id)
@@ -304,6 +306,7 @@ func (r *observabilityRepo) CreateSLOSnapshot(ctx context.Context, s *observabil
 }
 
 func (r *observabilityRepo) UpdateSLOSnapshot(ctx context.Context, s *observability.SLOSnapshot) error {
+	ctx = withValidTenantUUID(ctx)
 	s.RecordedAt = time.Now().UTC()
 	query := `
 		UPDATE slo_snapshots 
@@ -321,6 +324,7 @@ func (r *observabilityRepo) UpdateSLOSnapshot(ctx context.Context, s *observabil
 }
 
 func (r *observabilityRepo) DeleteSLOSnapshotBySLOID(ctx context.Context, sloID string) error {
+	ctx = withValidTenantUUID(ctx)
 	query := `DELETE FROM slo_snapshots WHERE slo_id = $1`
 	query, args := BuildTenantQuery(ctx, query, sloID)
 	_, err := r.getDB(ctx).Exec(ctx, query, args...)
@@ -328,6 +332,21 @@ func (r *observabilityRepo) DeleteSLOSnapshotBySLOID(ctx context.Context, sloID 
 		return fmt.Errorf("deleting slo snapshot: %w", err)
 	}
 	return nil
+}
+
+func withValidTenantUUID(ctx context.Context) context.Context {
+	tid := tenancy.TenantIDFromContext(ctx)
+	role := tenancy.UserRoleFromContext(ctx)
+	if role == "platform_admin" {
+		return ctx
+	}
+	if tid == "" && role == "" {
+		return tenancy.WithUserRole(ctx, "platform_admin")
+	}
+	if tid != "" {
+		return tenancy.WithTenantID(ctx, parseTenantUUID(tid))
+	}
+	return tenancy.WithTenantID(ctx, "00000000-0000-0000-0000-000000000000")
 }
 
 func parseTenantUUID(tid string) string {

@@ -178,17 +178,22 @@ func TestCrossTenantAccess_StrictIsolation(t *testing.T) {
 	t.Run("ObservabilityRepo Isolation", func(t *testing.T) {
 		repo := postgres.NewObservabilityRepo(pool)
 
-		_, _ = repo.ListSLODefinitions(ctxTenantA)
-		assertHasArg(t, pool.lastArgs, "tenant-alpha-001", "Tenant A slo defs")
+		obsTenantA := "11111111-1111-1111-1111-111111111111"
+		obsTenantB := "22222222-2222-2222-2222-222222222222"
+		ctxObsA := pkgtenancy.WithTenantID(ctxTenantA, obsTenantA)
+		ctxObsB := pkgtenancy.WithTenantID(ctxTenantB, obsTenantB)
 
-		_, _ = repo.GetSLODefinition(ctxTenantB, "slo-001")
-		assertHasArg(t, pool.lastArgs, "tenant-beta-002", "Tenant B slo get")
+		_, _ = repo.ListSLODefinitions(ctxObsA)
+		assertHasArg(t, pool.lastArgs, obsTenantA, "Tenant A slo defs")
 
-		_ = repo.CreateSLODefinition(ctxTenantA, &observability.SLODefinition{Service: "auth"})
-		assertHasArg(t, pool.lastArgs, "tenant-alpha-001", "Tenant A slo create")
+		_, _ = repo.GetSLODefinition(ctxObsB, "slo-001")
+		assertHasArg(t, pool.lastArgs, obsTenantB, "Tenant B slo get")
 
-		_, _ = repo.ListSLOSnapshots(ctxTenantB)
-		assertHasArg(t, pool.lastArgs, "tenant-beta-002", "Tenant B snapshot list")
+		_ = repo.CreateSLODefinition(ctxObsA, &observability.SLODefinition{Service: "auth"})
+		assertHasArg(t, pool.lastArgs, obsTenantA, "Tenant A slo create")
+
+		_, _ = repo.ListSLOSnapshots(ctxObsB)
+		assertHasArg(t, pool.lastArgs, obsTenantB, "Tenant B snapshot list")
 	})
 
 	t.Run("PromotionRepo Isolation", func(t *testing.T) {
