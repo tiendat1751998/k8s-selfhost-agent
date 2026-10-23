@@ -246,11 +246,14 @@ func (p *PodTailer) processLine(rawLine string, meta PodMeta, state *podFileStat
 	if !ok {
 		// Fallback for non-CRI formatted plain lines
 		p.emitEntry(logengine.Entry{
-			Timestamp: time.Now().UTC(),
-			Service:   meta.ServiceName,
-			Level:     "info",
-			Message:   cleanLine,
-			Raw:       rawLine,
+			Timestamp:     time.Now().UTC(),
+			Service:       meta.ServiceName,
+			Level:         "info",
+			Message:       cleanLine,
+			Raw:           rawLine,
+			Namespace:     meta.Namespace,
+			PodName:       meta.PodName,
+			ContainerName: meta.ContainerName,
 		})
 		return
 	}
@@ -265,11 +268,15 @@ func (p *PodTailer) processLine(rawLine string, meta PodMeta, state *podFileStat
 		// Dynamic 1MB line buffer guard: flush if exceeding capacity
 		if state.partialBuf.Len() >= maxPartialBufferSize {
 			p.emitEntry(logengine.Entry{
-				Timestamp: state.partialTime,
-				Service:   meta.ServiceName,
-				Level:     streamToLevel(state.partialStream),
-				Message:   state.partialBuf.String(),
-				Raw:       rawLine,
+				Timestamp:     state.partialTime,
+				Service:       meta.ServiceName,
+				Level:         streamToLevel(state.partialStream),
+				Message:       state.partialBuf.String(),
+				Raw:           rawLine,
+				Namespace:     meta.Namespace,
+				PodName:       meta.PodName,
+				ContainerName: meta.ContainerName,
+				Stream:        state.partialStream,
 			})
 			state.partialBuf.Reset()
 		}
@@ -294,21 +301,29 @@ func (p *PodTailer) processLine(rawLine string, meta PodMeta, state *podFileStat
 	}
 
 	p.emitEntry(logengine.Entry{
-		Timestamp: finalTime,
-		Service:   meta.ServiceName,
-		Level:     streamToLevel(stream),
-		Message:   finalMessage,
-		Raw:       rawLine,
+		Timestamp:     finalTime,
+		Service:       meta.ServiceName,
+		Level:         streamToLevel(stream),
+		Message:       finalMessage,
+		Raw:           rawLine,
+		Namespace:     meta.Namespace,
+		PodName:       meta.PodName,
+		ContainerName: meta.ContainerName,
+		Stream:        stream,
 	})
 }
 
 func (p *PodTailer) emitEntry(entry logengine.Entry) {
 	if p.entryWriter != nil {
-		_ = p.entryWriter(entry)
+		if err := p.entryWriter(entry); err != nil && p.logger != nil {
+			p.logger.Warn("Failed to emit entry via entryWriter", "error", err)
+		}
 		return
 	}
 	if p.writer != nil {
-		_ = p.writer.Write(entry)
+		if err := p.writer.Write(entry); err != nil && p.logger != nil {
+			p.logger.Warn("Failed to write log entry to logengine", "error", err, "pod", entry.PodName)
+		}
 	}
 }
 

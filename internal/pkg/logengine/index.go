@@ -30,7 +30,7 @@ func (m *BlockMark) Encode(dst []byte) {
 	binary.LittleEndian.PutUint32(dst[12:16], m.UncompressedSize)
 	binary.LittleEndian.PutUint32(dst[16:20], m.RowCount)
 	binary.LittleEndian.PutUint16(dst[20:22], m.LevelMask)
-	binary.LittleEndian.PutUint16(dst[22:24], 0)
+	binary.LittleEndian.PutUint16(dst[22:24], m.Reserved)
 	binary.LittleEndian.PutUint64(dst[24:32], m.ServiceBloom)
 }
 
@@ -41,6 +41,7 @@ func (m *BlockMark) Decode(src []byte) {
 	m.UncompressedSize = binary.LittleEndian.Uint32(src[12:16])
 	m.RowCount = binary.LittleEndian.Uint32(src[16:20])
 	m.LevelMask = binary.LittleEndian.Uint16(src[20:22])
+	m.Reserved = binary.LittleEndian.Uint16(src[22:24])
 	m.ServiceBloom = binary.LittleEndian.Uint64(src[24:32])
 }
 

@@ -37,10 +37,13 @@ type Writer struct {
 	activeMarksFile  *os.File
 	activeBloomFile  *os.File
 	activePidxFile   *os.File
-	maxRetention      time.Duration
-	maxDiskBytes      int64
-	lastPruneTime     time.Time
-	lastSavedDictSize int
+	maxRetention          time.Duration
+	maxDiskBytes          int64
+	lastPruneTime         time.Time
+	lastSavedDictSize     int
+	metaDict              *MetaDictionary
+	lastSavedMetaDictSize int
+	builderMu             sync.RWMutex
 
 	flushReqCh chan chan error
 	closeCh    chan struct{}
@@ -74,6 +77,10 @@ func NewWriter(dir string, dict *LabelDictionary, opts ...WriterOption) (*Writer
 	for _, opt := range opts {
 		opt(w)
 	}
+
+	w.metaDict = NewMetaDictionary()
+	_ = w.metaDict.Load(filepath.Join(dir, "meta_dict.json"))
+	w.lastSavedMetaDictSize = w.metaDict.Size()
 
 	w.ringBuf = NewRingBuffer(w.ringCap)
 
@@ -217,7 +224,16 @@ func (w *Writer) flusherLoop() {
 }
 
 func (w *Writer) drainToBuilder(batch []Entry) int {
+	w.builderMu.Lock()
+	defer w.builderMu.Unlock()
+	return w.drainToBuilderLocked(batch)
+}
+
+func (w *Writer) drainToBuilderLocked(batch []Entry) int {
 	n := w.ringBuf.DrainBatch(batch)
+	if n == 0 {
+		return 0
+	}
 	var lastSvc string
 	var lastSvcID uint16
 	for i := 0; i < n; i++ {
@@ -230,56 +246,20 @@ func (w *Writer) drainToBuilder(batch []Entry) int {
 			lastSvc = e.Service
 			lastSvcID = svcID
 		}
+		var nsID, podID, contID uint16
+		if w.metaDict != nil && (e.Namespace != "" || e.PodName != "" || e.ContainerName != "") {
+			nsID, podID, contID = w.metaDict.GetOrInsert(e.Namespace, e.PodName, e.ContainerName)
+		}
+		streamID := StreamToID(e.Stream)
 		lvlID := ParseLevelID(e.Level)
 		ts := e.Timestamp.UnixNano()
-		w.builder.AppendString(ts, svcID, lvlID, e.Message)
+		w.builder.AppendWithMeta(ts, svcID, lvlID, nsID, podID, contID, streamID, e.Message)
+		if e.Namespace != "" {
+			w.builder.AddReservedBits(MetaBloomBit(e.Namespace))
+		}
 		batch[i] = Entry{}
 	}
 	return n
-}
-
-// SealActivePart closes the current active multi-block part directory so the next flush starts a new part.
-func (w *Writer) SealActivePart() {
-	w.closedMu.Lock()
-	defer w.closedMu.Unlock()
-	w.sealActivePartLocked()
-}
-
-func (w *Writer) closeActiveFiles() {
-	if w.activeDataFile != nil { _ = w.activeDataFile.Close(); w.activeDataFile = nil }
-	if w.activeMarksFile != nil { _ = w.activeMarksFile.Close(); w.activeMarksFile = nil }
-	if w.activeBloomFile != nil { _ = w.activeBloomFile.Close(); w.activeBloomFile = nil }
-	if w.activePidxFile != nil { _ = w.activePidxFile.Close(); w.activePidxFile = nil }
-}
-
-func (w *Writer) sealActivePartLocked() {
-	w.closeActiveFiles()
-	if w.activePartDir != "" {
-		w.nextPartID++
-		w.activePartDir = ""
-		w.activePartBlocks = 0
-		w.activePartBytes = 0
-	}
-}
-
-// LastError returns the last asynchronous error encountered during flush.
-func (w *Writer) LastError() error {
-	w.closedMu.RLock()
-	defer w.closedMu.RUnlock()
-	return w.lastErr
-}
-
-func (w *Writer) setLastError(err error) {
-	if err == nil { return }
-	w.closedMu.Lock()
-	w.lastErr = err
-	w.closedMu.Unlock()
-}
-
-// DroppedEntries returns total entries dropped by ingest ring buffer.
-func (w *Writer) DroppedEntries() uint64 {
-	if w.ringBuf != nil { return w.ringBuf.Dropped() }
-	return 0
 }
 
 // Write pushes an entry into the lock-free ring buffer without acquiring a disk mutex.
@@ -352,7 +332,9 @@ func (w *Writer) Flush() error {
 }
 
 func (w *Writer) flushCurrentBlock() error {
+	w.builderMu.Lock()
 	if w.builder.RowCount() == 0 {
+		w.builderMu.Unlock()
 		return nil
 	}
 
@@ -362,7 +344,13 @@ func (w *Writer) flushCurrentBlock() error {
 	compBuf := GetBlockBuffer()
 	defer PutBlockBuffer(compBuf)
 
+	reservedMask := w.builder.ReservedMask()
+	rowCount := w.builder.RowCount()
 	compressed, uncompressedSize, minTime, maxTime, bloom, levelMask, serviceBloom := w.builder.PackAndCompress(scratchBuf, compBuf)
+	var bloomBytes [BloomFilterSize]byte
+	copy(bloomBytes[:], bloom.Bytes())
+	w.builder.Reset()
+	w.builderMu.Unlock()
 
 	w.closedMu.Lock()
 	isNewPart := false
@@ -402,24 +390,30 @@ func (w *Writer) flushCurrentBlock() error {
 	// 1. Append data.bin
 	offset := w.activePartBytes
 	if _, err := w.activeDataFile.Write(compressed); err != nil {
-		w.closedMu.Unlock(); return fmt.Errorf("failed to append data.bin: %w", err)
+		w.closeActiveFiles()
+		w.closedMu.Unlock()
+		return fmt.Errorf("failed to append data.bin: %w", err)
 	}
 
 	// 2. Append marks.bin
 	mark := BlockMark{
 		CompressedOffset: uint64(offset), CompressedLength: uint32(len(compressed)),
-		UncompressedSize: uint32(uncompressedSize), RowCount: uint32(w.builder.RowCount()),
-		LevelMask: levelMask, ServiceBloom: serviceBloom,
+		UncompressedSize: uint32(uncompressedSize), RowCount: uint32(rowCount),
+		LevelMask: levelMask, Reserved: reservedMask, ServiceBloom: serviceBloom,
 	}
 	var markBytes [BlockMarkSize]byte
 	mark.Encode(markBytes[:])
 	if _, err := w.activeMarksFile.Write(markBytes[:]); err != nil {
-		w.closedMu.Unlock(); return fmt.Errorf("failed to append marks.bin: %w", err)
+		w.closeActiveFiles()
+		w.closedMu.Unlock()
+		return fmt.Errorf("failed to append marks.bin: %w", err)
 	}
 
 	// 3. Append bloom.bin
-	if _, err := w.activeBloomFile.Write(bloom.Bytes()); err != nil {
-		w.closedMu.Unlock(); return fmt.Errorf("failed to append bloom.bin: %w", err)
+	if _, err := w.activeBloomFile.Write(bloomBytes[:]); err != nil {
+		w.closeActiveFiles()
+		w.closedMu.Unlock()
+		return fmt.Errorf("failed to append bloom.bin: %w", err)
 	}
 
 	// 4. Append primary.idx
@@ -427,26 +421,32 @@ func (w *Writer) flushCurrentBlock() error {
 	binary.LittleEndian.PutUint64(idxBytes[0:8], uint64(minTime))
 	binary.LittleEndian.PutUint64(idxBytes[8:16], uint64(maxTime))
 	if _, err := w.activePidxFile.Write(idxBytes[:]); err != nil {
-		w.closedMu.Unlock(); return fmt.Errorf("failed to append primary.idx: %w", err)
+		w.closeActiveFiles()
+		w.closedMu.Unlock()
+		return fmt.Errorf("failed to append primary.idx: %w", err)
 	}
 
 	w.activePartBlocks++
 	w.activePartBytes += int64(len(compressed))
 	w.closedMu.Unlock()
 
-	// 5. Persist dictionary snapshot (only when dictionary has changed)
+	// 5. Persist dictionary snapshots
 	if w.dict != nil && w.dict.Size() != w.lastSavedDictSize {
 		dictData, err := json.Marshal(w.dict.Export())
 		if err != nil {
-			return fmt.Errorf("failed to marshal dict: %w", err)
+			return fmt.Errorf("marshal dict: %w", err)
 		}
 		if err := os.WriteFile(filepath.Join(w.dir, "dict.json"), dictData, 0644); err != nil {
-			return fmt.Errorf("failed to write dict.json: %w", err)
+			return fmt.Errorf("write dict.json: %w", err)
 		}
 		w.lastSavedDictSize = w.dict.Size()
 	}
-
-	w.builder.Reset()
+	if w.metaDict != nil && w.metaDict.Size() != w.lastSavedMetaDictSize {
+		if err := w.metaDict.Save(filepath.Join(w.dir, "meta_dict.json")); err != nil {
+			return fmt.Errorf("save meta_dict.json: %w", err)
+		}
+		w.lastSavedMetaDictSize = w.metaDict.Size()
+	}
 
 	// 6. Check retention / disk quota pruning (throttled: only on new part or once per 60s)
 	now := time.Now()

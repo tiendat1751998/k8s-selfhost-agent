@@ -4,11 +4,15 @@ import "time"
 
 // Entry represents a single log entry passed into the log engine.
 type Entry struct {
-	Timestamp time.Time
-	Service   string
-	Level     string
-	Message   string
-	Raw       string
+	Timestamp     time.Time
+	Service       string
+	Level         string
+	Message       string
+	Raw           string
+	Namespace     string
+	PodName       string
+	ContainerName string
+	Stream        string
 }
 
 // WriterOption configures the Writer.
