@@ -69,7 +69,7 @@ const activeHostNodes = computed(() => {
     const isSelected =
       (props.modelValue.type === 'node' && props.modelValue.id === node.id) ||
       props.modelValue.node === node.id
-    return count > 0 || isSelected
+    return !!node.online || count > 0 || isSelected
   })
 })
 
@@ -79,7 +79,7 @@ const idleHostNodes = computed(() => {
     const isSelected =
       (props.modelValue.type === 'node' && props.modelValue.id === node.id) ||
       props.modelValue.node === node.id
-    return count === 0 && !isSelected
+    return !node.online && count === 0 && !isSelected
   })
 })
 
@@ -226,7 +226,7 @@ function handleServiceClick(svc: AvailableServiceItem) {
         <span class="tree-icon"><BaseIcon name="layers" size="sm" /></span>
         <span>Log Targets</span>
       </div>
-      <span class="tree-badge font-mono">{{ logs.length }} logs</span>
+      <span class="tree-badge font-mono">{{ totalServiceLogsCount }} logs</span>
     </div>
 
     <!-- Quick Filter Search Input -->

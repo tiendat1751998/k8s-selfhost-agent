@@ -88,4 +88,41 @@ describe('useLogTargets', () => {
     assert.equal(workerServices.length, 1)
     assert.equal(workerServices[0].id, 'my-nginx')
   })
+
+  it('excludes noise logs and invalid tag lines from getNodeCount and getServiceCount', () => {
+    const selectedTarget: LogTarget = { type: 'node', id: 'k8smater133', name: 'k8smater133' }
+    const logs: LogEntry[] = [
+      {
+        time: '2026-10-22T00:00:01Z',
+        level: 'INFO',
+        node: 'k8smater133',
+        service: 'traefik.service',
+        msg: 'valid log line'
+      },
+      {
+        time: '2026-10-22T00:00:02Z',
+        level: 'INFO',
+        node: 'k8smater133',
+        service: 'traefik.service',
+        msg: '[db] [INFO]' // noise message -> should be ignored!
+      },
+      {
+        time: '2026-10-22T00:00:03Z',
+        level: 'INFO',
+        node: 'k8smater133',
+        service: 'init.scope', // noise service -> should be ignored!
+        msg: 'valid log message'
+      },
+    ]
+
+    const { getNodeCount, getServiceCount } = useLogTargets(
+      { modelValue: selectedTarget, logs },
+      () => {}
+    )
+
+    // Only the first valid log line should be counted!
+    assert.equal(getServiceCount('traefik.service'), 1)
+    assert.equal(getServiceCount('init.scope'), 0)
+    assert.equal(getNodeCount('k8smater133'), 1)
+  })
 })
