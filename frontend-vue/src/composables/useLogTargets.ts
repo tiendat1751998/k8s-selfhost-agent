@@ -5,6 +5,7 @@ import { api } from '../api/client'
 import { dockerApi } from '../api/docker'
 import { k8sApi } from '../api/k8s'
 import { isNoiseLog, classifyLogTarget } from '../utils/logTargetCategorizer'
+import { cleanLogMessage } from '../components/logs/virtualLogUtils'
 
 export interface LogTarget {
   type: 'service' | 'node' | 'all'
@@ -22,6 +23,7 @@ export interface TargetNodeItem {
   icon: string
   role: string
   systemd?: boolean
+  online?: boolean
 }
 
 export interface TargetServiceItem {
@@ -178,13 +180,21 @@ export function useLogTargets(
       for (const h of hosts.value) {
         const name = h.name || h.id || h.endpoint
         const isMaster = name.toLowerCase().includes('mater') || name.toLowerCase().includes('master')
-        map.set(name.toLowerCase(), { id: name, name, icon: 'server', role: isMaster ? 'Control Plane · SystemD' : 'Worker Node · SystemD', systemd: true })
+        const isOnline = h.status === 'connected' || h.status === 'online' || h.status === 'healthy'
+        map.set(name.toLowerCase(), {
+          id: name,
+          name,
+          icon: 'server',
+          role: isMaster ? 'Control Plane · SystemD' : 'Worker Node · SystemD',
+          systemd: true,
+          online: isOnline,
+        })
       }
     }
     for (const log of props.logs) {
       const node = log.node || log.attributes?.node
       if (node && !map.has(node.toLowerCase())) {
-        map.set(node.toLowerCase(), { id: node, name: node, icon: 'server', role: 'Host Node · SystemD', systemd: true })
+        map.set(node.toLowerCase(), { id: node, name: node, icon: 'server', role: 'Host Node · SystemD', systemd: true, online: false })
       }
     }
     return Array.from(map.values())
@@ -219,6 +229,11 @@ export function useLogTargets(
     const serviceCounts = new Map<string, number>()
     const nodeCounts = new Map<string, number>()
     for (const l of props.logs) {
+      if (!l.msg || !cleanLogMessage(l.msg)) continue
+
+      const svc = l.service || l.container || l.attributes?.app || l.attributes?.service || l.pod
+      if (svc && isNoiseLog(svc)) continue
+
       const sTargets = [l.service, l.container, l.attributes?.app, l.attributes?.service, l.pod, l.namespace].filter(Boolean) as string[]
       for (const key of new Set(sTargets.map(s => s.toLowerCase()))) {
         serviceCounts.set(key, (serviceCounts.get(key) || 0) + 1)
@@ -245,7 +260,7 @@ export function useLogTargets(
       const node = (log.node || log.attributes?.node || log.attributes?.node_name || '').toLowerCase()
       if (!node) continue
       const svc = log.service || log.container || log.attributes?.app || log.attributes?.service
-      if (!svc || isNoiseLog(svc)) continue
+      if (!svc || isNoiseLog(svc) || !cleanLogMessage(log.msg)) continue
       if (!map[node]) {
         map[node] = new Map<string, TargetServiceItem>()
       }
@@ -282,10 +297,12 @@ export function useLogTargets(
   const nodeServiceCounts = computed<Map<string, number>>(() => {
     const map = new Map<string, number>()
     for (const l of props.logs) {
+      if (!l.msg || !cleanLogMessage(l.msg)) continue
       const node = (l.node || l.attributes?.node || l.attributes?.node_name || '').toLowerCase()
       if (!node) continue
       const sTargets = [l.service, l.container, l.attributes?.app, l.attributes?.service, l.pod].filter(Boolean) as string[]
       for (const s of new Set(sTargets.map(st => st.toLowerCase()))) {
+        if (isNoiseLog(s)) continue
         const key = `${node}::${s}`
         map.set(key, (map.get(key) || 0) + 1)
       }

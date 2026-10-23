@@ -4,7 +4,7 @@ import type { LogEntry } from '../../stores/logStore'
 import { useLogStore } from '../../stores/logStore'
 import { calculateVirtualWindow } from '../../utils/virtualWindow'
 import { detectStackTrace, type StackTraceInfo } from '../../utils/stackTraceParser'
-import { formatTime, getTargetBadge, cleanLogMessage } from './virtualLogUtils'
+import { formatTime, getTargetBadge, cleanLogMessage, coalesceLogEntries } from './virtualLogUtils'
 import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
@@ -47,6 +47,9 @@ const unpinnedNewLogsCount = ref(0)
 const isPinnedToBottom = ref(true)
 const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 640 : false)
 const effectiveRowHeight = computed(() => isMobile.value ? 58 : props.rowHeight)
+
+// Coalesce consecutive identical logs and merge SQL/multi-line continuations
+const coalescedLogs = computed(() => coalesceLogEntries(props.logs))
 
 // Expanded stack traces map: index -> boolean
 const expandedStackTraces = ref<Record<number, boolean>>({})
@@ -96,7 +99,7 @@ function handleResize() {
 
 const windowResult = computed(() => {
   return calculateVirtualWindow({
-    totalCount: props.logs.length,
+    totalCount: coalescedLogs.value.length,
     scrollTop: scrollTop.value,
     clientHeight: clientHeight.value,
     itemHeight: effectiveRowHeight.value,
@@ -106,13 +109,13 @@ const windowResult = computed(() => {
 
 const visibleItems = computed(() => {
   const { startIndex, endIndex } = windowResult.value
-  const slice = props.logs.slice(startIndex, endIndex)
-  return slice.map((log, offset) => {
+  const slice = coalescedLogs.value.slice(startIndex, endIndex)
+  return slice.map((item, offset) => {
     const actualIndex = startIndex + offset
-    const stackInfo: StackTraceInfo = detectStackTrace(log.msg)
+    const stackInfo: StackTraceInfo = detectStackTrace(item.fullMsg || item.log.msg)
     const isExpanded = !!expandedStackTraces.value[actualIndex]
     return {
-      log,
+      ...item,
       actualIndex,
       stackInfo,
       isExpanded,
@@ -185,7 +188,7 @@ function handleMuteClick(log: LogEntry) {
 }
 
 watch(
-  () => props.logs.length,
+  () => coalescedLogs.value.length,
   (newLen, oldLen) => {
     const diff = newLen - (oldLen || 0)
     const isPausedReading = isHoverPaused.value || props.isScrollLocked || !isPinnedToBottom.value
@@ -268,14 +271,31 @@ defineExpose({
               </button>
             </span>
 
+            <!-- Repeat and Multiline Badges -->
+            <span
+              v-if="item.repeatCount > 1"
+              class="virtual-repeat-badge font-mono"
+              :title="`Repeated ${item.repeatCount} times consecutively`"
+            >
+              &times;{{ item.repeatCount }}
+            </span>
+            <span
+              v-if="item.mergedLinesCount > 0"
+              class="virtual-multiline-badge font-mono"
+              :title="`Merged ${item.mergedLinesCount} continuation lines`"
+              @click.stop="toggleRowExpand(item.actualIndex)"
+            >
+              +{{ item.mergedLinesCount }} lines
+            </span>
+
             <!-- Log Message & Stack Trace Section -->
             <div class="virtual-log-body" @click="toggleRowExpand(item.actualIndex)">
               <span class="virtual-msg-line" :class="{ 'virtual-msg-nowrap': !wrapLines }">
-                {{ cleanLogMessage(item.stackInfo.isStackTrace ? item.stackInfo.firstLine : item.log.msg) }}
+                {{ item.stackInfo.isStackTrace ? cleanLogMessage(item.stackInfo.firstLine) : item.cleanMsg }}
               </span>
 
               <!-- Expanded Raw Log Detail Preview -->
-              <pre v-if="expandedRowIndex === item.actualIndex" class="virtual-raw-expanded font-mono" @click.stop>{{ item.log.msg }}</pre>
+              <pre v-if="expandedRowIndex === item.actualIndex" class="virtual-raw-expanded font-mono" @click.stop>{{ item.fullMsg || item.log.msg }}</pre>
 
               <!-- Stack Trace Interactive Toggle -->
               <div v-if="item.stackInfo.isStackTrace">
@@ -324,7 +344,7 @@ defineExpose({
       </div>
 
       <!-- Empty State -->
-      <div v-if="logs.length === 0" class="virtual-empty-state font-mono">
+      <div v-if="coalescedLogs.length === 0" class="virtual-empty-state font-mono">
         <BaseIcon name="radio" size="lg" />
         <p class="virtual-empty-title">
           {{ isConnected ? `Waiting for logs from [${targetName || 'cluster'}]...` : 'Disconnected from log stream. Reconnecting...' }}

@@ -5,6 +5,7 @@ import type { LogFilterParams } from '../api/logging'
 import type { useLogStore, LogEntry } from '../stores/logStore'
 import { isNoiseLog, isSystemdService } from '../utils/logTargetCategorizer'
 import { matchesTarget } from '../stores/logStore'
+import { cleanLogMessage } from '../components/logs/virtualLogUtils'
 
 export interface TimeRangeConfig {
   label: string
@@ -161,8 +162,8 @@ export function useHistoricalLogSearch(
     const cat = sourceCategory.value
 
     return logStore.logs.filter((log) => {
-      // 1. Filter out empty logs, '-- No entries --'
-      if (!log.msg || log.msg === '-- No entries --' || log.msg.trim() === '-- No entries --') return false
+      // 1. Filter out empty logs, '-- No entries --', and tag-only noise ([db] [INFO])
+      if (!log.msg || log.msg === '-- No entries --' || log.msg.trim() === '-- No entries --' || !cleanLogMessage(log.msg)) return false
 
       const svc = log.service || log.container || log.attributes?.app || log.attributes?.service || log.attributes?.container_name || log.pod || ''
 

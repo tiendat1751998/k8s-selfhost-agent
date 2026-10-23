@@ -53,6 +53,13 @@ describe('useHistoricalLogSearch targetFilteredLogs isolation', () => {
         node: 'k8sworker',
         service: 'postgres_db',
         msg: 'worker postgres'
+      },
+      {
+        time: '2026-10-22T00:00:05Z',
+        level: 'INFO',
+        node: 'k8smater133',
+        service: 'postgres_db',
+        msg: '[db] [INFO]'
       }
     ])
 
