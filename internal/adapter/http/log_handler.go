@@ -73,6 +73,7 @@ func (h *LogHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/status", h.HandleStatus)
 	r.Get("/services", h.HandleGetServices)
 	r.Get("/targets", h.HandleGetServices)
+	r.Get("/errors", h.HandleErrorsRadar)
 }
 
 // HandleStatus returns metadata on the storage engine, latency, total records, and retention.
