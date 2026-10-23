@@ -43,6 +43,21 @@ func FingerprintError(msg []byte) string {
 	return buf.String()
 }
 
+// IsNoiseService returns true if the service name represents a systemd slice, scope, user session, or empty marker.
+func IsNoiseService(svc string) bool {
+	lower := strings.ToLower(strings.TrimSpace(svc))
+	if lower == "" || lower == "-- no entries --" || lower == "init.scope" {
+		return true
+	}
+	if strings.HasSuffix(lower, ".scope") || strings.HasSuffix(lower, ".slice") {
+		return true
+	}
+	if strings.HasPrefix(lower, "user@") || strings.HasPrefix(lower, "user-runtime-dir@") {
+		return true
+	}
+	return false
+}
+
 // SummarizeErrors discovers all unique error groups across the parts in the specified time window without keyword search.
 func (r *Reader) SummarizeErrors(ctx context.Context, params QueryParams) ([]ErrorGroup, error) {
 	r.mu.RLock()
@@ -163,6 +178,7 @@ func (r *Reader) SummarizeErrors(ctx context.Context, params QueryParams) ([]Err
 				msgBytes := view.MessageAt(rIdx)
 				fp := FingerprintError(msgBytes)
 				svcName, _ := r.dict.Lookup(view.ServiceIDs[rIdx])
+				if IsNoiseService(svcName) { continue }
 				key := svcName + "|" + lvlStr + "|" + fp
 				tVal := time.Unix(0, ts).UTC()
 

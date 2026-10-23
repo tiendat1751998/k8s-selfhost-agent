@@ -150,3 +150,93 @@ func TestDistributedAgentLogRepo_SummarizeErrors_FallbackSearchNodeLogs(t *testi
 		t.Errorf("unexpected fallback summary: %+v", groups[0])
 	}
 }
+
+func TestDistributedAgentLogRepo_SummarizeErrors_SkipsOfflineHosts(t *testing.T) {
+	now := time.Now().UTC()
+
+	connectedSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"groups": []map[string]any{
+				{
+					"service":        "web-service",
+					"level":          "error",
+					"fingerprint":    "err_500",
+					"sample_message": "internal error",
+					"count":          1,
+					"first_seen":     now,
+					"last_seen":      now,
+				},
+			},
+		})
+	}))
+	defer connectedSrv.Close()
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-online",
+				Name:     "node-online",
+				Endpoint: connectedSrv.URL,
+				Status:   "connected",
+			},
+			{
+				ID:       "host-dead",
+				Name:     "node-dead",
+				Endpoint: "http://192.0.2.1:9999", // blackhole IP
+				Status:   "disconnected",
+			},
+		},
+	}
+
+	repo := agent.NewDistributedAgentLogRepo(hostRepo, &mockRadarLogClient{})
+	// Cluster-wide query (targetNode is "")
+	groups, err := repo.SummarizeErrors(context.Background(), domainLogging.LogFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("SummarizeErrors failed: %v", err)
+	}
+
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group from online host only, got %d", len(groups))
+	}
+	if groups[0].Node != "node-online" {
+		t.Errorf("expected node-online, got %s", groups[0].Node)
+	}
+}
+
+func TestDistributedAgentLogRepo_SummarizeErrors_FiltersNoiseServices(t *testing.T) {
+	now := time.Now().UTC()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"groups": []map[string]any{
+				{"service": "user@1000.service", "level": "error", "fingerprint": "f1", "sample_message": "m1", "count": 10, "first_seen": now, "last_seen": now},
+				{"service": "user-runtime-dir@1000.service", "level": "error", "fingerprint": "f2", "sample_message": "m2", "count": 5, "first_seen": now, "last_seen": now},
+				{"service": "init.scope", "level": "error", "fingerprint": "f3", "sample_message": "m3", "count": 2, "first_seen": now, "last_seen": now},
+				{"service": "system.slice", "level": "error", "fingerprint": "f4", "sample_message": "m4", "count": 3, "first_seen": now, "last_seen": now},
+				{"service": "-- no entries --", "level": "error", "fingerprint": "f5", "sample_message": "m5", "count": 1, "first_seen": now, "last_seen": now},
+				{"service": "payment-api", "level": "error", "fingerprint": "f6", "sample_message": "real error", "count": 7, "first_seen": now, "last_seen": now},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{ID: "host-1", Name: "node-1", Endpoint: srv.URL, Status: "connected"},
+		},
+	}
+	repo := agent.NewDistributedAgentLogRepo(hostRepo, &mockRadarLogClient{})
+	groups, err := repo.SummarizeErrors(context.Background(), domainLogging.LogFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("SummarizeErrors failed: %v", err)
+	}
+
+	if len(groups) != 1 {
+		t.Fatalf("expected only 1 non-noise group (payment-api), got %d: %+v", len(groups), groups)
+	}
+	if groups[0].Service != "payment-api" {
+		t.Errorf("expected payment-api, got %s", groups[0].Service)
+	}
+}
+
