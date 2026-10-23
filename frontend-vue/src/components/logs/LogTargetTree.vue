@@ -276,6 +276,8 @@ function handleServiceClick(svc: AvailableServiceItem) {
             :name="node.name"
             :icon="node.icon || 'server'"
             :count="getNodeCount(node.id)"
+            :online="node.online"
+            :hide-zero-count="true"
             :active="modelValue.type === 'node' && (modelValue.id === node.id || modelValue.node === node.id) && !activeService"
             @click="handleNodeClick(node)"
           />

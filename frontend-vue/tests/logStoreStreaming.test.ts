@@ -265,4 +265,36 @@ describe('Log Store Realtime Streaming & Order Tests', () => {
     assert.equal(typeof streamer.appendLog, 'function')
     assert.equal(typeof streamer.scrollToBottom, 'function')
   })
+
+  it('promotes log level from INFO to ERROR or WARN during addLogEntry and appendLogBatch', () => {
+    setActivePinia(createPinia())
+    const store = useLogStore()
+    store.clear()
+
+    store.addLogEntry({
+      time: '2026-10-23T04:29:10Z',
+      level: 'INFO',
+      namespace: 'default',
+      pod: 'traefik-0',
+      service: 'traefik.service',
+      msg: '{"error":"command traefik error: field not found, node: entryPoint","level":"error","msg":"Command error"}',
+    })
+
+    assert.equal(store.logs.length, 1)
+    assert.equal(store.logs[0].level, 'ERROR')
+
+    store.appendLogBatch([
+      {
+        time: '2026-10-23T04:29:15Z',
+        level: 'INFO',
+        namespace: 'default',
+        pod: 'traefik-0',
+        service: 'traefik.service',
+        msg: '{"level":"warn","msg":"deprecated flag used"}',
+      },
+    ])
+
+    assert.equal(store.logs.length, 2)
+    assert.equal(store.logs[1].level, 'WARN')
+  })
 })

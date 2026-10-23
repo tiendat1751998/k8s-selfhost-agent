@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { getTargetBadge, cleanFingerprint, cleanLogMessage, coalesceLogEntries } from '../src/components/logs/virtualLogUtils.ts'
+import { getTargetBadge, cleanFingerprint, cleanLogMessage, coalesceLogEntries, inferEffectiveLevel } from '../src/components/logs/virtualLogUtils.ts'
 import type { LogEntry } from '../src/stores/logStore.ts'
 
 describe('Log Decluttering Helpers (virtualLogUtils)', () => {
@@ -302,6 +302,128 @@ describe('Log Decluttering Helpers (virtualLogUtils)', () => {
       const coalesced = coalesceLogEntries(logs)
       assert.equal(coalesced.length, 1)
       assert.equal(coalesced[0].cleanMsg, 'checkpoint starting: time')
+    })
+
+    it('coalesces Postgres error with bracketed PID CONTEXT and STATEMENT continuation lines into 1 row', () => {
+      const logs: LogEntry[] = [
+        {
+          id: 'p1',
+          time: '2026-10-23 05:58:25.186',
+          level: 'INFO', // journald/docker stdout mislabeling
+          node: 'k8smater133',
+          service: 'db',
+          msg: '2026-10-23 05:58:25.186 UTC [677906] ERROR:  invalid input syntax for type uuid: ""',
+        },
+        {
+          id: 'p2',
+          time: '2026-10-23 05:58:25.186',
+          level: 'INFO',
+          node: 'k8smater133',
+          service: 'db',
+          msg: '2026-10-23 05:58:25.186 UTC [677906] CONTEXT:  unnamed portal parameter $1 = \'\'',
+        },
+        {
+          id: 'p3',
+          time: '2026-10-23 05:58:25.186',
+          level: 'INFO',
+          node: 'k8smater133',
+          service: 'db',
+          msg: '2026-10-23 05:58:25.186 UTC [677906] STATEMENT:  SELECT id, service, slo_type',
+        },
+        {
+          id: 'p4',
+          time: '2026-10-23 05:58:25.186',
+          level: 'INFO',
+          node: 'k8smater133',
+          service: 'db',
+          msg: 'FROM slo_definitions',
+        },
+        {
+          id: 'p5',
+          time: '2026-10-23 05:58:25.186',
+          level: 'INFO',
+          node: 'k8smater133',
+          service: 'db',
+          msg: 'WHERE tenant_id = $1 ORDER BY created_at DESC',
+        },
+      ]
+
+      const coalesced = coalesceLogEntries(logs)
+      assert.equal(coalesced.length, 1, 'Should coalesce all 5 lines into 1 single row')
+      assert.equal(coalesced[0].mergedLinesCount, 4, 'Should merge 4 continuation lines')
+      assert.equal(coalesced[0].log.level, 'ERROR', 'Parent log level should be promoted to ERROR')
+      assert.ok(coalesced[0].fullMsg.includes('CONTEXT:  unnamed portal parameter $1 = \'\''))
+      assert.ok(coalesced[0].fullMsg.includes('STATEMENT:  SELECT id, service, slo_type'))
+      assert.ok(coalesced[0].fullMsg.includes('WHERE tenant_id = $1 ORDER BY created_at DESC'))
+    })
+  })
+
+  describe('inferEffectiveLevel', () => {
+    it('infers ERROR from JSON payload when rawLevel is INFO', () => {
+      const raw = '{"level":"error","error":"command traefik error","msg":"Command error"}'
+      assert.equal(inferEffectiveLevel('INFO', raw), 'ERROR')
+    })
+
+    it('infers WARN from JSON payload when rawLevel is INFO', () => {
+      const raw = '{"level":"warn","msg":"configuration warning"}'
+      assert.equal(inferEffectiveLevel('INFO', raw), 'WARN')
+    })
+
+    it('infers ERROR from severity field in JSON payload', () => {
+      const raw = '{"severity":"error","message":"database failed"}'
+      assert.equal(inferEffectiveLevel('INFO', raw), 'ERROR')
+    })
+
+    it('infers ERROR from logfmt level=error', () => {
+      const raw = 'time="2026-10-23T04:00:00Z" level=error msg="failed to bind port"'
+      assert.equal(inferEffectiveLevel('INFO', raw), 'ERROR')
+    })
+
+    it('infers ERROR from message matching ERROR: pattern', () => {
+      const raw = '2026-10-23 05:58:25.186 UTC [677906] ERROR:  invalid input syntax for type uuid: ""'
+      assert.equal(inferEffectiveLevel('INFO', raw), 'ERROR')
+    })
+
+    it('infers ERROR from FATAL or PANIC prefix', () => {
+      assert.equal(inferEffectiveLevel('INFO', 'FATAL: terminating connection'), 'ERROR')
+      assert.equal(inferEffectiveLevel('INFO', 'PANIC: runtime out of memory'), 'ERROR')
+    })
+
+    it('infers WARN from WARNING: prefix', () => {
+      const raw = '2026-10-23 05:58:25.186 UTC [677906] WARNING: disk space low'
+      assert.equal(inferEffectiveLevel('INFO', raw), 'WARN')
+    })
+
+    it('preserves non-INFO level unchanged', () => {
+      assert.equal(inferEffectiveLevel('WARN', 'some normal text'), 'WARN')
+      assert.equal(inferEffectiveLevel('DEBUG', 'some normal text'), 'DEBUG')
+      assert.equal(inferEffectiveLevel('ERROR', 'some normal text'), 'ERROR')
+    })
+
+    it('returns INFO for normal info logs', () => {
+      assert.equal(inferEffectiveLevel('INFO', 'Server listening on :8080'), 'INFO')
+      assert.equal(inferEffectiveLevel('info', 'Started successfully'), 'INFO')
+    })
+  })
+
+  describe('LogTargetItem Badge Visibility Logic', () => {
+    function shouldShowCountBadge(hideZeroCount?: boolean, count?: number): boolean {
+      return !(hideZeroCount && !count)
+    }
+
+    it('hides count badge when hideZeroCount is true and count is 0 or undefined', () => {
+      assert.equal(shouldShowCountBadge(true, 0), false)
+      assert.equal(shouldShowCountBadge(true, undefined), false)
+    })
+
+    it('shows count badge when count is greater than 0 even if hideZeroCount is true', () => {
+      assert.equal(shouldShowCountBadge(true, 42), true)
+      assert.equal(shouldShowCountBadge(true, 1), true)
+    })
+
+    it('shows count badge when hideZeroCount is false or undefined even if count is 0', () => {
+      assert.equal(shouldShowCountBadge(false, 0), true)
+      assert.equal(shouldShowCountBadge(undefined, 0), true)
     })
   })
 })

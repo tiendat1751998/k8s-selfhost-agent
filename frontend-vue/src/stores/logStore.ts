@@ -9,6 +9,7 @@ import {
   type LogSearchResult,
 } from '../api/logging'
 import { parseWebSocketFrame, mapRawToLogEntry } from '../utils/logBatchParser'
+import { inferEffectiveLevel } from '../components/logs/virtualLogUtils'
 
 export interface LogEntry {
   time: string
@@ -237,17 +238,19 @@ export const useLogStore = defineStore('log', () => {
   }
 
   function addLogEntry(entry: LogEntry) {
+    const effectiveLevel = inferEffectiveLevel(entry.level, entry.msg)
+    const normalized = entry.level !== effectiveLevel ? { ...entry, level: effectiveLevel } : entry
     if (logs.value.length > 0) {
       const last = logs.value[logs.value.length - 1]
       if (
-        last.time === entry.time &&
-        last.msg === entry.msg &&
-        (last.service || last.pod || '') === (entry.service || entry.pod || '')
+        last.time === normalized.time &&
+        last.msg === normalized.msg &&
+        (last.service || last.pod || '') === (normalized.service || normalized.pod || '')
       ) {
         return
       }
     }
-    logs.value.push(entry)
+    logs.value.push(normalized)
     if (logs.value.length > maxBufferSize.value) {
       logs.value = logs.value.slice(-maxBufferSize.value)
     }
@@ -260,16 +263,18 @@ export const useLogStore = defineStore('log', () => {
 
     for (let i = 0; i < entries.length; i++) {
       const cur = entries[i]
+      const effectiveLevel = inferEffectiveLevel(cur.level, cur.msg)
+      const normalized = cur.level !== effectiveLevel ? { ...cur, level: effectiveLevel } : cur
       if (
         last &&
-        last.time === cur.time &&
-        last.msg === cur.msg &&
-        (last.service || last.pod || '') === (cur.service || cur.pod || '')
+        last.time === normalized.time &&
+        last.msg === normalized.msg &&
+        (last.service || last.pod || '') === (normalized.service || normalized.pod || '')
       ) {
         continue
       }
-      valid.push(cur)
-      last = cur
+      valid.push(normalized)
+      last = normalized
     }
 
     if (valid.length === 0) return

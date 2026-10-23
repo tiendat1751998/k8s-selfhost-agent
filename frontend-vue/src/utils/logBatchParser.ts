@@ -1,4 +1,5 @@
-﻿import type { LogEntry } from '../stores/logStore'
+import type { LogEntry } from '../stores/logStore'
+import { inferEffectiveLevel } from '../components/logs/virtualLogUtils'
 
 export type WebSocketParsedResult =
   | { type: 'logs'; entries: LogEntry[] }
@@ -12,8 +13,10 @@ export function mapRawToLogEntry(raw: any, defaultNamespace = 'default', default
     return null
   }
 
+  const msgStr = typeof msg === 'string' ? msg : String(msg)
   const time = raw.timestamp || raw.time || new Date().toISOString()
-  const level = (raw.log_level || raw.level || raw.severity || 'INFO').toUpperCase()
+  const rawLevel = (raw.log_level || raw.level || raw.severity || 'INFO').toUpperCase()
+  const level = inferEffectiveLevel(rawLevel, msgStr)
   const namespace = raw.namespace || raw.ns || defaultNamespace
   const container = raw.container_name || raw.container
   const pod = raw.pod_name || raw.pod || container || raw.service || 'system'
@@ -93,7 +96,7 @@ export function parseWebSocketFrame(data: string | unknown, defaultNamespace = '
     // Non-JSON plain text string
     const entry: LogEntry = {
       time: new Date().toISOString(),
-      level: 'INFO',
+      level: inferEffectiveLevel('INFO', trimmed),
       namespace: defaultNamespace,
       pod: 'system',
       service: defaultService,

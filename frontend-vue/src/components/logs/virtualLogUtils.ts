@@ -63,7 +63,55 @@ const JSON_IGNORED_KEYS = new Set([
   'msg', 'message', 'error', 'err', 'log', 'caller', 'logger',
 ])
 
-const SQL_CONTINUATION_REGEX = /^(?:CONTEXT:|DETAIL:|HINT:|STATEMENT:|QUERY:|SELECT\b|FROM\b|WHERE\b|JOIN\b|LEFT\b|INNER\b|GROUP BY\b|ORDER BY\b|LIMIT\b|VALUES\b|SET\b|COALESCE\(|created_at\b|updated_at\b|AND\b|OR\b|\)|;)/i
+const SQL_CONTINUATION_REGEX = /^(?:\[[^\]]+\]\s*)*(?:CONTEXT:|DETAIL:|HINT:|STATEMENT:|QUERY:|SELECT\b|FROM\b|WHERE\b|JOIN\b|LEFT\b|INNER\b|GROUP BY\b|ORDER BY\b|LIMIT\b|VALUES\b|SET\b|COALESCE\(|created_at\b|updated_at\b|AND\b|OR\b|\)|;)/i
+
+/**
+ * Infers effective log level ('ERROR' | 'WARN') from JSON attributes or message content
+ * when the raw transport level is 'INFO' (e.g. journald stdout capture or docker stdout/stderr misclassification).
+ */
+export function inferEffectiveLevel(rawLevel: string, rawMsg?: string): string {
+  const lvl = (rawLevel || 'INFO').toUpperCase()
+  if (lvl !== 'INFO') return lvl
+
+  if (rawMsg) {
+    const lower = rawMsg.toLowerCase()
+    if (
+      lower.includes('"level":"error"') ||
+      lower.includes('"level": "error"') ||
+      lower.includes('"level":"fatal"') ||
+      lower.includes('"level": "fatal"') ||
+      lower.includes('"level":"panic"') ||
+      lower.includes('"level": "panic"') ||
+      lower.includes('"severity":"error"') ||
+      lower.includes('"severity": "error"') ||
+      lower.includes('level=error') ||
+      lower.includes('level="error"') ||
+      lower.includes('level=fatal') ||
+      lower.includes('level="fatal"') ||
+      /\b(?:ERROR|FATAL|PANIC):/i.test(rawMsg)
+    ) {
+      return 'ERROR'
+    }
+
+    if (
+      lower.includes('"level":"warn"') ||
+      lower.includes('"level": "warn"') ||
+      lower.includes('"level":"warning"') ||
+      lower.includes('"level": "warning"') ||
+      lower.includes('"severity":"warning"') ||
+      lower.includes('"severity": "warning"') ||
+      lower.includes('level=warn') ||
+      lower.includes('level="warn"') ||
+      lower.includes('level=warning') ||
+      lower.includes('level="warning"') ||
+      /\bWARNING:/i.test(rawMsg)
+    ) {
+      return 'WARN'
+    }
+  }
+
+  return lvl
+}
 
 /**
  * Cleans single-line log message preview by extracting primary text from raw JSON
@@ -154,9 +202,12 @@ export function coalesceLogEntries(logs: LogEntry[]): CoalescedLogEntry[] {
   const result: CoalescedLogEntry[] = []
   if (!logs || logs.length === 0) return result
 
-  for (const log of logs) {
-    const cleanMsg = cleanLogMessage(log.msg)
+  for (const rawLog of logs) {
+    const cleanMsg = cleanLogMessage(rawLog.msg)
     if (!cleanMsg) continue
+
+    const effectiveLevel = inferEffectiveLevel(rawLog.level, rawLog.msg)
+    const log = rawLog.level !== effectiveLevel ? { ...rawLog, level: effectiveLevel } : rawLog
 
     const node = (log.node || '').toLowerCase()
     const service = (log.service || log.container || log.pod || '').toLowerCase()

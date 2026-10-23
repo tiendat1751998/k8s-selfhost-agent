@@ -9,6 +9,8 @@ defineProps<{
   active?: boolean
   muted?: boolean
   showMute?: boolean
+  online?: boolean
+  hideZeroCount?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -33,7 +35,8 @@ const emit = defineEmits<{
       <BaseIcon :name="icon || 'box'" size="sm" />
     </span>
     <span class="item-name font-mono" :title="name">{{ name }}</span>
-    <span class="item-count font-mono" :class="{ 'has-logs': (count || 0) > 0 }">{{ count || 0 }}</span>
+    <span v-if="online" class="node-online-dot" title="Online / Connected" />
+    <span v-if="!(hideZeroCount && !count)" class="item-count font-mono" :class="{ 'has-logs': (count || 0) > 0 }">{{ count || 0 }}</span>
     <button
       v-if="showMute"
       type="button"
