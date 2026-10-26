@@ -5,12 +5,10 @@ import {
 } from '../api/compute'
 
 export type TimeWindowFilter = '1h' | '6h' | '24h' | '7d' | '30d'
-
-export interface ServiceOption {
-  id: string
-  name: string
-  desc: string
-}
+export interface ServiceOption { id: string; name: string; desc: string }
+export interface LatencyPercentiles { p50: number; p90: number; p99: number; p999: number }
+export interface InspectSLOState { def?: SLODefinition; snap?: SLOSnapshot }
+export interface BannerMessage { type: 'success' | 'warning' | 'error'; text: string }
 
 export interface SLOFormState {
   id?: string
@@ -24,21 +22,32 @@ export interface SLOFormState {
   target_latency_p99_ms?: number
 }
 
-export interface LatencyPercentiles {
-  p50: number
-  p90: number
-  p99: number
-  p999: number
-}
-
-export interface InspectSLOState {
-  def?: SLODefinition
+export interface EnrichedSLOItem {
+  id: string
+  service: string
+  target: number
+  actual: number
+  error_budget: number
+  burn_rate: number
+  alert_threshold: number
+  budget_status: 'healthy' | 'warning' | 'critical' | string
+  indicator_type: string
+  window: string
+  query: string
+  isFastBurn: boolean
+  isExhausted: boolean
+  def: SLODefinition
   snap?: SLOSnapshot
 }
 
-export interface BannerMessage {
-  type: 'success' | 'warning' | 'error'
-  text: string
+export interface FleetReliabilityPulse {
+  monitoredCount: number
+  healthyCount: number
+  warningCount: number
+  criticalCount: number
+  fastBurnCount: number
+  exhaustedCount: number
+  avgBudgetRemainingPct: number
 }
 
 // Error budget calculations & burn rate velocity
@@ -63,15 +72,8 @@ export function calculateBurnRateVelocity(burnRate: number, windowStr = '30d'): 
 }
 
 export function getTargetLatencyPercentiles(targetLatencyP99?: number): LatencyPercentiles {
-  if (!targetLatencyP99 || targetLatencyP99 <= 0) {
-    return { p50: 0, p90: 0, p99: 0, p999: 0 }
-  }
-  return {
-    p50: 0,
-    p90: 0,
-    p99: Math.round(targetLatencyP99),
-    p999: 0
-  }
+  if (!targetLatencyP99 || targetLatencyP99 <= 0) return { p50: 0, p90: 0, p99: 0, p999: 0 }
+  return { p50: 0, p90: 0, p99: Math.round(targetLatencyP99), p999: 0 }
 }
 
 export function formatLatencyMetric(val?: number): string {
@@ -85,8 +87,7 @@ export function formatPercent(val?: number): string {
 }
 
 export function getEffectiveBurnRate(rawRate?: number): number {
-  if (rawRate === undefined || rawRate === null) return 0
-  return rawRate
+  return (rawRate === undefined || rawRate === null || isNaN(rawRate)) ? 0 : rawRate
 }
 
 export function getBurnRateColor(rate: number): string {
@@ -100,8 +101,69 @@ export function getBudgetBarWidth(budget?: number): number {
   return Math.min(Math.max(budget, 0), 100)
 }
 
+export function enrichSLOItem(def: SLODefinition, snap?: SLOSnapshot): EnrichedSLOItem {
+  const target = def.target > 1 ? def.target : Number((def.target * 100).toFixed(2))
+  const alertThreshold = def.alert_threshold && def.alert_threshold > 0 ? def.alert_threshold : 1.5
+  let actual = target, burnRate = 1.0, budgetStatus = 'healthy', errorBudget = 100
+
+  if (snap) {
+    if (typeof snap.actual === 'number' && !isNaN(snap.actual)) {
+      actual = snap.actual > 1 ? snap.actual : Number((snap.actual * 100).toFixed(2))
+    }
+    if (typeof snap.burn_rate === 'number' && !isNaN(snap.burn_rate)) burnRate = snap.burn_rate
+    if (snap.budget_status) budgetStatus = snap.budget_status
+    if (typeof snap.error_budget === 'number' && !isNaN(snap.error_budget)) {
+      errorBudget = Math.max(0, Math.min(100, snap.error_budget))
+    } else {
+      errorBudget = calculateErrorBudget(target, actual)
+    }
+  }
+
+  const isFastBurn = burnRate >= alertThreshold
+  const isExhausted = errorBudget <= 0
+  if ((isFastBurn || isExhausted) && budgetStatus === 'healthy') {
+    budgetStatus = isExhausted ? 'critical' : 'warning'
+  }
+
+  return {
+    id: def.id, service: def.service, target, actual,
+    error_budget: errorBudget, burn_rate: burnRate, alert_threshold: alertThreshold,
+    budget_status: budgetStatus, indicator_type: def.indicator_type || 'availability',
+    window: def.window || '30d', query: def.query || '',
+    isFastBurn, isExhausted, def, snap,
+  }
+}
+
+export function sortSLOsByUrgency(items: EnrichedSLOItem[]): EnrichedSLOItem[] {
+  return [...items].sort((a, b) => {
+    const rankA = (a.isExhausted || a.isFastBurn || a.budget_status === 'critical') ? 0 : a.budget_status === 'warning' ? 1 : 2
+    const rankB = (b.isExhausted || b.isFastBurn || b.budget_status === 'critical') ? 0 : b.budget_status === 'warning' ? 1 : 2
+    if (rankA !== rankB) return rankA - rankB
+    if (b.burn_rate !== a.burn_rate) return b.burn_rate - a.burn_rate
+    if (a.error_budget !== b.error_budget) return a.error_budget - b.error_budget
+    return a.service.localeCompare(b.service)
+  })
+}
+
+export function enrichAndSortSLOs(definitions: SLODefinition[], snapshots: SLOSnapshot[]): EnrichedSLOItem[] {
+  return sortSLOsByUrgency(definitions.map(def => enrichSLOItem(def, snapshots.find(s => s.slo_id === def.id || s.service === def.service))))
+}
+
+export function deriveFleetPulse(items: EnrichedSLOItem[]): FleetReliabilityPulse {
+  const monitoredCount = items.length
+  if (monitoredCount === 0) {
+    return { monitoredCount: 0, healthyCount: 0, warningCount: 0, criticalCount: 0, fastBurnCount: 0, exhaustedCount: 0, avgBudgetRemainingPct: 100 }
+  }
+  const healthyCount = items.filter(s => s.budget_status === 'healthy' && !s.isFastBurn && !s.isExhausted).length
+  const warningCount = items.filter(s => s.budget_status === 'warning' && !s.isExhausted).length
+  const criticalCount = items.filter(s => s.budget_status === 'critical' || s.isExhausted).length
+  const fastBurnCount = items.filter(s => s.isFastBurn).length
+  const exhaustedCount = items.filter(s => s.isExhausted).length
+  const totalBudget = items.reduce((acc, s) => acc + s.error_budget, 0)
+  return { monitoredCount, healthyCount, warningCount, criticalCount, fastBurnCount, exhaustedCount, avgBudgetRemainingPct: Number((totalBudget / monitoredCount).toFixed(1)) }
+}
+
 export function useSLOMonitor() {
-  // State
   const loading = ref(false)
   const actionInProgress = ref(false)
   const error = ref<string | null>(null)
@@ -110,20 +172,18 @@ export function useSLOMonitor() {
   const definitions = ref<SLODefinition[]>([])
   const snapshots = ref<SLOSnapshot[]>([])
   const selectedWindowFilter = ref<TimeWindowFilter>('30d')
+  const viewMode = ref<'board' | 'table'>('board')
 
-  // Modals & Drawers
   const showCreateModal = ref(false)
   const showInspectModal = ref(false)
   const isEditing = ref(false)
   const selectedInspectSLO = ref<InspectSLOState | null>(null)
 
-  // Real cluster services catalog fetched dynamically from Docker API
   const realServices = ref<ServiceOption[]>([
     { id: 'custom', name: 'Custom Workload...', desc: 'Enter custom service name' }
   ])
   const loadingServices = ref(false)
 
-  // SLO Form State
   const newSLO = reactive<SLOFormState>({
     selectedService: 'custom',
     customServiceName: '',
@@ -148,7 +208,6 @@ export function useSLOMonitor() {
     return `sum(rate(http_requests_total{service="${service}",status=~"2..|3.."}[5m])) / sum(rate(http_requests_total{service="${service}"}[5m])) * 100`
   }
 
-  // Watch form changes to automatically suggest PromQL
   watch([() => newSLO.selectedService, () => newSLO.indicator_type], ([newSvc, newInd]) => {
     if (!isEditing.value) {
       const svc = newSvc === 'custom' ? (newSLO.customServiceName || 'my_service') : newSvc
@@ -164,44 +223,28 @@ export function useSLOMonitor() {
         dockerApi.listContainers(),
       ])
       const found = new Map<string, ServiceOption>()
-
       if (servicesRes.status === 'fulfilled' && Array.isArray(servicesRes.value)) {
         for (const s of servicesRes.value) {
-          if (s.name) {
-            found.set(s.name, {
-              id: s.name,
-              name: s.name,
-              desc: s.image ? `Docker Service (${s.image})` : 'Docker Swarm Service'
-            })
-          }
+          if (s.name) found.set(s.name, { id: s.name, name: s.name, desc: s.image ? `Docker Service (${s.image})` : 'Docker Swarm Service' })
         }
       }
-
       if (containersRes.status === 'fulfilled' && Array.isArray(containersRes.value)) {
         for (const c of containersRes.value) {
           const name = c.name.replace(/^\//, '')
           if (name && !found.has(name)) {
-            found.set(name, {
-              id: name,
-              name: name,
-              desc: c.image ? `Container (${c.image})` : `Container (${c.status || 'running'})`
-            })
+            found.set(name, { id: name, name, desc: c.image ? `Container (${c.image})` : `Container (${c.status || 'running'})` })
           }
         }
       }
-
       const list = Array.from(found.values())
       list.push({ id: 'custom', name: 'Custom Workload...', desc: 'Enter custom service name' })
       realServices.value = list
-
       if (list.length > 0 && (!newSLO.selectedService || !list.some(s => s.id === newSLO.selectedService))) {
         newSLO.selectedService = list[0].id
       }
     } catch (err) {
       console.error('Failed to fetch Docker services:', err)
-      realServices.value = [
-        { id: 'custom', name: 'Custom Workload...', desc: 'Enter custom service name' }
-      ]
+      realServices.value = [{ id: 'custom', name: 'Custom Workload...', desc: 'Enter custom service name' }]
     } finally {
       loadingServices.value = false
     }
@@ -215,16 +258,10 @@ export function useSLOMonitor() {
         sloApi.listDefinitions(),
         sloApi.listSnapshots(selectedWindowFilter.value)
       ])
-
-      if (defsRes.status === 'fulfilled') {
-        definitions.value = defsRes.value
-      }
-      if (snapRes.status === 'fulfilled') {
-        snapshots.value = snapRes.value
-      }
+      if (defsRes.status === 'fulfilled') definitions.value = defsRes.value
+      if (snapRes.status === 'fulfilled') snapshots.value = snapRes.value
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to retrieve SLO telemetry'
-      error.value = msg
+      error.value = err instanceof Error ? err.message : 'Failed to retrieve SLO telemetry'
     } finally {
       loading.value = false
     }
@@ -257,13 +294,8 @@ export function useSLOMonitor() {
       isEditing.value = true
       newSLO.id = defToEdit.id
       const matchingService = realServices.value.find(s => s.id === defToEdit.service)
-      if (matchingService && matchingService.id !== 'custom') {
-        newSLO.selectedService = matchingService.id
-        newSLO.customServiceName = ''
-      } else {
-        newSLO.selectedService = 'custom'
-        newSLO.customServiceName = defToEdit.service
-      }
+      newSLO.selectedService = (matchingService && matchingService.id !== 'custom') ? matchingService.id : 'custom'
+      newSLO.customServiceName = (matchingService && matchingService.id !== 'custom') ? '' : defToEdit.service
       newSLO.indicator_type = defToEdit.indicator_type
       newSLO.target = defToEdit.target > 1 ? defToEdit.target : Number((defToEdit.target * 100).toFixed(2))
       newSLO.window = defToEdit.window || '30d'
@@ -289,12 +321,8 @@ export function useSLOMonitor() {
   }
 
   function openInspect(def?: SLODefinition, snap?: SLOSnapshot) {
-    if (!def && snap) {
-      def = getDefForSnapshot(snap)
-    }
-    if (!snap && def) {
-      snap = getSnapshotForDef(def.id, def.service)
-    }
+    if (!def && snap) def = getDefForSnapshot(snap)
+    if (!snap && def) snap = getSnapshotForDef(def.id, def.service)
     selectedInspectSLO.value = { def, snap }
     showInspectModal.value = true
   }
@@ -310,44 +338,28 @@ export function useSLOMonitor() {
       bannerMessage.value = { type: 'error', text: 'Please specify a service name for the SLO objective.' }
       return
     }
-
     actionInProgress.value = true
     bannerMessage.value = null
     try {
+      const payload = {
+        service: serviceName,
+        target: Number(newSLO.target),
+        indicator_type: newSLO.indicator_type,
+        window: newSLO.window,
+        query: newSLO.query,
+        alert_threshold: Number(newSLO.alert_threshold) || 1.5,
+      }
       if (isEditing.value && newSLO.id) {
-        const updatePayload: UpdateSLOPayload = {
-          service: serviceName,
-          target: Number(newSLO.target),
-          indicator_type: newSLO.indicator_type,
-          window: newSLO.window,
-          query: newSLO.query,
-          alert_threshold: Number(newSLO.alert_threshold) || 1.5,
-        }
-        await sloApi.updateDefinition(newSLO.id, updatePayload)
-        bannerMessage.value = {
-          type: 'success',
-          text: `SLO target objective updated for service "${serviceName}".`
-        }
+        await sloApi.updateDefinition(newSLO.id, payload as UpdateSLOPayload)
+        bannerMessage.value = { type: 'success', text: `SLO target objective updated for service "${serviceName}".` }
       } else {
-        const createPayload: CreateSLOPayload = {
-          service: serviceName,
-          target: Number(newSLO.target),
-          indicator_type: newSLO.indicator_type,
-          window: newSLO.window,
-          query: newSLO.query,
-          alert_threshold: Number(newSLO.alert_threshold) || 1.5,
-        }
-        await sloApi.createDefinition(createPayload)
-        bannerMessage.value = {
-          type: 'success',
-          text: `SLO target objective successfully created for service "${serviceName}". Telemetry initialized.`
-        }
+        await sloApi.createDefinition(payload as CreateSLOPayload)
+        bannerMessage.value = { type: 'success', text: `SLO target objective successfully created for service "${serviceName}". Telemetry initialized.` }
       }
       showCreateModal.value = false
       await fetchSLOData()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to save SLO definition'
-      bannerMessage.value = { type: 'error', text: msg }
+      bannerMessage.value = { type: 'error', text: err instanceof Error ? err.message : 'Failed to save SLO definition' }
     } finally {
       actionInProgress.value = false
     }
@@ -359,14 +371,10 @@ export function useSLOMonitor() {
     try {
       await sloApi.createDefinition(payload)
       showCreateModal.value = false
-      bannerMessage.value = {
-        type: 'success',
-        text: `SLO target objective successfully armed for service "${payload.service}". Telemetry initialized.`
-      }
+      bannerMessage.value = { type: 'success', text: `SLO target objective successfully armed for service "${payload.service}". Telemetry initialized.` }
       await fetchSLOData()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create SLO definition'
-      bannerMessage.value = { type: 'error', text: msg }
+      bannerMessage.value = { type: 'error', text: err instanceof Error ? err.message : 'Failed to create SLO definition' }
     } finally {
       actionInProgress.value = false
     }
@@ -376,52 +384,43 @@ export function useSLOMonitor() {
     actionInProgress.value = true
     try {
       const res = await sloApi.triggerBurnAlert(defId)
-      bannerMessage.value = {
-        type: 'warning',
-        text: res.message || `Fast burn rate alert triggered for ${serviceName}: elevated error rate detected.`,
-      }
+      bannerMessage.value = { type: 'warning', text: res.message || `Fast burn rate alert triggered for ${serviceName}: elevated error rate detected.` }
       await fetchSLOData()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to trigger burn alert'
-      bannerMessage.value = { type: 'error', text: msg }
+      bannerMessage.value = { type: 'error', text: err instanceof Error ? err.message : 'Failed to trigger burn alert' }
     } finally {
       actionInProgress.value = false
     }
   }
 
   async function handleDeleteSLO(defId: string, serviceName: string) {
-    if (!confirm(`Are you sure you want to delete the SLO objective for "${serviceName}"?`)) {
-      return
-    }
-
+    if (!confirm(`Are you sure you want to delete the SLO objective for "${serviceName}"?`)) return
     actionInProgress.value = true
     try {
       await sloApi.deleteDefinition(defId)
-      bannerMessage.value = {
-        type: 'success',
-        text: `SLO definition for "${serviceName}" deleted.`,
-      }
-      if (showInspectModal.value) {
-        showInspectModal.value = false
-      }
+      bannerMessage.value = { type: 'success', text: `SLO definition for "${serviceName}" deleted.` }
+      if (showInspectModal.value) showInspectModal.value = false
       await fetchSLOData()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to delete SLO definition'
-      bannerMessage.value = { type: 'error', text: msg }
+      bannerMessage.value = { type: 'error', text: err instanceof Error ? err.message : 'Failed to delete SLO definition' }
     } finally {
       actionInProgress.value = false
     }
   }
 
-  // Computed Metrics
-  const totalSLOs = computed(() => definitions.value.length)
-  const healthySLOs = computed(() => snapshots.value.filter(s => s.budget_status === 'healthy').length)
-  const warningSLOs = computed(() => snapshots.value.filter(s => s.budget_status === 'warning').length)
-  const criticalSLOs = computed(() => snapshots.value.filter(s => s.budget_status === 'critical').length)
+  // Computed Enriched SLOs and Fleet Metrics
+  const enrichedSortedSLOs = computed(() => enrichAndSortSLOs(definitions.value, snapshots.value))
+  const fleetPulse = computed(() => deriveFleetPulse(enrichedSortedSLOs.value))
 
-  const activeBurnAlerts = computed(() => {
-    return snapshots.value.filter(s => s.budget_status === 'critical' || (s.burn_rate && s.burn_rate >= 14.4)).length
-  })
+  const totalSLOs = computed(() => definitions.value.length)
+  const healthySLOs = computed(() => fleetPulse.value.healthyCount)
+  const warningSLOs = computed(() => fleetPulse.value.warningCount)
+  const criticalSLOs = computed(() => fleetPulse.value.criticalCount)
+  const healthySloCount = computed(() => fleetPulse.value.healthyCount)
+  const fastBurnCount = computed(() => fleetPulse.value.fastBurnCount)
+  const exhaustedBudgetCount = computed(() => fleetPulse.value.exhaustedCount)
+  const avgErrorBudgetPct = computed(() => fleetPulse.value.avgBudgetRemainingPct)
+  const activeBurnAlerts = computed(() => fleetPulse.value.fastBurnCount)
 
   const avgBurnRateNum = computed(() => {
     if (snapshots.value.length === 0) return 1.0
@@ -429,10 +428,7 @@ export function useSLOMonitor() {
     return Number((total / snapshots.value.length).toFixed(2))
   })
 
-  const avgBurnRate = computed(() => {
-    if (snapshots.value.length === 0) return '—'
-    return `${avgBurnRateNum.value.toFixed(2)}x`
-  })
+  const avgBurnRate = computed(() => (snapshots.value.length === 0 ? '—' : `${avgBurnRateNum.value.toFixed(2)}x`))
 
   onMounted(() => {
     fetchSLOData()
@@ -440,48 +436,18 @@ export function useSLOMonitor() {
   })
 
   return {
-    loading,
-    actionInProgress,
-    error,
-    bannerMessage,
-    definitions,
-    snapshots,
-    selectedWindowFilter,
-    showCreateModal,
-    showInspectModal,
-    isEditing,
-    selectedInspectSLO,
-    realServices,
-    loadingServices,
-    newSLO,
-    totalSLOs,
-    healthySLOs,
-    warningSLOs,
-    criticalSLOs,
-    activeBurnAlerts,
-    avgBurnRate,
-    avgBurnRateNum,
-    fetchSLOData,
-    fetchRealServices,
-    setWindowFilter,
-    calculateErrorBudget,
-    calculateBurnRateVelocity,
-    getTargetLatencyPercentiles,
-    formatLatencyMetric,
-    formatPercent,
-    getEffectiveBurnRate,
-    getBurnRateColor,
-    getBudgetBarWidth,
-    formatDate,
-    getSnapshotForDef,
-    getDefForSnapshot,
-    openCreateModal,
-    closeCreateModal,
-    openInspect,
-    closeInspect,
-    handleSaveSLO,
-    handleCreateSLO,
-    handleTriggerAlert,
-    handleDeleteSLO,
+    loading, actionInProgress, error, bannerMessage,
+    definitions, snapshots, selectedWindowFilter, viewMode,
+    showCreateModal, showInspectModal, isEditing, selectedInspectSLO,
+    realServices, loadingServices, newSLO,
+    totalSLOs, healthySLOs, warningSLOs, criticalSLOs,
+    healthySloCount, fastBurnCount, exhaustedBudgetCount, avgErrorBudgetPct,
+    enrichedSortedSLOs, fleetPulse, activeBurnAlerts, avgBurnRate, avgBurnRateNum,
+    fetchSLOData, fetchRealServices, setWindowFilter,
+    calculateErrorBudget, calculateBurnRateVelocity, getTargetLatencyPercentiles,
+    formatLatencyMetric, formatPercent, getEffectiveBurnRate, getBurnRateColor,
+    getBudgetBarWidth, formatDate, getSnapshotForDef, getDefForSnapshot,
+    openCreateModal, closeCreateModal, openInspect, closeInspect,
+    handleSaveSLO, handleCreateSLO, handleTriggerAlert, handleDeleteSLO,
   }
 }
