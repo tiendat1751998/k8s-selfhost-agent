@@ -135,6 +135,7 @@ export interface NodeMetrics {
   disk_devices?: DiskIOStats[]
   container_count: number
   running_count: number
+  processes?: number
   os?: string
   arch?: string
   os_distro?: string

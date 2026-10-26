@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useInfraHosts } from '../composables/useInfraHosts'
 import HostControlsBar from '../components/hosts/HostControlsBar.vue'
+import FleetCapacityStrip from '../components/hosts/FleetCapacityStrip.vue'
 import HostsGrid from '../components/hosts/HostsGrid.vue'
 import HostsTable from '../components/hosts/HostsTable.vue'
 import HostsMobileCards from '../components/hosts/HostsMobileCards.vue'
@@ -42,6 +43,7 @@ const {
   totalHosts, connectedHosts, disconnectedHosts, errorHosts,
   onlineHostsCount, offlineHostsCount, avgLatency, typeCounts,
   availableLabels, filteredHosts, hostTypeDefinitions,
+  hostHardwareMap, fleetAggregates,
   getHostTypeMeta, getLatencyBadgeClass, formatDate, formatUptime,
   copyToClipboard, fetchHosts, openAddHostModal, openEditHostModal,
   addLabelRow, removeLabelRow, testModalConnection, submitHostForm,
@@ -92,6 +94,11 @@ const {
       />
     </div>
 
+    <!-- Fleet Hardware Capacity Strip (Real Hardware Telemetry) -->
+    <div v-if="hosts.length > 0" class="fleet-capacity-wrap animate-fade-in">
+      <FleetCapacityStrip :aggregates="fleetAggregates" :loading="loading" />
+    </div>
+
     <!-- Loading State -->
     <div v-if="loading && hosts.length === 0" class="loading-state glass-panel">
       <div class="spinner"></div>
@@ -126,6 +133,7 @@ const {
       <div class="mobile-only">
         <HostsMobileCards
           :hosts="filteredHosts"
+          :host-hardware-map="hostHardwareMap"
           :host-test-results="hostTestResults"
           :testing-host-id="testingHostId"
           :get-host-type-meta="getHostTypeMeta"
@@ -139,10 +147,11 @@ const {
         />
       </div>
 
-      <!-- Desktop Grid View -->
+      <!-- Desktop Grid View (Hardware Blade Rack) -->
       <div v-if="viewMode === 'grid'" class="desktop-only animate-fade-in">
         <HostsGrid
           :hosts="filteredHosts"
+          :host-hardware-map="hostHardwareMap"
           :host-test-results="hostTestResults"
           :testing-host-id="testingHostId"
           :get-host-type-meta="getHostTypeMeta"
@@ -197,6 +206,7 @@ const {
     <HostDetailDrawer
       v-model:show="showDetailDrawer"
       :host="selectedHost"
+      :hardware-metrics="selectedHost ? hostHardwareMap[selectedHost.id] : undefined"
       :host-test-result="selectedHost ? hostTestResults[selectedHost.id] : undefined"
       :host-test-histories="selectedHost ? hostTestHistories[selectedHost.id] : undefined"
       :testing-host-id="testingHostId"

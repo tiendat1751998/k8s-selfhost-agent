@@ -3,11 +3,12 @@ import { ref, computed, watch } from 'vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 import type { ComputeHost } from '../../api/compute'
-import type { HostTestResult, HostTypeDefinition } from '../../types/hosts'
-import { formatDate as defaultFormatDate, formatHostLastSeen } from '../../types/hosts'
+import type { HostTestResult, HostTypeDefinition, HostHardwareMetrics } from '../../types/hosts'
+import { formatDate as defaultFormatDate, formatHostLastSeen, resolveHostHardwareMetrics } from '../../types/hosts'
 
 const props = defineProps<{
   hosts: ComputeHost[]
+  hostHardwareMap?: Record<string, HostHardwareMetrics>
   hostTestResults: Record<string, HostTestResult>
   testingHostId: string | null
   getHostTypeMeta: (type?: string) => HostTypeDefinition
@@ -80,6 +81,16 @@ function handleMobileAction(action: string, host: ComputeHost) {
   else if (action === 'edit') emit('edit', host)
   else if (action === 'fencing') emit('fencing', host)
   else if (action === 'delete') emit('delete', host)
+}
+
+function getHw(host: ComputeHost): HostHardwareMetrics {
+  return props.hostHardwareMap?.[host.id] || resolveHostHardwareMetrics(host, undefined, props.hostTestResults[host.id]?.agent_info)
+}
+
+function getSaturationClass(pct: number): string {
+  if (pct >= 85) return 'm-meter-critical'
+  if (pct >= 70) return 'm-meter-warning'
+  return 'm-meter-healthy'
 }
 </script>
 
@@ -186,6 +197,51 @@ function handleMobileAction(action: string, host: ComputeHost) {
             </span>
           </div>
         </div>
+
+        <!-- Row 3: Compact Inline CPU % · RAM % · DISK % Mini-bars (Mobile Parity) -->
+        <div class="m-card-telemetry-row font-mono">
+          <div class="m-telemetry-meter">
+            <span class="m-meter-lbl">CPU</span>
+            <div class="m-meter-track">
+              <div
+                class="m-meter-fill"
+                :class="getSaturationClass(getHw(host).cpu_percent)"
+                :style="{ width: `${Math.min(100, Math.max(0, getHw(host).cpu_percent))}%` }"
+              ></div>
+            </div>
+            <span class="m-meter-val" :class="getSaturationClass(getHw(host).cpu_percent)">
+              {{ getHw(host).cpu_percent.toFixed(0) }}%
+            </span>
+          </div>
+
+          <div class="m-telemetry-meter">
+            <span class="m-meter-lbl">RAM</span>
+            <div class="m-meter-track">
+              <div
+                class="m-meter-fill"
+                :class="getSaturationClass(getHw(host).memory_percent)"
+                :style="{ width: `${Math.min(100, Math.max(0, getHw(host).memory_percent))}%` }"
+              ></div>
+            </div>
+            <span class="m-meter-val" :class="getSaturationClass(getHw(host).memory_percent)">
+              {{ getHw(host).memory_percent.toFixed(0) }}%
+            </span>
+          </div>
+
+          <div class="m-telemetry-meter">
+            <span class="m-meter-lbl">DISK</span>
+            <div class="m-meter-track">
+              <div
+                class="m-meter-fill"
+                :class="getSaturationClass(getHw(host).disk_percent)"
+                :style="{ width: `${Math.min(100, Math.max(0, getHw(host).disk_percent))}%` }"
+              ></div>
+            </div>
+            <span class="m-meter-val" :class="getSaturationClass(getHw(host).disk_percent)">
+              {{ getHw(host).disk_percent.toFixed(0) }}%
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -261,12 +317,8 @@ function handleMobileAction(action: string, host: ComputeHost) {
   flex-shrink: 0;
   display: inline-block;
 }
-.m-status-dot.dot-connected {
-  background: var(--color-status-online, #3fb950);
-}
-.m-status-dot.dot-disconnected {
-  background: var(--color-status-offline, #f85149);
-}
+.m-status-dot.dot-connected { background: var(--color-status-online); }
+.m-status-dot.dot-disconnected { background: var(--color-status-offline); }
 .m-host-name {
   font-family: var(--font-sans);
   font-size: 14px;
@@ -295,26 +347,10 @@ function handleMobileAction(action: string, host: ComputeHost) {
   background: var(--color-badge-agent-bg, rgba(56, 189, 248, 0.15));
   border: 1px solid var(--color-badge-agent-border, rgba(56, 189, 248, 0.40));
 }
-.m-type-chip.badge-k8s {
-  color: var(--color-badge-k8s-text, #58a6ff);
-  background: var(--color-badge-k8s-bg, rgba(50, 108, 229, 0.15));
-  border-color: var(--color-badge-k8s-border, rgba(50, 108, 229, 0.40));
-}
-.m-type-chip.badge-agent {
-  color: var(--color-badge-agent-text, #38bdf8);
-  background: var(--color-badge-agent-bg, rgba(56, 189, 248, 0.15));
-  border-color: var(--color-badge-agent-border, rgba(56, 189, 248, 0.40));
-}
-.m-type-chip.badge-docker {
-  color: var(--color-badge-docker-text, #60a5fa);
-  background: var(--color-badge-docker-bg, rgba(36, 150, 237, 0.15));
-  border-color: var(--color-badge-docker-border, rgba(36, 150, 237, 0.40));
-}
-.m-type-chip.badge-purple {
-  color: var(--color-badge-metrics-text, #c084fc);
-  background: var(--color-badge-metrics-bg, rgba(168, 85, 247, 0.15));
-  border-color: var(--color-badge-metrics-border, rgba(168, 85, 247, 0.40));
-}
+.m-type-chip.badge-k8s { color: var(--color-badge-k8s-text); background: var(--color-badge-k8s-bg); border-color: var(--color-badge-k8s-border); }
+.m-type-chip.badge-agent { color: var(--color-badge-agent-text); background: var(--color-badge-agent-bg); border-color: var(--color-badge-agent-border); }
+.m-type-chip.badge-docker { color: var(--color-badge-docker-text); background: var(--color-badge-docker-bg); border-color: var(--color-badge-docker-border); }
+.m-type-chip.badge-purple { color: var(--color-badge-metrics-text); background: var(--color-badge-metrics-bg); border-color: var(--color-badge-metrics-border); }
 .m-card-header-right {
   display: flex;
   align-items: center;
@@ -387,5 +423,61 @@ function handleMobileAction(action: string, host: ComputeHost) {
   font-weight: 400;
   color: var(--text-muted);
   line-height: 1.3;
+}
+.m-card-telemetry-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-hairline);
+  border-radius: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.m-telemetry-meter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.m-meter-lbl {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.m-meter-track {
+  flex: 1 1 auto;
+  height: 4px;
+  background: var(--color-surface-card);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+  min-width: 20px;
+}
+.m-meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.m-meter-val {
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+  min-width: 24px;
+  text-align: right;
+}
+.m-meter-healthy {
+  background: var(--color-status-online);
+  color: var(--color-status-online);
+}
+.m-meter-warning {
+  background: var(--color-status-warning);
+  color: var(--color-status-warning);
+}
+.m-meter-critical {
+  background: var(--color-status-offline);
+  color: var(--color-status-offline);
 }
 </style>

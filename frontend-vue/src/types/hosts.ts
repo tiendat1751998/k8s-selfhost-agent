@@ -1,4 +1,4 @@
-import type { HostType, AgentInfo, ComputeHost, CreateHostRequest, UpdateHostRequest } from '../api/compute'
+import type { HostType, AgentInfo, ComputeHost, CreateHostRequest, UpdateHostRequest, NodeMetrics, ProcessMetric } from '../api/hosts'
 
 export interface HostTestResult {
   latency_ms: number
@@ -284,5 +284,194 @@ export function formatHostLastSeen(
     return 'Awaiting probe'
   }
   return includePrefix ? 'Last check: Never' : 'Never'
+}
+
+// ==========================================
+// Physical Hardware Blade Fabric Telemetry
+// ==========================================
+
+export interface HostHardwareMetrics {
+  cpu_percent: number
+  load_average: [number, number, number] | number[]
+  memory_used: number
+  memory_total: number
+  memory_percent: number
+  disk_used: number
+  disk_total: number
+  disk_percent: number
+  disk_avg_await_ms: number
+  os_distro: string
+  kernel_version: string
+  arch: string
+  uptime_seconds: number
+  running_count: number
+  container_count: number
+  processes: number
+  top_processes: ProcessMetric[]
+  is_live: boolean
+}
+
+export interface FleetHardwareAggregates {
+  fleetCpuAvgPct: number
+  fleetMemUsedBytes: number
+  fleetMemTotalBytes: number
+  fleetMemUsedGiB: string
+  fleetMemTotalGiB: string
+  fleetMemPct: number
+  fleetDiskUsedBytes: number
+  fleetDiskTotalBytes: number
+  fleetDiskUsedGiB: string
+  fleetDiskTotalGiB: string
+  fleetDiskPct: number
+  totalRunningContainers: number
+  onlineBladeCount: number
+  totalBladeCount: number
+}
+
+export function matchHostWithNodeMetrics(host: ComputeHost, nodeMetricsList: NodeMetrics[]): NodeMetrics | undefined {
+  if (!nodeMetricsList || nodeMetricsList.length === 0) return undefined
+
+  // 1. Direct ID or Name match
+  const directMatch = nodeMetricsList.find(n => 
+    (n.node_id && (n.node_id === host.id || n.node_id === host.name)) ||
+    (n.node_name && (n.node_name === host.name || n.node_name === host.id))
+  )
+  if (directMatch) return directMatch
+
+  // 2. Label matches (kubernetes.io/hostname, node, hostname, instance)
+  if (host.labels) {
+    const labelMatch = nodeMetricsList.find(n =>
+      (n.node_name && (n.node_name === host.labels['kubernetes.io/hostname'] || n.node_name === host.labels['node'] || n.node_name === host.labels['hostname'])) ||
+      (n.node_id && (n.node_id === host.labels['node_id'] || n.node_id === host.labels['instance']))
+    )
+    if (labelMatch) return labelMatch
+  }
+
+  // 3. Endpoint IP match (e.g. host endpoint http://10.10.10.60:9100 matching node with 10.10.10.60)
+  if (host.endpoint) {
+    const ipMatch = host.endpoint.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/)
+    if (ipMatch) {
+      const ip = ipMatch[0]
+      const endpointMatch = nodeMetricsList.find(n => 
+        (n.node_name && n.node_name.includes(ip)) ||
+        (n.node_id && n.node_id.includes(ip))
+      )
+      if (endpointMatch) return endpointMatch
+    }
+  }
+
+  // 4. Case-insensitive name match
+  const lowerName = host.name?.toLowerCase().trim()
+  if (lowerName) {
+    const looseMatch = nodeMetricsList.find(n => 
+      n.node_name?.toLowerCase().trim() === lowerName ||
+      n.node_id?.toLowerCase().trim() === lowerName
+    )
+    if (looseMatch) return looseMatch
+  }
+
+  return undefined
+}
+
+export function resolveHostHardwareMetrics(
+  host: ComputeHost,
+  node?: NodeMetrics,
+  agentInfo?: AgentInfo
+): HostHardwareMetrics {
+  if (!node) {
+    return {
+      cpu_percent: 0,
+      load_average: [0, 0, 0],
+      memory_used: 0,
+      memory_total: 0,
+      memory_percent: 0,
+      disk_used: 0,
+      disk_total: 0,
+      disk_percent: 0,
+      disk_avg_await_ms: 0,
+      os_distro: agentInfo?.os_distro || agentInfo?.os || '',
+      kernel_version: agentInfo?.kernel_version || '',
+      arch: agentInfo?.arch || '',
+      uptime_seconds: agentInfo?.uptime_seconds || agentInfo?.uptime || 0,
+      running_count: 0,
+      container_count: 0,
+      processes: 0,
+      top_processes: [],
+      is_live: false,
+    }
+  }
+
+  const loadAvg = node.load_average || node.load_avg || [0, 0, 0]
+  const memUsed = node.memory_used || 0
+  const memTotal = node.memory_total || 0
+  const memPct = node.memory_percent ?? (memTotal > 0 ? (memUsed / memTotal) * 100 : 0)
+
+  const diskUsed = node.disk_used || 0
+  const diskTotal = node.disk_total || 0
+  const diskPct = node.disk_percent ?? (diskTotal > 0 ? (diskUsed / diskTotal) * 100 : 0)
+
+  const isConnected = host.status === 'connected' || host.status === 'ok' ||
+    node.status === 'ready' || node.status === 'ok' || node.status === 'online'
+
+  return {
+    cpu_percent: typeof node.cpu_percent === 'number' && !isNaN(node.cpu_percent) ? node.cpu_percent : 0,
+    load_average: Array.isArray(loadAvg) && loadAvg.length >= 3 ? [loadAvg[0], loadAvg[1], loadAvg[2]] : [0, 0, 0],
+    memory_used: memUsed,
+    memory_total: memTotal,
+    memory_percent: typeof memPct === 'number' && !isNaN(memPct) ? Math.min(100, Math.max(0, memPct)) : 0,
+    disk_used: diskUsed,
+    disk_total: diskTotal,
+    disk_percent: typeof diskPct === 'number' && !isNaN(diskPct) ? Math.min(100, Math.max(0, diskPct)) : 0,
+    disk_avg_await_ms: typeof node.disk_avg_await_ms === 'number' && !isNaN(node.disk_avg_await_ms) ? node.disk_avg_await_ms : 0,
+    os_distro: node.os_distro || node.os || agentInfo?.os_distro || agentInfo?.os || '',
+    kernel_version: node.kernel_version || agentInfo?.kernel_version || '',
+    arch: node.arch || agentInfo?.arch || '',
+    uptime_seconds: node.uptime_seconds || node.uptime || agentInfo?.uptime_seconds || agentInfo?.uptime || 0,
+    running_count: node.running_count || 0,
+    container_count: node.container_count || 0,
+    processes: node.processes || 0,
+    top_processes: Array.isArray(node.top_processes) ? node.top_processes : [],
+    is_live: isConnected,
+  }
+}
+
+export function computeFleetHardwareAggregates(
+  hosts: ComputeHost[],
+  hardwareMap: Record<string, HostHardwareMetrics>
+): FleetHardwareAggregates {
+  const onlineHosts = hosts.filter(h => h.status === 'connected' || h.status === 'ok')
+  const liveMetrics = hosts
+    .map(h => hardwareMap[h.id])
+    .filter((m): m is HostHardwareMetrics => Boolean(m && m.is_live))
+
+  const cpuHosts = liveMetrics.filter(m => m.cpu_percent > 0)
+  const fleetCpuAvgPct = cpuHosts.length > 0
+    ? parseFloat((cpuHosts.reduce((acc, m) => acc + m.cpu_percent, 0) / cpuHosts.length).toFixed(1))
+    : 0
+
+  const fleetMemUsedBytes = liveMetrics.reduce((acc, m) => acc + m.memory_used, 0)
+  const fleetMemTotalBytes = liveMetrics.reduce((acc, m) => acc + m.memory_total, 0)
+  const fleetDiskUsedBytes = liveMetrics.reduce((acc, m) => acc + m.disk_used, 0)
+  const fleetDiskTotalBytes = liveMetrics.reduce((acc, m) => acc + m.disk_total, 0)
+  const totalRunningContainers = liveMetrics.reduce((acc, m) => acc + m.running_count, 0)
+
+  const bytesToGiB = (bytes: number): string => (bytes / (1024 * 1024 * 1024)).toFixed(1)
+
+  return {
+    fleetCpuAvgPct,
+    fleetMemUsedBytes,
+    fleetMemTotalBytes,
+    fleetMemUsedGiB: bytesToGiB(fleetMemUsedBytes),
+    fleetMemTotalGiB: bytesToGiB(fleetMemTotalBytes),
+    fleetMemPct: fleetMemTotalBytes > 0 ? Math.min(100, (fleetMemUsedBytes / fleetMemTotalBytes) * 100) : 0,
+    fleetDiskUsedBytes,
+    fleetDiskTotalBytes,
+    fleetDiskUsedGiB: bytesToGiB(fleetDiskUsedBytes),
+    fleetDiskTotalGiB: bytesToGiB(fleetDiskTotalBytes),
+    fleetDiskPct: fleetDiskTotalBytes > 0 ? Math.min(100, (fleetDiskUsedBytes / fleetDiskTotalBytes) * 100) : 0,
+    totalRunningContainers,
+    onlineBladeCount: onlineHosts.length,
+    totalBladeCount: hosts.length
+  }
 }
 

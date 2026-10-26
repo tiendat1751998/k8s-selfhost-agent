@@ -3,12 +3,14 @@ import BaseIcon from '../ui/BaseIcon.vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import HostRemediationPanel from './HostRemediationPanel.vue'
+import HostProcessesTable from './HostProcessesTable.vue'
 import type { ComputeHost } from '../../api/compute'
-import type { HostTestResult, HostTestHistoryItem, HostTypeDefinition } from '../../types/hosts'
+import type { HostTestResult, HostTestHistoryItem, HostTypeDefinition, HostHardwareMetrics } from '../../types/hosts'
 
-defineProps<{
+const props = defineProps<{
   show: boolean
   host: ComputeHost | null
+  hardwareMetrics?: HostHardwareMetrics
   hostTestResult?: HostTestResult
   hostTestHistories?: HostTestHistoryItem[]
   testingHostId: string | null
@@ -16,6 +18,16 @@ defineProps<{
   formatDate: (d?: string) => string
   formatUptime: (seconds?: number) => string
 }>()
+
+function bytesToGiB(b: number): string {
+  return (b / (1024 * 1024 * 1024)).toFixed(1)
+}
+
+function getSaturationClass(pct: number): string {
+  if (pct >= 85) return 'text-rose'
+  if (pct >= 70) return 'text-amber'
+  return 'text-emerald'
+}
 
 const emit = defineEmits<{
   (e: 'update:show', val: boolean): void
@@ -61,55 +73,42 @@ const emit = defineEmits<{
       <div class="drawer-section">
         <h3 class="section-title">SPECIFICATIONS & SECURITY</h3>
         <div class="spec-grid glass-panel">
-          <div class="spec-cell">
-            <span class="spec-lbl">HOST TYPE</span>
-            <span class="spec-val text-primary">{{ (host.host_type || 'agent').toUpperCase() }}</span>
-          </div>
-          <div class="spec-cell">
-            <span class="spec-lbl">TLS AUTH (mTLS)</span>
-            <span class="spec-val" :class="host.tls_enabled ? 'text-emerald' : 'text-muted'">
-              {{ host.tls_enabled ? 'ENABLED' : 'DISABLED' }}
-            </span>
-          </div>
-          <div class="spec-cell">
-            <span class="spec-lbl">API VERSION</span>
-            <span class="spec-val">{{ host.api_version || 'auto-negotiate' }}</span>
-          </div>
-          <div class="spec-cell">
-            <span class="spec-lbl">TENANT ID</span>
-            <span class="spec-val">{{ host.tenant_id || 'default-tenant' }}</span>
-          </div>
-          <div class="spec-cell">
-            <span class="spec-lbl">REGISTERED AT</span>
-            <span class="spec-val">{{ formatDate(host.created_at) }}</span>
-          </div>
-          <div class="spec-cell">
-            <span class="spec-lbl">LAST HEALTH CHECK</span>
-            <span class="spec-val">{{ formatDate(host.last_health_check) }}</span>
-          </div>
+          <div class="spec-cell"><span class="spec-lbl">HOST TYPE</span><span class="spec-val text-primary">{{ (host.host_type || 'agent').toUpperCase() }}</span></div>
+          <div class="spec-cell"><span class="spec-lbl">TLS AUTH (mTLS)</span><span class="spec-val" :class="host.tls_enabled ? 'text-emerald' : 'text-muted'">{{ host.tls_enabled ? 'ENABLED' : 'DISABLED' }}</span></div>
+          <div class="spec-cell"><span class="spec-lbl">API VERSION</span><span class="spec-val">{{ host.api_version || 'auto-negotiate' }}</span></div>
+          <div class="spec-cell"><span class="spec-lbl">TENANT ID</span><span class="spec-val">{{ host.tenant_id || 'default-tenant' }}</span></div>
+          <div class="spec-cell"><span class="spec-lbl">REGISTERED AT</span><span class="spec-val">{{ formatDate(host.created_at) }}</span></div>
+          <div class="spec-cell"><span class="spec-lbl">LAST HEALTH CHECK</span><span class="spec-val">{{ formatDate(host.last_health_check) }}</span></div>
         </div>
       </div>
 
-      <!-- Live System Telemetry (if agent info available) -->
-      <div v-if="hostTestResult?.agent_info" class="drawer-section">
+      <!-- Hardware Capacity & Saturation -->
+      <div v-if="hardwareMetrics && hardwareMetrics.is_live" class="drawer-section">
+        <h3 class="section-title">HARDWARE CAPACITY & SATURATION</h3>
+        <div class="spec-grid glass-panel">
+          <div class="spec-cell"><span class="spec-lbl">CPU SATURATION</span><span class="spec-val font-bold" :class="getSaturationClass(hardwareMetrics.cpu_percent)">{{ hardwareMetrics.cpu_percent.toFixed(1) }}%</span></div>
+          <div class="spec-cell"><span class="spec-lbl">LOAD AVERAGE (1/5/15M)</span><span class="spec-val font-mono">{{ hardwareMetrics.load_average[0]?.toFixed(2) }} / {{ hardwareMetrics.load_average[1]?.toFixed(2) }} / {{ hardwareMetrics.load_average[2]?.toFixed(2) }}</span></div>
+          <div class="spec-cell"><span class="spec-lbl">RAM ALLOCATION</span><span class="spec-val font-bold" :class="getSaturationClass(hardwareMetrics.memory_percent)">{{ bytesToGiB(hardwareMetrics.memory_used) }} / {{ bytesToGiB(hardwareMetrics.memory_total) }} GiB ({{ hardwareMetrics.memory_percent.toFixed(1) }}%)</span></div>
+          <div class="spec-cell"><span class="spec-lbl">STORAGE CAPACITY</span><span class="spec-val font-bold" :class="getSaturationClass(hardwareMetrics.disk_percent)">{{ bytesToGiB(hardwareMetrics.disk_used) }} / {{ bytesToGiB(hardwareMetrics.disk_total) }} GiB ({{ hardwareMetrics.disk_percent.toFixed(1) }}%)</span></div>
+          <div class="spec-cell"><span class="spec-lbl">DISK AWAIT LATENCY</span><span class="spec-val">{{ hardwareMetrics.disk_avg_await_ms > 0 ? `${hardwareMetrics.disk_avg_await_ms.toFixed(1)} ms` : '--' }}</span></div>
+          <div class="spec-cell"><span class="spec-lbl">ACTIVE WORKLOADS</span><span class="spec-val text-cyan">{{ hardwareMetrics.running_count }} running / {{ hardwareMetrics.processes }} procs</span></div>
+        </div>
+      </div>
+
+      <!-- Live Top Consuming Processes Table -->
+      <div v-if="hardwareMetrics && hardwareMetrics.top_processes && hardwareMetrics.top_processes.length > 0" class="drawer-section">
+        <h3 class="section-title">TOP CONSUMING PROCESSES</h3>
+        <HostProcessesTable :processes="hardwareMetrics.top_processes" />
+      </div>
+
+      <!-- Live System Telemetry -->
+      <div v-if="hardwareMetrics?.os_distro || hostTestResult?.agent_info" class="drawer-section">
         <h3 class="section-title">LIVE SYSTEM TELEMETRY</h3>
         <div class="metrics-agent-box glass-panel">
-          <div class="telemetry-item">
-            <span class="telemetry-lbl">HOSTNAME:</span>
-            <span class="telemetry-val font-bold text-cyan">{{ hostTestResult.agent_info?.hostname }}</span>
-          </div>
-          <div class="telemetry-item">
-            <span class="telemetry-lbl">OS / DISTRO:</span>
-            <span class="telemetry-val">{{ hostTestResult.agent_info?.os_distro || hostTestResult.agent_info?.os }} ({{ hostTestResult.agent_info?.arch }})</span>
-          </div>
-          <div v-if="hostTestResult.agent_info?.kernel_version" class="telemetry-item">
-            <span class="telemetry-lbl">KERNEL:</span>
-            <span class="telemetry-val font-mono">{{ hostTestResult.agent_info?.kernel_version }}</span>
-          </div>
-          <div class="telemetry-item">
-            <span class="telemetry-lbl">UPTIME:</span>
-            <span class="telemetry-val text-emerald">{{ formatUptime(hostTestResult.agent_info?.uptime || hostTestResult.agent_info?.uptime_seconds) }}</span>
-          </div>
+          <div class="telemetry-item"><span class="telemetry-lbl">HOSTNAME:</span><span class="telemetry-val font-bold text-cyan">{{ hostTestResult?.agent_info?.hostname || host.name }}</span></div>
+          <div class="telemetry-item"><span class="telemetry-lbl">OS / DISTRO:</span><span class="telemetry-val">{{ hardwareMetrics?.os_distro || hostTestResult?.agent_info?.os_distro || hostTestResult?.agent_info?.os }} ({{ hardwareMetrics?.arch || hostTestResult?.agent_info?.arch || 'amd64' }})</span></div>
+          <div v-if="hardwareMetrics?.kernel_version || hostTestResult?.agent_info?.kernel_version" class="telemetry-item"><span class="telemetry-lbl">KERNEL:</span><span class="telemetry-val font-mono">{{ hardwareMetrics?.kernel_version || hostTestResult?.agent_info?.kernel_version }}</span></div>
+          <div class="telemetry-item"><span class="telemetry-lbl">UPTIME:</span><span class="telemetry-val text-emerald">{{ formatUptime(hardwareMetrics?.uptime_seconds || hostTestResult?.agent_info?.uptime || hostTestResult?.agent_info?.uptime_seconds) }}</span></div>
         </div>
       </div>
 

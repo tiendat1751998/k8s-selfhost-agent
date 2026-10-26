@@ -1,17 +1,21 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { hostsApi, type ComputeHost } from '../api/compute'
+import { hostsApi, type ComputeHost, type NodeMetrics } from '../api/hosts'
+import { overviewApi } from '../api/overview'
 import {
   type HostTestResult, type HostTestHistoryItem, type ModalTestResult, type HostFormData,
+  type HostHardwareMetrics, type FleetHardwareAggregates,
   createDefaultHostForm, populateHostForm, buildHostPayload, matchesHostFilters,
-  getLatencyBadgeClass, formatDate, formatUptime, hostTypeDefinitions, getHostTypeMeta
+  getLatencyBadgeClass, formatDate, formatUptime, hostTypeDefinitions, getHostTypeMeta,
+  matchHostWithNodeMetrics, resolveHostHardwareMetrics, computeFleetHardwareAggregates
 } from '../types/hosts'
 
 // Re-export domain types and utilities for consumers
-export type { HostTestResult, HostTestHistoryItem, ModalTestResult, HostFormData, HostTypeDefinition } from '../types/hosts'
+export type { HostTestResult, HostTestHistoryItem, ModalTestResult, HostFormData, HostTypeDefinition, HostHardwareMetrics, FleetHardwareAggregates } from '../types/hosts'
 export {
   createDefaultHostForm, populateHostForm, buildHostPayload, matchesHostFilters,
-  getLatencyBadgeClass, formatDate, formatUptime, hostTypeDefinitions, getHostTypeMeta
+  getLatencyBadgeClass, formatDate, formatUptime, hostTypeDefinitions, getHostTypeMeta,
+  matchHostWithNodeMetrics, resolveHostHardwareMetrics, computeFleetHardwareAggregates
 } from '../types/hosts'
 
 export function useInfraHosts() {
@@ -27,7 +31,8 @@ export function useInfraHosts() {
   const error = ref<string | null>(null)
   const toastMessage = ref<{ text: string; type: 'success' | 'error' } | null>(null)
   const hosts = ref<ComputeHost[]>([])
-  const viewMode = ref<'grid' | 'table'>('table')
+  const rawNodeMetrics = ref<NodeMetrics[]>([])
+  const viewMode = ref<'grid' | 'table'>('grid')
 
   // Filter State
   const searchQuery = ref(route?.query?.search ? String(route.query.search) : '')
@@ -81,8 +86,15 @@ export function useInfraHosts() {
     loading.value = true
     error.value = null
     try {
-      const data = await hostsApi.list()
-      hosts.value = Array.isArray(data) ? data : []
+      const [hostsData, metricsData] = await Promise.all([
+        hostsApi.list(),
+        overviewApi.getNodeMetrics().catch((err: unknown) => {
+          console.warn('[useInfraHosts] /overview/nodes telemetry fallback:', err)
+          return [] as NodeMetrics[]
+        })
+      ])
+      hosts.value = Array.isArray(hostsData) ? hostsData : []
+      rawNodeMetrics.value = Array.isArray(metricsData) ? metricsData : []
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to retrieve infrastructure hosts'
       error.value = msg
@@ -139,6 +151,31 @@ export function useInfraHosts() {
     }
     return Array.from(labelSet).sort()
   })
+
+  // Hardware Telemetry Map & Fleet Aggregates
+  const hostHardwareMap = computed<Record<string, HostHardwareMetrics>>(() => {
+    const map: Record<string, HostHardwareMetrics> = {}
+    for (const host of hosts.value) {
+      const matchedNode = matchHostWithNodeMetrics(host, rawNodeMetrics.value)
+      const testResult = hostTestResults.value[host.id]
+      map[host.id] = resolveHostHardwareMetrics(host, matchedNode, testResult?.agent_info)
+    }
+    return map
+  })
+
+  function getHostHardware(host: ComputeHost): HostHardwareMetrics {
+    return hostHardwareMap.value[host.id] || resolveHostHardwareMetrics(host, undefined)
+  }
+
+  const fleetAggregates = computed<FleetHardwareAggregates>(() => {
+    return computeFleetHardwareAggregates(hosts.value, hostHardwareMap.value)
+  })
+  const fleetCpuAvgPct = computed(() => fleetAggregates.value.fleetCpuAvgPct)
+  const fleetMemUsedBytes = computed(() => fleetAggregates.value.fleetMemUsedBytes)
+  const fleetMemTotalBytes = computed(() => fleetAggregates.value.fleetMemTotalBytes)
+  const fleetDiskUsedBytes = computed(() => fleetAggregates.value.fleetDiskUsedBytes)
+  const fleetDiskTotalBytes = computed(() => fleetAggregates.value.fleetDiskTotalBytes)
+  const totalRunningContainers = computed(() => fleetAggregates.value.totalRunningContainers)
 
   const filteredHosts = computed(() => {
     const list = hosts.value.filter(host =>
@@ -207,39 +244,22 @@ export function useInfraHosts() {
         const targetUrl = hostForm.value.endpoint.trim()
         const isHttp = targetUrl.startsWith('http://') || targetUrl.startsWith('https://')
         if (!isHttp && !targetUrl.startsWith('tcp://') && hostForm.value.host_type !== 'database') {
-          modalTestResult.value = {
-            success: false,
-            latency_ms: 0,
-            message: 'Invalid endpoint format. Please include protocol prefix (http://, https://, tcp://, postgresql://)'
-          }
+          modalTestResult.value = { success: false, latency_ms: 0, message: 'Invalid endpoint format. Protocol required (http://, https://, tcp://, postgresql://)' }
         } else if (isHttp) {
           const startTime = performance.now()
-          let reachable = false
-          let probeMsg = ''
           const controller = new AbortController()
           const timer = setTimeout(() => controller.abort(), 4000)
           try {
             await fetch(targetUrl, { method: 'HEAD', mode: 'no-cors', signal: controller.signal })
-            reachable = true
-            probeMsg = `Endpoint reachable: ${targetUrl}`
+            const latency = Math.round(performance.now() - startTime)
+            modalTestResult.value = { success: true, latency_ms: latency, message: `Endpoint reachable (${latency}ms)` }
           } catch (probeErr: unknown) {
-            probeMsg = probeErr instanceof Error ? probeErr.message : 'Probe connection failed'
-            reachable = false
+            modalTestResult.value = { success: false, latency_ms: 0, message: probeErr instanceof Error ? probeErr.message : 'Probe connection failed' }
           } finally {
             clearTimeout(timer)
           }
-          const latency = Math.round(performance.now() - startTime)
-          modalTestResult.value = {
-            success: reachable,
-            latency_ms: reachable ? latency : 0,
-            message: reachable ? probeMsg : `Endpoint unreachable: ${probeMsg}`
-          }
         } else {
-          modalTestResult.value = {
-            success: true,
-            latency_ms: 0,
-            message: `Endpoint format valid: ${targetUrl}. Connection verified upon registration.`
-          }
+          modalTestResult.value = { success: true, latency_ms: 0, message: `Endpoint format valid: ${targetUrl}. Connection verified upon registration.` }
         }
       }
     } catch (err: unknown) {
@@ -438,6 +458,10 @@ export function useInfraHosts() {
     availableLabels,
     filteredHosts,
     hostTypeDefinitions,
+    // Hardware Telemetry & Fleet Aggregates
+    rawNodeMetrics, hostHardwareMap, getHostHardware,
+    fleetAggregates, fleetCpuAvgPct, fleetMemUsedBytes, fleetMemTotalBytes,
+    fleetDiskUsedBytes, fleetDiskTotalBytes, totalRunningContainers,
     // Helpers
     showToast,
     getHostTypeMeta,

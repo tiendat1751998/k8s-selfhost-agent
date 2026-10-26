@@ -140,29 +140,29 @@ const hosts = computed(() => props.hosts || { length: props.totalHosts ?? 0 })
       </select>
     </div>
 
-    <!-- View Mode Switcher (Table / Grid) -->
+    <!-- View Mode Switcher (Blades / Table) -->
     <div class="toolbar-view-toggle" role="group" aria-label="View mode">
       <button
         type="button"
         class="mode-btn"
+        :class="{ 'mode-btn-active': viewMode === 'grid' }"
+        title="Physical Hardware Blade Rack View"
+        aria-label="Switch to Physical Hardware Blade Rack View"
+        @click="emit('update:viewMode', 'grid')"
+      >
+        <BaseIcon name="server" size="xs" />
+        <span>Blades</span>
+      </button>
+      <button
+        type="button"
+        class="mode-btn"
         :class="{ 'mode-btn-active': viewMode === 'table' }"
-        title="Table View"
+        title="Compact Table View"
         aria-label="Switch to Table View"
         @click="emit('update:viewMode', 'table')"
       >
         <BaseIcon name="table" size="xs" />
         <span>Table</span>
-      </button>
-      <button
-        type="button"
-        class="mode-btn"
-        :class="{ 'mode-btn-active': viewMode === 'grid' }"
-        title="Grid View"
-        aria-label="Switch to Grid View"
-        @click="emit('update:viewMode', 'grid')"
-      >
-        <BaseIcon name="grid" size="xs" />
-        <span>Grid</span>
       </button>
     </div>
 
