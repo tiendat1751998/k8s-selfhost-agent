@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import '../assets/styles/views/slo.css'
 import BaseIcon from '../components/ui/BaseIcon.vue'
+import SloBurnDownBoard from '../components/slo/SloBurnDownBoard.vue'
 import SloCatalogTable from '../components/slo/SloCatalogTable.vue'
 import SloMobileCards from '../components/slo/SloMobileCards.vue'
 import SloCreateModal from '../components/slo/SloCreateModal.vue'
@@ -17,6 +18,7 @@ const {
   definitions,
   snapshots,
   selectedWindowFilter,
+  viewMode,
   showCreateModal,
   showInspectModal,
   selectedInspectSLO,
@@ -24,6 +26,8 @@ const {
   totalSLOs,
   healthySLOs,
   activeBurnAlerts,
+  enrichedSortedSLOs,
+  fleetPulse,
   fetchSLOData,
   setWindowFilter,
   formatPercent,
@@ -92,6 +96,16 @@ const mobileWindowPills = [
 const searchQuery = ref('')
 const showMobileSearch = ref(false)
 
+// Filtered enriched sorted SLOs for board
+const filteredSortedSLOs = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return enrichedSortedSLOs.value
+  return enrichedSortedSLOs.value.filter(s =>
+    s.service.toLowerCase().includes(q) ||
+    (s.indicator_type && s.indicator_type.toLowerCase().includes(q))
+  )
+})
+
 // Filtered definitions based on search query
 const filteredDefinitions = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
@@ -139,7 +153,7 @@ function handleEditSLO(def: SLODefinition) {
       <button class="banner-close" @click="bannerMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Sleek Unified 38px Enterprise Toolbar -->
+    <!-- Sleek Unified 48px Enterprise Toolbar -->
     <div class="slo-toolbar-sleek glass-panel desktop-only">
       <!-- Search input with search icon and clear button -->
       <div class="toolbar-search-wrap slo-search-wrap">
@@ -195,6 +209,34 @@ function handleEditSLO(def: SLODefinition) {
         </div>
       </div>
 
+      <!-- Board | Table View Switcher -->
+      <div class="view-mode-toggle font-mono" role="radiogroup" aria-label="View Mode">
+        <button
+          type="button"
+          class="view-mode-btn"
+          :class="{ active: viewMode === 'board' }"
+          role="radio"
+          :aria-checked="viewMode === 'board'"
+          aria-label="Board view"
+          @click="viewMode = 'board'"
+        >
+          <BaseIcon name="layout" size="xs" />
+          <span>Board</span>
+        </button>
+        <button
+          type="button"
+          class="view-mode-btn"
+          :class="{ active: viewMode === 'table' }"
+          role="radio"
+          :aria-checked="viewMode === 'table'"
+          aria-label="Table view"
+          @click="viewMode = 'table'"
+        >
+          <BaseIcon name="list" size="xs" />
+          <span>Table</span>
+        </button>
+      </div>
+
       <!-- Inline Micro-Telemetry Pill -->
       <div class="slo-micro-telemetry font-mono" role="status" aria-label="SLO micro-telemetry">
         <span class="badge-dot-emerald"></span>
@@ -203,8 +245,7 @@ function handleEditSLO(def: SLODefinition) {
 
       <!-- Right: Action buttons -->
       <div class="toolbar-actions-group slo-toolbar-actions">
-
-        <!-- Action buttons: + Add Target (primary) and Refresh (secondary with spinner) -->
+        <!-- Action buttons: Add Target (primary) and Refresh (secondary with spinner) -->
         <button
           type="button"
           class="toolbar-btn btn-primary"
@@ -213,7 +254,7 @@ function handleEditSLO(def: SLODefinition) {
           @click="openCreateModal()"
         >
           <BaseIcon name="plus" size="xs" />
-          <span>+ Add Target</span>
+          <span>Add Target</span>
         </button>
 
         <button
@@ -237,6 +278,15 @@ function handleEditSLO(def: SLODefinition) {
         <span class="slo-count-pill font-mono">{{ totalSLOs }} Objectives</span>
       </div>
       <div class="command-bar-actions">
+        <button
+          class="btn-icon-cmd"
+          :class="{ active: viewMode === 'board' }"
+          :title="viewMode === 'board' ? 'Switch to Table' : 'Switch to Board'"
+          :aria-label="viewMode === 'board' ? 'Switch to Table' : 'Switch to Board'"
+          @click="viewMode = viewMode === 'board' ? 'table' : 'board'"
+        >
+          <BaseIcon :name="viewMode === 'board' ? 'list' : 'layout'" size="xs" />
+        </button>
         <button class="btn-icon-cmd" title="Create SLO definition" aria-label="Create SLO definition" @click="openCreateModal()">
           <BaseIcon name="plus" size="xs" />
         </button>
@@ -280,33 +330,48 @@ function handleEditSLO(def: SLODefinition) {
       </div>
     </div>
 
-    <!-- Desktop View Mode: Standardized High-Density Catalog Table wrapped in elevated dark card -->
-    <div class="slo-table-card desktop-only">
-      <SloCatalogTable
+    <!-- Primary View: Error Budget Burn-Down & Velocity Board (Default) -->
+    <SloBurnDownBoard
+      v-if="viewMode === 'board'"
+      :items="filteredSortedSLOs"
+      :pulse="fleetPulse"
+      :loading="loading"
+      :error="error"
+      @inspect="openInspect"
+      @trigger-alert="handleTriggerAlert"
+      @edit="openCreateModal"
+      @delete="handleDeleteSLO"
+      @create="openCreateModal()"
+    />
+
+    <!-- Secondary View: Standardized High-Density Catalog Table -->
+    <template v-else>
+      <div class="slo-table-card desktop-only">
+        <SloCatalogTable
+          :definitions="filteredDefinitions"
+          :snapshots="filteredSnapshots"
+          :loading="loading"
+          :error="error"
+          @inspect="openInspectFromTable"
+          @trigger-alert="handleTriggerAlert"
+          @delete-slo="handleDeleteSLO"
+        />
+      </div>
+
+      <SloMobileCards
+        class="mobile-only"
         :definitions="filteredDefinitions"
         :snapshots="filteredSnapshots"
-        :loading="loading"
-        :error="error"
-        @inspect="openInspectFromTable"
-        @trigger-alert="handleTriggerAlert"
-        @delete-slo="handleDeleteSLO"
+        :format-percent="formatPercent"
+        :get-effective-burn-rate="getEffectiveBurnRate"
+        :get-burn-rate-color="getBurnRateColor"
+        :get-budget-bar-width="getBudgetBarWidth"
+        :get-snapshot-for-def="getSnapshotForDef"
+        @inspect="handleMobileInspect"
+        @edit="handleEditSLO"
+        @delete="handleDeleteSLO"
       />
-    </div>
-
-    <!-- First-Class Mobile Card Stream (<768px) -->
-    <SloMobileCards
-      class="mobile-only"
-      :definitions="filteredDefinitions"
-      :snapshots="filteredSnapshots"
-      :format-percent="formatPercent"
-      :get-effective-burn-rate="getEffectiveBurnRate"
-      :get-burn-rate-color="getBurnRateColor"
-      :get-budget-bar-width="getBudgetBarWidth"
-      :get-snapshot-for-def="getSnapshotForDef"
-      @inspect="handleMobileInspect"
-      @edit="handleEditSLO"
-      @delete="handleDeleteSLO"
-    />
+    </template>
 
     <!-- Modals -->
     <SloCreateModal
