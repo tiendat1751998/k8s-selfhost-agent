@@ -5,7 +5,7 @@
   left: 0;
   right: 0;
   z-index: 30;
-  background: var(--bg-card);
+  background: var(--color-surface-card);
   border: 1px solid var(--color-status-offline-border, rgba(239, 68, 68, 0.4));
   border-radius: 6px;
   margin: 0;
@@ -23,7 +23,7 @@
 }
 .radar-header {
   padding: 8px 12px;
-  background: var(--bg-elevated);
+  background: var(--color-surface-elevated);
   border-bottom: 1px solid var(--color-status-offline-border, rgba(239, 68, 68, 0.2));
   display: flex;
   align-items: center;
@@ -33,7 +33,7 @@
 }
 .radar-title-group { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .radar-title { font-size: 12px; font-weight: 700; color: var(--color-status-offline, #f87171); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-.radar-subtitle { font-size: 11px; color: var(--text-secondary, #94a3b8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.radar-subtitle { font-size: 11px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .radar-scope-badge {
   font-size: 10px;
   padding: 2px 7px;
@@ -47,30 +47,30 @@
 .radar-time-pills {
   display: flex;
   align-items: center;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 4px;
   padding: 1px;
 }
 .radar-pill-btn {
-  background: none; border: none; color: var(--text-muted);
+  background: none; border: none; color: var(--color-muted);
   font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 3px; cursor: pointer; transition: all 0.15s ease;
 }
-.radar-pill-btn:hover { color: var(--text-primary); }
+.radar-pill-btn:hover { color: var(--color-body); }
 .radar-pill-btn.active { background: var(--color-status-offline-bg); color: var(--color-status-offline); border: 1px solid var(--color-status-offline-border); }
 .radar-action-btn {
-  background: var(--bg-card); border: 1px solid var(--border-subtle);
-  color: var(--text-secondary); border-radius: 4px; padding: 3px 8px; font-size: 11px;
+  background: var(--color-surface-card); border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary); border-radius: 4px; padding: 3px 8px; font-size: 11px;
   font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease;
 }
-.radar-action-btn:hover { background: var(--color-surface-hover); color: var(--text-primary); }
-.radar-close-btn { background: none; border: none; color: var(--text-muted); font-size: 14px; cursor: pointer; padding: 0 4px; }
+.radar-action-btn:hover { background: var(--color-surface-hover); color: var(--color-body); }
+.radar-close-btn { background: none; border: none; color: var(--color-muted); font-size: 14px; cursor: pointer; padding: 0 4px; }
 .radar-close-btn:hover { color: var(--color-status-offline); }
 .radar-body { max-height: 240px; overflow-y: auto; padding: 4px 0; }
 .radar-list { display: flex; flex-direction: column; }
 .radar-item {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 12px; border-bottom: 1px solid var(--border-subtle); gap: 10px; transition: background 0.12s ease;
+  padding: 6px 12px; border-bottom: 1px solid var(--color-border-subtle); gap: 10px; transition: background 0.12s ease;
 }
 .radar-item:last-child { border-bottom: none; }
 .radar-item:hover { background: var(--color-surface-hover); }
@@ -92,9 +92,9 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .radar-pattern-block { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.radar-fingerprint { font-size: 11px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.radar-fingerprint { font-size: 11px; font-weight: 600; color: var(--color-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .radar-sample-subline {
-  font-size: 10px; color: var(--text-secondary);
+  font-size: 10px; color: var(--color-text-secondary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; gap: 8px;
 }
 .radar-inspect-btn {
@@ -108,4 +108,4 @@
 }
 .radar-empty-state { color: var(--color-status-online); }
 .radar-error-state { color: var(--color-status-offline); }
-.radar-loading-state { color: var(--text-muted); }
+.radar-loading-state { color: var(--color-muted); }
