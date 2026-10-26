@@ -132,7 +132,7 @@ function formatDate(d?: string): string {
 
           <div class="meta-item">
             <span class="meta-label">Target Resource</span>
-            <span class="meta-val font-mono" style="color: var(--accent-sky);">{{ event.target_resource }}</span>
+            <span class="meta-val font-mono" style="color: var(--color-endpoint-syntax);">{{ event.target_resource }}</span>
           </div>
 
           <div class="meta-item">
