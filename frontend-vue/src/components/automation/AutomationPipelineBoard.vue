@@ -33,6 +33,11 @@ function handleMenuSelect(actionId: string, rule: AutomationRule) {
     emit('delete', rule.id)
   }
 }
+
+function formatRuleShortId(id: string): string {
+  if (!id) return ''
+  return `#${id.length <= 8 ? id : id.slice(-6)}`
+}
 </script>
 
 <template>
@@ -86,7 +91,7 @@ function handleMenuSelect(actionId: string, rule: AutomationRule) {
             <div class="identity-text">
               <div class="name-hash-row">
                 <span class="rule-title" :title="rule.name">{{ rule.name }}</span>
-                <span class="rule-hash font-mono" :title="rule.id">#{{ rule.id.slice(0, 8) }}</span>
+                <span class="rule-hash font-mono" :title="rule.id">{{ formatRuleShortId(rule.id) }}</span>
               </div>
               <div class="telemetry-meta font-mono">
                 <span class="meta-runs text-emerald">{{ rule.executions || 0 }} runs</span>

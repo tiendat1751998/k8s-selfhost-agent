@@ -26,12 +26,35 @@
   }
 }
 
-@media (max-width: 639.98px) {
-  .fleet-pulse-strip {
-    grid-template-columns: repeat(2, 1fr) !important;
+@media (max-width: 640px) {
+  .fleet-pulse-strip,
+  .slo-pulse-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 8px !important;
   }
+
+  .pulse-card {
+    min-width: 0;
+    overflow: hidden;
+    padding: 10px;
+  }
+
+  .pulse-card-header .pulse-badge {
+    display: none;
+  }
+
+  .pulse-metric-row {
+    min-width: 0;
+  }
+
+  .pulse-sub {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
+
 
 .pulse-card {
   padding: 10px 14px;

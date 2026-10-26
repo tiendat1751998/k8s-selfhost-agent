@@ -10,8 +10,8 @@ const props = defineProps<{
   violations: ComplianceViolation[]
   loading: boolean
   error: string | null
-  activeSeverity: SeverityFilter
-  severityFilters: Array<{ key: SeverityFilter; label: string; count: number; badgeClass: string }>
+  activeSeverity?: SeverityFilter
+  severityFilters?: Array<{ key: SeverityFilter; label: string; count: number; badgeClass: string }>
   selectedFrameworkName?: string
   formatFrameworkTag: (tag: string) => string
   formatDate: (d: string) => string
@@ -39,32 +39,6 @@ const columns: Column<ComplianceControlItem>[] = [
 
 <template>
   <div class="violations-section">
-    <div class="filter-bar glass-panel">
-      <div class="filter-group">
-        <span class="filter-label">Severity:</span>
-        <button
-          v-for="sev in severityFilters"
-          :key="sev.key"
-          class="filter-pill"
-          :class="[sev.badgeClass, { 'filter-active': activeSeverity === sev.key }]"
-          @click="emit('filter-severity', sev.key)"
-        >
-          <span>{{ sev.label }} ({{ sev.count }})</span>
-        </button>
-      </div>
-
-      <div class="filter-actions-group">
-        <div v-if="selectedFrameworkName" class="active-filter-badge">
-          <span>Framework: {{ selectedFrameworkName }}</span>
-          <button class="clear-btn" title="Clear filter" aria-label="Clear filter" @click="emit('clear-framework')"><BaseIcon name="x" size="xs" /></button>
-        </div>
-
-        <button class="btn btn-secondary btn-sm export-btn" title="Export Remediation Playbook" @click="emit('export')">
-          <BaseIcon name="download" size="xs" /> <span>Export Playbook</span>
-        </button>
-      </div>
-    </div>
-
     <DataTable
       :columns="columns"
       :data="tableData"
@@ -74,6 +48,16 @@ const columns: Column<ComplianceControlItem>[] = [
       search-placeholder="Filter by policy, namespace, cluster, or resource..."
       empty-message="No compliance violations found. All security posture controls are satisfied."
     >
+      <template #toolbar>
+        <div v-if="selectedFrameworkName" class="active-filter-badge">
+          <span>Framework: {{ selectedFrameworkName }}</span>
+          <button class="clear-btn" title="Clear filter" aria-label="Clear filter" @click="emit('clear-framework')"><BaseIcon name="x" size="xs" /></button>
+        </div>
+
+        <button class="btn btn-secondary btn-sm export-btn" title="Export Remediation Playbook" @click="emit('export')">
+          <BaseIcon name="download" size="xs" /> <span>Export Playbook</span>
+        </button>
+      </template>
       <template #cell-severity="{ row }">
         <StatusBadge :status="row.severity" :label="row.severity.toUpperCase()" size="sm" />
       </template>

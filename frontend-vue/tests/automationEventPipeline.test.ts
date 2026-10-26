@@ -126,4 +126,15 @@ describe('Task T068-3.1: Automation WHEN -> IF -> THEN Event Pipeline & Timeline
       )
     }
   })
+
+  it('verifies AutomationPipelineBoard formats rule short-ID using last 6 characters', () => {
+    const boardPath = path.resolve(process.cwd(), 'src/components/automation/AutomationPipelineBoard.vue')
+    const content = fs.readFileSync(boardPath, 'utf8')
+
+    // Must NOT use shared prefix slice(0, 8) which causes duplicate #e1000001 on seeded UUIDs
+    assert.doesNotMatch(content, /rule\.id\.slice\(0,\s*8\)/, 'Must not use rule.id.slice(0, 8) for short-id')
+    // Must format short-id using slice(-6) or helper
+    assert.match(content, /slice\(-6\)/, 'Must format short ID using last 6 characters (slice(-6))')
+  })
 })
+
