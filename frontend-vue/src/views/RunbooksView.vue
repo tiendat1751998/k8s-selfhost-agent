@@ -55,8 +55,19 @@
 
       <!-- Right: View Mode Toggle & Action Buttons -->
       <div class="toolbar-actions-group">
-        <!-- View Mode Switcher (Grid / Table) -->
+        <!-- View Mode Switcher (Console / Grid / Table) -->
         <div class="view-mode-toggle desktop-only" title="Switch layout display">
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: viewMode === 'console' }"
+            title="Console View"
+            aria-label="Console View"
+            @click="viewMode = 'console'"
+          >
+            <BaseIcon name="terminal" size="xs" />
+            <span>Console</span>
+          </button>
           <button
             type="button"
             class="mode-btn"
@@ -103,7 +114,7 @@
           @click="showCreateModal = true"
         >
           <BaseIcon name="plus" size="xs" />
-          <span>+ New Runbook</span>
+          <span>New Runbook</span>
         </button>
       </div>
     </div>
@@ -145,9 +156,32 @@
       <span class="tel-item tel-live"><BaseIcon name="zap" size="xs" /> Live CLI</span>
     </div>
 
+    <!-- Split-Pane Playbook Console View (Default) -->
+    <RunbookPlaybookConsole
+      v-if="viewMode === 'console'"
+      class="desktop-only-grid"
+      :runbooks="displayRunbooks"
+      :selected-runbook="selectedRunbook"
+      :steps="parsedSteps"
+      :completed-steps="completedSteps"
+      :logs="executionLogs"
+      :executing-id="executingId"
+      :get-category-icon="getCategoryIcon"
+      :format-date="formatDate"
+      @select="selectedRunbook = $event"
+      @execute="openExecuteModal"
+      @execute-step="executeSingleStep"
+      @toggle-step="toggleStep"
+      @mark-all-complete="markAllStepsComplete"
+      @copy-command="copyCommand"
+      @edit="openEditModal"
+      @delete="handleDeleteRunbook"
+      @create="showCreateModal = true"
+    />
+
     <!-- Desktop Grid View -->
     <RunbooksGrid
-      v-if="viewMode === 'grid'"
+      v-else-if="viewMode === 'grid'"
       class="desktop-only-grid"
       :runbooks="displayRunbooks"
       :executing-id="executingId"
@@ -225,6 +259,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
+import RunbookPlaybookConsole from '../components/runbooks/RunbookPlaybookConsole.vue'
 import RunbooksGrid from '../components/runbooks/RunbooksGrid.vue'
 import RunbooksTable from '../components/runbooks/RunbooksTable.vue'
 import RunbooksMobileCards from '../components/runbooks/RunbooksMobileCards.vue'
@@ -284,47 +319,30 @@ function matchesCategory(category: string, filter: string): boolean {
   const c = (category || '').toLowerCase()
   if (filter === 'Incident') return c.includes('incident')
   if (filter === 'DR') return c.includes('dr') || c.includes('disaster')
-  if (filter === 'Maintenance') {
-    return c.includes('maint') || c.includes('database') || c.includes('db') || c.includes('security') || c.includes('routine') || (!c.includes('incident') && !c.includes('dr') && !c.includes('disaster'))
-  }
+  if (filter === 'Maintenance') return !c.includes('incident') && !c.includes('dr') && !c.includes('disaster')
   return c === filter.toLowerCase()
 }
 
 const displayRunbooks = computed(() => {
   return runbooks.value.filter(r => {
-    // 1. Category filter
-    if (!matchesCategory(r.category, selectedCategory.value)) {
-      return false
-    }
-    // 2. Search query filter (filters by name, id, category, target)
-    if (searchQuery.value && searchQuery.value.trim()) {
-      const q = searchQuery.value.toLowerCase().trim()
-      const matchName = (r.title || '').toLowerCase().includes(q)
-      const matchId = (r.id || '').toLowerCase().includes(q)
-      const matchCategory = (r.category || '').toLowerCase().includes(q)
-      const matchTags = (r.tags || []).some(t => t.toLowerCase().includes(q))
-      const matchContent = (r.content || '').toLowerCase().includes(q)
-      const targetStr = (r as any).target ? JSON.stringify((r as any).target).toLowerCase() : ''
-      const matchTarget = targetStr.includes(q) || matchContent
-      return matchName || matchId || matchCategory || matchTags || matchTarget
-    }
-    return true
+    if (!matchesCategory(r.category, selectedCategory.value)) return false
+    if (!searchQuery.value?.trim()) return true
+    const q = searchQuery.value.toLowerCase().trim()
+    const matchName = (r.title || '').toLowerCase().includes(q)
+    const matchId = (r.id || '').toLowerCase().includes(q)
+    const matchCat = (r.category || '').toLowerCase().includes(q)
+    const matchTags = (r.tags || []).some(t => t.toLowerCase().includes(q))
+    const matchContent = (r.content || '').toLowerCase().includes(q)
+    return matchName || matchId || matchCat || matchTags || matchContent
   })
 })
 
-const runningCount = computed(() => {
-  if (executingId.value) return 1
-  return executionHistory.value.filter(e => e.status === 'running').length
-})
-
+const runningCount = computed(() => executingId.value ? 1 : executionHistory.value.filter(e => e.status === 'running').length)
 const successRate = computed(() => {
-  if (!executionHistory.value || executionHistory.value.length === 0) return null
+  if (!executionHistory.value?.length) return null
   const completed = executionHistory.value.filter(e => e.status === 'completed').length
-  const total = executionHistory.value.length
-  return ((completed / total) * 100).toFixed(1)
+  return ((completed / executionHistory.value.length) * 100).toFixed(1)
 })
 
-onMounted(() => {
-  fetchRunbooks()
-})
+onMounted(() => { fetchRunbooks() })
 </script>

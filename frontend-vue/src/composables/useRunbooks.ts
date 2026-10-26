@@ -49,6 +49,92 @@ export interface RunbookExecutionRecord {
   steps: RunbookStep[];
 }
 
+export function parseRunbookSteps(content?: string, rbTitle?: string): RunbookStep[] {
+  if (!content) return []
+  const lines = content.split('\n')
+  const steps: RunbookStep[] = []
+  let currentStep: RunbookStep | null = null
+  let stepCounter = 1
+  let inCodeFence = false
+  const fenceBuffer: string[] = []
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim()
+    if (trimmed.startsWith('```')) {
+      if (inCodeFence) {
+        inCodeFence = false
+        if (currentStep && fenceBuffer.length > 0) {
+          const blockCmd = fenceBuffer.join('\n').trim()
+          if (blockCmd) currentStep.command = currentStep.command ? `${currentStep.command}\n${blockCmd}` : blockCmd
+        }
+        fenceBuffer.length = 0
+      } else {
+        inCodeFence = true
+        fenceBuffer.length = 0
+      }
+      continue
+    }
+    if (inCodeFence) {
+      fenceBuffer.push(rawLine)
+      continue
+    }
+
+    const isStepHeader = /^#{1,4}\s*(Step\s*\d+:?|\d+\.|\w+)/i.test(trimmed) ||
+                         /^\d+\.\s+/.test(trimmed) ||
+                         /^Step\s+\d+:?/i.test(trimmed)
+
+    if (isStepHeader) {
+      if (currentStep) steps.push(currentStep)
+      const stepNum = stepCounter++
+      const cleanTitle = trimmed
+        .replace(/^#{1,4}\s*/, '')
+        .replace(/^Step\s*\d+:?\s*/i, '')
+        .replace(/^\d+\.\s*/, '')
+        .trim()
+      currentStep = {
+        id: `step-${stepNum}`,
+        stepNum,
+        title: cleanTitle || `Step ${stepNum}`,
+        content: '',
+        dependencies: stepNum > 1 ? [`step-${stepNum - 1}`] : [],
+        status: 'idle',
+      }
+    } else if (trimmed.startsWith('`') && trimmed.endsWith('`') && trimmed.length > 2) {
+      const cmd = trimmed.slice(1, -1).trim()
+      if (currentStep) {
+        currentStep.command = currentStep.command ? `${currentStep.command}\n${cmd}` : cmd
+      }
+    } else if (trimmed) {
+      if (currentStep) {
+        currentStep.content += (currentStep.content ? '\n' : '') + trimmed
+      } else {
+        currentStep = {
+          id: 'step-1',
+          stepNum: 1,
+          title: 'Overview Procedure',
+          content: trimmed,
+          dependencies: [],
+          status: 'idle',
+        }
+        stepCounter++
+      }
+    }
+  }
+  if (inCodeFence && fenceBuffer.length > 0 && currentStep) {
+    const blockCmd = fenceBuffer.join('\n').trim()
+    if (blockCmd) currentStep.command = currentStep.command ? `${currentStep.command}\n${blockCmd}` : blockCmd
+  }
+  if (currentStep) steps.push(currentStep)
+  return steps.length > 0 ? steps : [{
+    id: 'step-1',
+    stepNum: 1,
+    title: rbTitle || 'Execution Step',
+    content: content,
+    dependencies: [],
+    status: 'idle',
+  }]
+}
+
 export function useRunbooks() {
   const runbooks = ref<Runbook[]>([])
   const loading = ref(false)
@@ -56,7 +142,7 @@ export function useRunbooks() {
   const statusMessage = ref<{ type: 'success' | 'error'; text: string } | null>(null)
   const activeCategory = ref<string>('ALL')
   const searchQuery = ref('')
-  const viewMode = ref<'grid' | 'table'>('grid')
+  const viewMode = ref<'console' | 'grid' | 'table'>('console')
 
   const selectedRunbook = ref<Runbook | null>(null)
   const executingRunbook = ref<Runbook | null>(null)
@@ -88,6 +174,9 @@ export function useRunbooks() {
     try {
       const res = await runbookApi.getRunbooks(activeCategory.value === 'ALL' ? undefined : activeCategory.value)
       runbooks.value = res.data || []
+      if (runbooks.value.length > 0 && (!selectedRunbook.value || !runbooks.value.some(r => r.id === selectedRunbook.value?.id))) {
+        selectedRunbook.value = runbooks.value[0]
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to load runbooks'
       error.value = msg
@@ -105,17 +194,12 @@ export function useRunbooks() {
 
   const categoryList = computed(() => {
     const cats = new Set<string>(['ALL'])
-    runbooks.value.forEach(r => {
-      if (r.category) cats.add(r.category)
-    })
+    runbooks.value.forEach(r => { if (r.category) cats.add(r.category) })
     return Array.from(cats)
   })
 
   const categoriesCount = computed(() => Math.max(0, categoryList.value.length - 1))
-  
-  const totalStepsCount = computed(() => {
-    return runbooks.value.reduce((acc, r) => acc + (r.steps_count || 3), 0)
-  })
+  const totalStepsCount = computed(() => runbooks.value.reduce((acc, r) => acc + (r.steps_count || 3), 0))
 
   const filteredRunbooks = computed(() => {
     return runbooks.value.filter(r => {
@@ -133,57 +217,7 @@ export function useRunbooks() {
     })
   })
 
-  function parseRunbookSteps(content?: string, rbTitle?: string): RunbookStep[] {
-    if (!content) return []
-    const lines = content.split('\n')
-    const steps: RunbookStep[] = []
-    let currentStep: RunbookStep | null = null
-    let stepCounter = 1
 
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (/^\d+\./.test(trimmed) || trimmed.startsWith('Step ')) {
-        if (currentStep) steps.push(currentStep)
-        const stepNum = stepCounter++
-        currentStep = {
-          id: `step-${stepNum}`,
-          stepNum,
-          title: trimmed.replace(/^\d+\.\s*/, '').replace(/^Step\s*\d+:\s*/, ''),
-          content: '',
-          dependencies: stepNum > 1 ? [`step-${stepNum - 1}`] : [],
-          status: 'idle',
-        }
-      } else if (trimmed.startsWith('`') && trimmed.endsWith('`') && trimmed.length > 2) {
-        const cmd = trimmed.slice(1, -1)
-        if (currentStep) {
-          currentStep.command = cmd
-        }
-      } else if (trimmed) {
-        if (currentStep) {
-          currentStep.content += (currentStep.content ? '\n' : '') + trimmed
-        } else {
-          currentStep = {
-            id: 'step-1',
-            stepNum: 1,
-            title: 'Overview Procedure',
-            content: trimmed,
-            dependencies: [],
-            status: 'idle',
-          }
-          stepCounter++
-        }
-      }
-    }
-    if (currentStep) steps.push(currentStep)
-    return steps.length > 0 ? steps : [{
-      id: 'step-1',
-      stepNum: 1,
-      title: rbTitle || 'Execution Step',
-      content: content,
-      dependencies: [],
-      status: 'idle',
-    }]
-  }
 
   const parsedSteps = computed<RunbookStep[]>(() => {
     if (!selectedRunbook.value) return []
@@ -229,11 +263,8 @@ export function useRunbooks() {
   }
 
   function toggleStep(idx: number) {
-    if (completedSteps.value.has(idx)) {
-      completedSteps.value.delete(idx)
-    } else {
-      completedSteps.value.add(idx)
-    }
+    if (completedSteps.value.has(idx)) completedSteps.value.delete(idx)
+    else completedSteps.value.add(idx)
   }
 
   function markAllStepsComplete() {
@@ -281,9 +312,8 @@ export function useRunbooks() {
         logs: [
           `[${new Date().toLocaleTimeString()}] [INIT] Initiating ${isDry ? 'DRY-RUN' : 'LIVE'} execution for "${rb.title}"`,
           `[${new Date().toLocaleTimeString()}] [TARGET] Cluster: ${options.target?.cluster || 'production-01'} | Namespace: ${options.target?.namespace || 'default'}`,
-          `[${new Date().toLocaleTimeString()}] [EXEC] Dispatched ${rb.steps_count || 3} procedure steps.`,
+          `[${new Date().toLocaleTimeString()}] [EXEC] Dispatched ${rb.steps_count || 3} procedure steps. Done in ${elapsedMs}ms.`,
           `[${new Date().toLocaleTimeString()}] [OUTPUT] ${res.message || 'All steps exited with code 0.'}`,
-          `[${new Date().toLocaleTimeString()}] [DONE] Runbook finished in ${elapsedMs}ms.`,
         ],
         steps: parseRunbookSteps(rb.content, rb.title).map(s => ({ ...s, status: 'completed' })),
       }
@@ -344,15 +374,11 @@ export function useRunbooks() {
     try {
       newRunbook.tags = tagInput.value.split(',').map(t => t.trim()).filter(Boolean)
       await runbookApi.createRunbook(newRunbook)
-      statusMessage.value = {
-        type: 'success',
-        text: `Runbook "${newRunbook.title}" published successfully.`,
-      }
+      statusMessage.value = { type: 'success', text: `Runbook "${newRunbook.title}" published successfully.` }
       showCreateModal.value = false
       await fetchRunbooks()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create runbook'
-      statusMessage.value = { type: 'error', text: msg }
+      statusMessage.value = { type: 'error', text: err instanceof Error ? err.message : 'Failed to create runbook' }
     } finally {
       loading.value = false
     }
@@ -364,15 +390,11 @@ export function useRunbooks() {
     statusMessage.value = null
     try {
       await runbookApi.updateRunbook(editingRunbook.value.id, editingRunbook.value)
-      statusMessage.value = {
-        type: 'success',
-        text: `Runbook "${editingRunbook.value.title}" updated successfully.`,
-      }
+      statusMessage.value = { type: 'success', text: `Runbook "${editingRunbook.value.title}" updated successfully.` }
       showEditModal.value = false
       await fetchRunbooks()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to update runbook'
-      statusMessage.value = { type: 'error', text: msg }
+      statusMessage.value = { type: 'error', text: err instanceof Error ? err.message : 'Failed to update runbook' }
     } finally {
       loading.value = false
     }
@@ -396,7 +418,6 @@ export function useRunbooks() {
     statusMessage.value = { type: 'success', text: 'Command copied to clipboard!' }
   }
 
-
   function getCategoryIcon(cat: string): string {
     const c = (cat || '').toLowerCase()
     if (c.includes('disaster') || c.includes('dr')) return 'zap'
@@ -407,14 +428,9 @@ export function useRunbooks() {
     return 'book-open'
   }
 
-
   function formatDate(d?: string): string {
     if (!d) return '-'
-    try {
-      return new Date(d).toLocaleDateString()
-    } catch {
-      return d
-    }
+    try { return new Date(d).toLocaleDateString() } catch { return d }
   }
 
   function dismissStatus() {

@@ -204,7 +204,7 @@ const emit = defineEmits<{
           @click="emit('openCreateRule')"
         >
           <BaseIcon name="plus" size="xs" />
-          <span>+ New Rule</span>
+          <span>New Rule</span>
         </button>
         <button
           v-else-if="activeTab === 'channels'"
@@ -215,7 +215,7 @@ const emit = defineEmits<{
           @click="emit('openCreateChannel')"
         >
           <BaseIcon name="plus" size="xs" />
-          <span>+ Add Channel</span>
+          <span>Add Channel</span>
         </button>
         <button
           type="button"

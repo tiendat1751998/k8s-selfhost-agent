@@ -70,7 +70,7 @@ const filteredRepos = computed(() => {
   <div class="helm-catalog-layout helm-view animate-fade-in">
     <!-- Toast Notification -->
     <Transition name="toast-slide">
-      <div v-if="toastMessage" class="cyber-toast" :class="`toast-${toastMessage.type}`">
+      <div v-if="toastMessage" class="helm-toast glass-panel" :class="`toast-${toastMessage.type}`">
         <BaseIcon :name="toastMessage.type === 'success' ? 'check-circle' : 'alert-triangle'" size="sm" class="toast-icon" />
         <span class="toast-text">{{ toastMessage.text }}</span>
       </div>
@@ -172,11 +172,11 @@ const filteredRepos = computed(() => {
           <p class="section-subtitle">Manage upstream OCI and HTTP chart registry sources</p>
         </div>
         <div class="repos-actions">
-          <button type="button" class="btn-cyber btn-outline-cyan" :disabled="updatingAllRepos" @click="handleUpdateAllRepos">
+          <button type="button" class="btn btn-secondary" :disabled="updatingAllRepos" @click="handleUpdateAllRepos">
             <BaseIcon name="refresh" size="xs" :class="{ 'spin-anim': updatingAllRepos }" />
             <span>{{ updatingAllRepos ? 'Updating Indexes...' : 'Update All Repos' }}</span>
           </button>
-          <button type="button" class="btn-cyber btn-primary" @click="openAddRepoModal">
+          <button type="button" class="btn btn-primary" @click="openAddRepoModal">
             <span>+ Add Repository</span>
           </button>
         </div>
@@ -184,17 +184,17 @@ const filteredRepos = computed(() => {
 
       <div class="data-table-container glass-panel">
         <div v-if="loadingRepos" class="loading-state">
-          <div class="cyber-spinner"></div>
+          <div class="helm-spinner"></div>
           <p class="font-mono text-muted">Loading Helm repository indexes...</p>
         </div>
         <div v-else-if="repos.length === 0" class="empty-state">
           <BaseIcon name="database" size="xl" class="empty-icon" />
           <h4 class="empty-title">No Repositories Configured</h4>
           <p class="empty-desc">Add your first Helm repository to start discovering charts.</p>
-          <button type="button" class="btn-cyber btn-primary" @click="openAddRepoModal">+ Add Repository</button>
+          <button type="button" class="btn btn-primary" @click="openAddRepoModal">+ Add Repository</button>
         </div>
         <div v-else class="table-scroll-wrapper desktop-only">
-          <table class="cyber-table">
+          <table class="helm-table data-table">
             <thead>
               <tr><th>Repository Name</th><th>Repository URL</th><th class="text-right">Actions</th></tr>
             </thead>

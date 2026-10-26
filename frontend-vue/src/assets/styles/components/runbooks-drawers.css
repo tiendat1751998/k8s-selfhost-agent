@@ -101,7 +101,7 @@
 .progress-bar-fill,
 .hud-progress-fill {
   height: 100%;
-  background: var(--grad-cyan, linear-gradient(90deg, #06b6d4, #38bdf8));
+  background: var(--color-primary);
   transition: width 0.25s ease;
 }
 
@@ -161,12 +161,12 @@
   gap: 8px;
   overflow: hidden;
 }
-.command-pre { margin: 0; font-size: 11.5px; color: var(--accent-sky, #38bdf8); white-space: pre-wrap; word-break: break-all; flex: 1; }
+.command-pre { margin: 0; font-size: 11.5px; color: var(--color-endpoint-syntax, #58a6ff); white-space: pre-wrap; word-break: break-all; flex: 1; }
 .copy-btn {
   background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
-  color: var(--accent-sky, #38bdf8);
+  color: var(--color-endpoint-syntax, #58a6ff);
   padding: 4px 8px;
   cursor: pointer;
   font-size: 11px;
@@ -174,7 +174,7 @@
   flex-shrink: 0;
   transition: all 0.15s ease;
 }
-.copy-btn:hover { background: var(--bg-card-hover); border-color: var(--accent-sky, #38bdf8); color: #fff; }
+.copy-btn:hover { background: var(--bg-card-hover); border-color: var(--color-primary); color: #fff; }
 
 /* Log Terminal Box */
 .log-terminal-box {

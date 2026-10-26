@@ -101,10 +101,11 @@
 .chevron-icon { color: var(--text-muted, var(--color-muted)); transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
 .chevron-icon.is-collapsed { transform: rotate(-90deg); }
 
-/* Workload Cards Grid (2 cols on desktop, 1 on mobile) */
-.namespace-cards-grid {
+/* Workload Cards Grid (Auto-fit on desktop, 1 col on mobile/tablet < 768px) */
+.namespace-cards-grid,
+.ns-cards-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
   gap: 12px;
   padding: 14px 16px;
 }
@@ -288,7 +289,8 @@
 
 /* RWD for Topology */
 @media (max-width: 1024px) {
-  .namespace-cards-grid { grid-template-columns: 1fr; }
+  .namespace-cards-grid,
+  .ns-cards-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 639px) {

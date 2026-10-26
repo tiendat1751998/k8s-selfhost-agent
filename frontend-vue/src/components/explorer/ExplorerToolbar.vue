@@ -223,7 +223,7 @@ function handleMoreActionSelect(actionId: string) {
           @click="emit('createResource')"
         >
           <BaseIcon name="plus" size="xs" />
-          <span>+ Create Resource</span>
+          <span>Create Resource</span>
         </button>
 
         <ActionDropdown

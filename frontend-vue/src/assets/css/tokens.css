@@ -5,6 +5,7 @@
   --color-primary-active: #2563eb;
   --color-primary-disabled: #1e293b;
   --color-on-primary: #ffffff;
+  --color-primary-fg: var(--color-on-primary);
 
   /* 4-Tier Deep Slate Surface Ladder (DevOps / GitHub Primer Dark Dimmed) */
   --color-canvas-dark: #0b0f17;
@@ -126,6 +127,7 @@
   --color-primary-hover: #2563eb;
   --color-primary-active: #1e40af;
   --color-on-primary: #ffffff;
+  --color-primary-fg: var(--color-on-primary);
 
   /* 4-Tier Surface Ladder (Cloud Console Light) */
   --color-canvas-dark: #f8fafc;
