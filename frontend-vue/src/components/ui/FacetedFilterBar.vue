@@ -206,7 +206,7 @@ onUnmounted(() => {
         @click="toggleFacetMenu"
       >
         <BaseIcon name="plus" size="12" />
-        <span>+ Filter</span>
+        <span>Filter</span>
       </button>
 
       <div v-if="isFacetMenuOpen" class="facet-menu-popover" role="menu">

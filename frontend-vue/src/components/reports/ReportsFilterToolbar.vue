@@ -114,7 +114,7 @@ function clearSearch() {
         @click="emit('generate')"
       >
         <BaseIcon name="plus" size="xs" />
-        <span>+ Generate Report</span>
+        <span>Generate Report</span>
       </button>
     </div>
   </div>
