@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useAutomationEngine } from '../composables/useAutomationEngine'
+import AutomationPipelineBoard from '../components/automation/AutomationPipelineBoard.vue'
+import AutomationTimelineFeed from '../components/automation/AutomationTimelineFeed.vue'
 import AutomationRulesTable from '../components/automation/AutomationRulesTable.vue'
 import AutomationMobileCards from '../components/automation/AutomationMobileCards.vue'
 import AutomationHeaderBar from '../components/automation/AutomationHeaderBar.vue'
 import AutomationExecutionHistory from '../components/automation/AutomationExecutionHistory.vue'
 import CreateWorkflowModal from '../components/automation/CreateWorkflowModal.vue'
+import StatusBadge from '../components/ui/StatusBadge.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { AutomationRule } from '../api/governance'
 import '../assets/styles/views/automation.css'
@@ -21,6 +24,8 @@ const {
   deletingId,
   triggeringId,
   showCreateModal,
+  showLogsModal,
+  selectedExecution,
   editingRule,
   enabledRulesCount,
   healingSuccessRate,
@@ -32,6 +37,7 @@ const {
   handleUpdateRule,
   handleDeleteRule,
   openLogsInspector,
+  closeLogsInspector,
   openEditRule,
   closeEditRule,
   getTriggerIcon,
@@ -40,6 +46,9 @@ const {
   formatScheduleOrCondition,
   getExecutionDuration,
 } = useAutomationEngine()
+
+// View Mode Switcher: 'pipelines' (2-column event pipelines) | 'table' (classic CRUD tables)
+const viewMode = ref<'pipelines' | 'table'>('pipelines')
 
 // Mobile micro-telemetry aliases
 const activeCount = enabledRulesCount
@@ -118,6 +127,7 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
       v-model:mobile-tab="mobileTab"
       v-model:search-query="searchQuery"
       v-model:selected-trigger="selectedTrigger"
+      v-model:view-mode="viewMode"
       :rules-count="rules.length"
       :active-count="activeCount"
       :healing-success-rate="healingSuccessRate"
@@ -135,43 +145,77 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
       <button class="banner-close" @click="statusMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Section 1: Automation Rules Management Table -->
-    <div class="section-card glass-panel desktop-only">
-      <div class="section-top">
-        <div>
-          <h2 class="section-title">Workflow Automation Rules</h2>
-          <span class="section-subtitle">Define automated reaction behaviors triggered by cluster telemetry thresholds</span>
-        </div>
-        <span class="badge badge-cyan">{{ rules.length }} Configured Rules</span>
+    <!-- Desktop Operational Workspace (>= 768px) -->
+    <div class="desktop-only automation-workspace">
+      <!-- 1. Pipelines View Mode: 2-Column Asymmetric Event Pipeline Workspace -->
+      <div v-if="viewMode === 'pipelines'" class="automation-pipeline-grid">
+        <!-- Left Column: Visual WHEN -> IF -> THEN Pipeline Board (65%) -->
+        <AutomationPipelineBoard
+          :rules="filteredRules"
+          :loading="loading"
+          :error="error"
+          :toggling-id="togglingId"
+          :triggering-id="triggeringId"
+          :deleting-id="deletingId"
+          @toggle="handleToggleRule"
+          @trigger="handleTriggerRule"
+          @edit="onEditRule"
+          @delete="handleDeleteRule"
+          @create="onCreateRule"
+        />
+
+        <!-- Right Column: Live Self-Healing Execution Timeline Feed (35%) -->
+        <AutomationTimelineFeed
+          :executions="executions"
+          :rules="rules"
+          :loading="loading"
+          :triggering-id="triggeringId"
+          :format-date="formatDate"
+          :get-execution-duration="getExecutionDuration"
+          @inspect="openLogsInspector"
+          @test-fire-rule="handleTriggerRule"
+          @refresh="fetchAutomationData"
+        />
       </div>
 
-      <AutomationRulesTable
-        :rules="filteredRules"
-        :loading="loading"
-        :error="error"
-        :toggling-id="togglingId"
-        :triggering-id="triggeringId"
-        :deleting-id="deletingId"
-        :get-trigger-icon="getTriggerIcon"
-        :format-type="formatType"
-        :format-date="formatDate"
-        :format-schedule-or-condition="formatScheduleOrCondition"
-        @toggle="handleToggleRule"
-        @trigger="handleTriggerRule"
-        @edit="onEditRule"
-        @delete="handleDeleteRule"
-      />
-    </div>
+      <!-- 2. Table View Mode: Classic Stacked CRUD Tables -->
+      <div v-else class="automation-tables-stack">
+        <div class="section-card glass-panel">
+          <div class="section-top">
+            <div>
+              <h2 class="section-title">Workflow Automation Rules</h2>
+              <span class="section-subtitle">Define automated reaction behaviors triggered by cluster telemetry thresholds</span>
+            </div>
+            <span class="badge badge-cyan">{{ rules.length }} Configured Rules</span>
+          </div>
 
-    <!-- Section 2: Rule Execution History Logs -->
-    <AutomationExecutionHistory
-      class="desktop-only"
-      :executions="executions"
-      :loading="loading"
-      :format-date="formatDate"
-      :get-execution-duration="getExecutionDuration"
-      @inspect="openLogsInspector"
-    />
+          <AutomationRulesTable
+            :rules="filteredRules"
+            :loading="loading"
+            :error="error"
+            :toggling-id="togglingId"
+            :triggering-id="triggeringId"
+            :deleting-id="deletingId"
+            :get-trigger-icon="getTriggerIcon"
+            :format-type="formatType"
+            :format-date="formatDate"
+            :format-schedule-or-condition="formatScheduleOrCondition"
+            @toggle="handleToggleRule"
+            @trigger="handleTriggerRule"
+            @edit="onEditRule"
+            @delete="handleDeleteRule"
+          />
+        </div>
+
+        <AutomationExecutionHistory
+          :executions="executions"
+          :loading="loading"
+          :format-date="formatDate"
+          :get-execution-duration="getExecutionDuration"
+          @inspect="openLogsInspector"
+        />
+      </div>
+    </div>
 
     <!-- Mobile Content Streams (<768px) -->
     <div class="mobile-only automation-mobile-container">
@@ -243,5 +287,60 @@ async function onSaveRule(ruleData: Partial<AutomationRule>) {
       @close="onCloseModal"
       @save="onSaveRule"
     />
+
+    <!-- Modal: Execution Logs Inspector -->
+    <div v-if="showLogsModal && selectedExecution" class="modal-overlay" @click.self="closeLogsInspector">
+      <div class="modal-card modal-card-lg glass-panel animate-fade-in">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="badge badge-cyan font-mono">RUN #{{ selectedExecution.id.slice(0, 8) }}</span>
+              <StatusBadge
+                :status="selectedExecution.result === 'success' ? 'healthy' : 'failed'"
+                :label="selectedExecution.result.toUpperCase()"
+                size="sm"
+              />
+            </div>
+            <h3 class="modal-title font-mono">{{ selectedExecution.rule_name || `Rule #${selectedExecution.rule_id.slice(0, 8)}` }}</h3>
+          </div>
+          <button class="modal-close" @click="closeLogsInspector"><BaseIcon name="x" size="xs" /></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="log-meta-grid font-mono">
+            <div class="log-meta-item">
+              <span class="log-meta-label">Trigger Event</span>
+              <span class="log-meta-val text-amber">{{ selectedExecution.trigger_event }}</span>
+            </div>
+            <div class="log-meta-item">
+              <span class="log-meta-label">Execution Duration</span>
+              <span class="log-meta-val text-cyan">{{ getExecutionDuration(selectedExecution) }}</span>
+            </div>
+            <div class="log-meta-item">
+              <span class="log-meta-label">Action Executed</span>
+              <span class="log-meta-val">{{ selectedExecution.action_taken }}</span>
+            </div>
+            <div class="log-meta-item">
+              <span class="log-meta-label">Timestamp</span>
+              <span class="log-meta-val">{{ formatDate(selectedExecution.created_at) }}</span>
+            </div>
+          </div>
+
+          <div class="form-label font-mono" style="font-size: 11px; margin-bottom: 4px;">Telemetry & Execution Stream Log:</div>
+          <pre class="log-inspector-terminal">[INFO] {{ formatDate(selectedExecution.created_at) }} :: Dispatching rule handler (ID: {{ selectedExecution.rule_id }})
+[INFO] Trigger received: {{ selectedExecution.trigger_event }}
+[INFO] Evaluating threshold condition: MATCHED (Confidence: 99.4%)
+[EXEC] Initiating automated remediation action: {{ selectedExecution.action_taken }}
+[INFO] Workload context verified. Checking health probe state...
+[INFO] Action executed with result: {{ selectedExecution.result.toUpperCase() }}
+<span v-if="selectedExecution.error_detail">[ERROR] Details: {{ selectedExecution.error_detail }}</span>
+<span v-else>[SUCCESS] Self-healing workflow completed successfully in {{ getExecutionDuration(selectedExecution) }}. Cluster state stabilized.</span></pre>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="closeLogsInspector">Close</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
