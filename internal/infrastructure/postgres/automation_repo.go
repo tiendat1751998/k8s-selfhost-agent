@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/automation"
@@ -265,19 +266,30 @@ func (r *automationRepo) ListExecutions(ctx context.Context, limit, offset int) 
 	return execs, total, nil
 }
 
+func parseTenantUUIDOrNil(tid string) *string {
+	if tid == "" {
+		return nil
+	}
+	if u, err := uuid.Parse(tid); err == nil {
+		s := u.String()
+		return &s
+	}
+	return nil
+}
+
 func (r *automationRepo) CreateExecution(ctx context.Context, e *automation.Execution) error {
+	if e.ID == "" {
+		e.ID = uuid.NewString()
+	}
 	if e.CreatedAt.IsZero() {
 		e.CreatedAt = time.Now().UTC()
 	}
 
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
-	}
+	tenantID := parseTenantUUIDOrNil(tenancy.TenantIDFromContext(ctx))
 
 	query := `
-		INSERT INTO automation_executions (rule_id, rule_name, trigger_event, action_taken, result, error_detail, created_at, tenant_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO automation_executions (id, rule_id, rule_name, trigger_event, action_taken, result, error_detail, created_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id
 	`
 	
@@ -287,7 +299,7 @@ func (r *automationRepo) CreateExecution(ctx context.Context, e *automation.Exec
 	}
 
 	err := r.getDB(ctx).QueryRow(ctx, query,
-		e.RuleID, e.RuleName, e.TriggerEvent, e.ActionTaken, e.Result, errDetail, e.CreatedAt, tenantID,
+		e.ID, e.RuleID, e.RuleName, e.TriggerEvent, e.ActionTaken, e.Result, errDetail, e.CreatedAt, tenantID,
 	).Scan(&e.ID)
 	
 	if err != nil {

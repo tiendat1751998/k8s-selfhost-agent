@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/datdt/k8sselfhost/internal/domain/automation"
 )
@@ -190,6 +191,7 @@ func (h *AutomationHandler) TriggerRule(w http.ResponseWriter, r *http.Request) 
 	}
 
 	exec := &automation.Execution{
+		ID:           uuid.NewString(),
 		RuleID:       rule.ID,
 		RuleName:     rule.Name,
 		TriggerEvent: "Manual SRE 1-Click trigger from console",
