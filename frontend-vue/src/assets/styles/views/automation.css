@@ -46,11 +46,11 @@
   gap: 6px; user-select: none; letter-spacing: -0.01em; padding: 0 4px; width: 100%; box-sizing: border-box;
 }
 .mobile-micro-telemetry .tel-item, .automation-micro-telemetry .tel-item { display: inline-flex; align-items: center; line-height: 1; }
-.mobile-micro-telemetry .tel-rules, .automation-micro-telemetry .tel-rules { color: #38bdf8; }
-.mobile-micro-telemetry .tel-active, .automation-micro-telemetry .tel-active { color: #34d399; }
+.mobile-micro-telemetry .tel-rules, .automation-micro-telemetry .tel-rules { color: var(--accent-cyan, #06b6d4); }
+.mobile-micro-telemetry .tel-active, .automation-micro-telemetry .tel-active { color: var(--color-status-online, #34d399); }
 .mobile-micro-telemetry .tel-healed, .automation-micro-telemetry .tel-healed { color: #c084fc; }
-.mobile-micro-telemetry .tel-saved, .automation-micro-telemetry .tel-saved { color: #fbbf24; }
-.mobile-micro-telemetry .tel-sep, .automation-micro-telemetry .tel-sep { color: rgba(148, 163, 184, 0.4); font-weight: 400; }
+.mobile-micro-telemetry .tel-saved, .automation-micro-telemetry .tel-saved { color: var(--color-status-warning, #fbbf24); }
+.mobile-micro-telemetry .tel-sep, .automation-micro-telemetry .tel-sep { color: var(--color-border-subtle); font-weight: 400; }
 
 /* 4. Segmented Control & Mobile Tab Switcher */
 .segmented-control {
@@ -251,9 +251,9 @@
 .automation-toolbar-sleek .kpi-badge {
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--accent-cyan, #38bdf8);
-  background: rgba(56, 189, 248, 0.1);
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: var(--accent-cyan, #06b6d4);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   padding: 3px 8px;
   border-radius: 6px;
   white-space: nowrap;
@@ -285,14 +285,14 @@
 
 .automation-toolbar-sleek .toolbar-btn.btn-primary {
   background: var(--color-primary);
-  color: var(--color-primary-fg);
+  color: var(--color-on-primary, #ffffff);
   border: 1px solid transparent;
   font-weight: 600;
 }
 
 .automation-toolbar-sleek .toolbar-btn.btn-primary:hover {
   background: var(--color-primary-hover, #1d4ed8);
-  color: var(--color-primary-fg);
+  color: var(--color-on-primary, #ffffff);
   box-shadow: none;
 }
 
@@ -353,15 +353,15 @@ input:checked + .slider:before { transform: translateX(16px); }
 .action-cell { min-width: 0; overflow: hidden; }
 .action-tag {
   display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px;
-  background: rgba(6, 182, 212, 0.12); border: 1px solid rgba(6, 182, 212, 0.25);
-  border-radius: 6px; color: var(--accent-sky, #38bdf8); max-width: 100%;
+  background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle);
+  border-radius: 6px; color: var(--accent-cyan, #06b6d4); max-width: 100%;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box;
 }
 .actions-cell { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .btn-trigger-action:hover:not(:disabled) {
-  background: var(--color-badge-agent-bg, rgba(6, 182, 212, 0.2)) !important;
-  border-color: var(--color-badge-agent-border, #06b6d4) !important;
-  color: var(--color-badge-k8s-text, #38bdf8) !important;
+  background: var(--color-surface-inset) !important;
+  border-color: var(--color-border-strong) !important;
+  color: var(--accent-cyan, #06b6d4) !important;
 }
 .btn-edit-action:hover:not(:disabled) { background: var(--bg-card-hover) !important; border-color: var(--color-border-strong) !important; }
 .btn-crimson-delete {
@@ -373,7 +373,7 @@ input:checked + .slider:before { transform: translateX(16px); }
   color: var(--color-status-offline, #f43f5e) !important; box-shadow: none;
 }
 .duration-badge {
-  display: inline-flex; align-items: padding: 2px 7px; background: var(--color-surface-inset);
+  display: inline-flex; align-items: center; padding: 2px 7px; background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle); border-radius: 4px; font-size: 11px; color: var(--text-primary);
 }
 
@@ -386,13 +386,13 @@ input:checked + .slider:before { transform: translateX(16px); }
   padding: 10px 12px; border-radius: 10px; background: var(--bg-card);
   border: 1px solid var(--color-border-subtle); display: flex; flex-direction: column; gap: 6px; box-sizing: border-box;
 }
-.auto-card:hover { border-color: rgba(6, 182, 212, 0.3); }
+.auto-card:hover { border-color: var(--color-border-strong); }
 .card-header-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .rule-title { font-size: 13px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .status-pill { font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 4px; letter-spacing: 0.04em; flex-shrink: 0; }
-.pill-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-.pill-running { background: rgba(6, 182, 212, 0.15); color: #38bdf8; border: 1px solid rgba(6, 182, 212, 0.3); }
-.pill-failed { background: rgba(244, 63, 94, 0.15); color: #f87171; border: 1px solid rgba(244, 63, 94, 0.3); }
+.pill-success { background: var(--color-status-online-bg, rgba(16, 185, 129, 0.15)); color: var(--color-status-online, #34d399); border: 1px solid var(--color-status-online-border, rgba(16, 185, 129, 0.3)); }
+.pill-running { background: var(--color-surface-inset); color: var(--accent-cyan, #06b6d4); border: 1px solid var(--color-border-subtle); }
+.pill-failed { background: var(--color-status-offline-bg, rgba(244, 63, 94, 0.15)); color: var(--color-status-offline, #f87171); border: 1px solid var(--color-status-offline-border, rgba(244, 63, 94, 0.3)); }
 .card-details-grid {
   display: flex; flex-direction: column; gap: 3px; font-size: 11px;
   background: var(--color-surface-inset); padding: 6px 8px; border-radius: 6px; box-sizing: border-box;
@@ -433,3 +433,28 @@ input:checked + .slider:before { transform: translateX(16px); }
   .section-card { padding: 14px; }
   .section-top { flex-direction: column; align-items: stretch; gap: 8px; }
 }
+
+/* 14. 2-Column Asymmetric Event Pipeline Grid */
+.automation-workspace {
+  width: 100%;
+}
+.automation-pipeline-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.85fr) minmax(300px, 1fr);
+  gap: 16px;
+  align-items: start;
+  width: 100%;
+  box-sizing: border-box;
+}
+.automation-tables-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+@media (max-width: 1023.98px) {
+  .automation-pipeline-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

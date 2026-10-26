@@ -11,12 +11,14 @@ defineProps<{
   mobileTab: 'rules' | 'history'
   searchQuery: string
   selectedTrigger: 'all' | 'crashloop' | 'nodepressure' | 'deploymentfailed'
+  viewMode?: 'pipelines' | 'table'
 }>()
 
 const emit = defineEmits<{
   (e: 'update:mobileTab', val: 'rules' | 'history'): void
   (e: 'update:searchQuery', val: string): void
   (e: 'update:selectedTrigger', val: 'all' | 'crashloop' | 'nodepressure' | 'deploymentfailed'): void
+  (e: 'update:viewMode', val: 'pipelines' | 'table'): void
   (e: 'refresh'): void
   (e: 'create'): void
 }>()
@@ -127,6 +129,34 @@ const triggerFilterPills = [
         </button>
       </div>
 
+      <!-- Pipelines | Table View Switcher -->
+      <div class="segmented-control desktop-only" role="tablist" aria-label="View mode">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="viewMode === 'pipelines' || !viewMode"
+          class="segmented-btn"
+          :class="{ active: viewMode === 'pipelines' || !viewMode }"
+          title="Pipelines View"
+          @click="emit('update:viewMode', 'pipelines')"
+        >
+          <BaseIcon name="git-commit" size="xs" />
+          <span>Pipelines</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="viewMode === 'table'"
+          class="segmented-btn"
+          :class="{ active: viewMode === 'table' }"
+          title="Table View"
+          @click="emit('update:viewMode', 'table')"
+        >
+          <BaseIcon name="table" size="xs" />
+          <span>Table</span>
+        </button>
+      </div>
+
       <!-- Inline compact execution badge strip font-mono -->
       <div class="toolbar-kpi-strip font-mono desktop-only" role="status" aria-label="Automation execution metrics">
         <span class="kpi-badge font-mono">{{ rulesCount }} Rules ({{ activeCount }} Active · {{ executionsCount > 0 ? `${healingSuccessRate}% Healed` : '0 Healed' }} · {{ savedHours }}h Saved)</span>
@@ -138,11 +168,11 @@ const triggerFilterPills = [
           type="button"
           class="btn btn-primary toolbar-btn"
           title="Create Automation Rule"
-          aria-label="Create Automation Rule"
+          aria-label="Create Rule"
           @click="emit('create')"
         >
           <BaseIcon name="plus" size="xs" />
-          <span>+ Create Automation Rule</span>
+          <span>Create Rule</span>
         </button>
         <button
           type="button"
