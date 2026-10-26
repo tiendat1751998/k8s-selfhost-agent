@@ -16,7 +16,7 @@
 .explorer-right-col { height: 100%; display: flex; flex-direction: column; min-width: 0; overflow: hidden; position: relative; }
 
 /* Collapsible Log Volume Histogram */
-.histogram-wrapper { margin-bottom: 8px; flex-shrink: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.15)); background: var(--color-surface-card, rgba(15, 23, 42, 0.6)); }
+.histogram-wrapper { margin-bottom: 8px; flex-shrink: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-subtle); background: var(--bg-card); }
 
 /* Sleek Unified 48px Enterprise Toolbar */
 .logs-toolbar-sleek {
@@ -192,8 +192,8 @@
 /* Mobile Command Bar */
 .logs-mobile-command-bar {
   display: none; height: 40px; min-height: 40px; padding: 0 8px;
-  background: var(--color-surface-card, rgba(15, 23, 42, 0.85)); backdrop-filter: blur(12px);
-  border: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.15)); border-radius: 8px;
+  background: var(--bg-card); backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle); border-radius: 8px;
   align-items: center; justify-content: space-between; gap: 6px; width: 100%;
   box-sizing: border-box; margin-bottom: 8px; flex-shrink: 0;
 }
@@ -202,7 +202,7 @@
 .mobile-btn {
   height: 26px; padding: 0 7px; font-size: 11px; font-weight: 600;
   display: inline-flex; align-items: center; gap: 4px; border-radius: 5px;
-  background: var(--color-surface-elevated, rgba(30, 41, 59, 0.7)); border: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.25)); color: var(--color-body, #e2e8f0); cursor: pointer;
+  background: var(--bg-elevated); border: 1px solid var(--border-subtle); color: var(--text-primary); cursor: pointer;
 }
 .mobile-btn.active { background: var(--color-badge-k8s-bg); border-color: var(--color-badge-k8s-border); color: var(--color-badge-k8s-text); box-shadow: none; }
 .mobile-btn.btn-tail-active { background: var(--color-status-online-bg); border-color: var(--color-status-online-border); color: var(--color-status-online); }
@@ -319,14 +319,14 @@
 
 @media (max-width: 900px) {
   .mobile-backdrop { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); z-index: 45; }
-  .mobile-drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--color-surface-card, #0f172a); border-bottom: 1px solid var(--color-border-subtle, #1e293b); }
-  .drawer-title { font-size: 11px; font-weight: 700; color: #38bdf8; text-transform: uppercase; }
-  .drawer-close-btn { background: none; border: none; color: var(--color-muted, #94a3b8); font-size: 13px; cursor: pointer; }
+  .mobile-drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg-card); border-bottom: 1px solid var(--border-subtle); }
+  .drawer-title { font-size: 11px; font-weight: 700; color: var(--color-badge-agent-text); text-transform: uppercase; }
+  .drawer-close-btn { background: none; border: none; color: var(--text-muted); font-size: 13px; cursor: pointer; }
   .log-explorer-grid { grid-template-columns: 1fr; position: relative; }
   .explorer-left-col {
     display: none; position: fixed; top: 50px; left: 12px; right: 12px; bottom: 20px;
-    max-width: 380px; z-index: 50; background: var(--color-surface-card, #0b0f19); border: 1px solid var(--color-border-subtle, #1e293b);
-    border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.9); flex-direction: column;
+    max-width: 380px; z-index: 50; background: var(--bg-card); border: 1px solid var(--border-subtle);
+    border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4); flex-direction: column;
   }
   .explorer-left-col.mobile-tree-open { display: flex; }
 }
