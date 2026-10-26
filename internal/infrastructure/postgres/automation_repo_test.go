@@ -64,7 +64,7 @@ func (r *recordingAutomationDB) QueryRow(ctx context.Context, sql string, args .
 func TestAutomationRepo_CreateExecution_UUIDAndTenantHandling(t *testing.T) {
 	ruleID := "e1000001-0000-0000-0000-000000000001"
 
-	t.Run("generates valid UUID for Execution.ID and passes nil tenant when empty", func(t *testing.T) {
+	t.Run("generates valid UUID for Execution.ID and defaults tenant_id to default-tenant when empty", func(t *testing.T) {
 		db := &recordingAutomationDB{}
 		repo := postgres.NewAutomationRepo(db)
 
@@ -105,15 +105,14 @@ func TestAutomationRepo_CreateExecution_UUIDAndTenantHandling(t *testing.T) {
 			t.Fatalf("expected arg[0] to match exec.ID %q, got: %v", exec.ID, db.lastArgs[0])
 		}
 
-		// Verify tenant_id (arg[8]) is nil for empty tenant
-		if db.lastArgs[8] != nil {
-			if tenantPtr, ok := db.lastArgs[8].(*string); ok && tenantPtr != nil {
-				t.Fatalf("expected nil tenant_id for empty tenant context, got: %v", *tenantPtr)
-			}
+		// Verify tenant_id (arg[8]) is "default-tenant" string (VARCHAR(255) NOT NULL)
+		tenantStr, ok := db.lastArgs[8].(string)
+		if !ok || tenantStr != "default-tenant" {
+			t.Fatalf("expected string 'default-tenant' for empty tenant context, got: %v (%T)", db.lastArgs[8], db.lastArgs[8])
 		}
 	})
 
-	t.Run("passes nil tenant for non-UUID default-tenant string", func(t *testing.T) {
+	t.Run("passes string default-tenant for default-tenant context", func(t *testing.T) {
 		db := &recordingAutomationDB{}
 		repo := postgres.NewAutomationRepo(db)
 
@@ -135,15 +134,14 @@ func TestAutomationRepo_CreateExecution_UUIDAndTenantHandling(t *testing.T) {
 			t.Fatalf("expected 9 arguments, got %d: %v", len(db.lastArgs), db.lastArgs)
 		}
 
-		// Verify tenant_id (arg[8]) is nil for non-UUID "default-tenant"
-		if db.lastArgs[8] != nil {
-			if tenantPtr, ok := db.lastArgs[8].(*string); ok && tenantPtr != nil {
-				t.Fatalf("expected nil tenant_id for non-UUID 'default-tenant', got: %v", *tenantPtr)
-			}
+		// Verify tenant_id (arg[8]) is "default-tenant" string
+		tenantStr, ok := db.lastArgs[8].(string)
+		if !ok || tenantStr != "default-tenant" {
+			t.Fatalf("expected string 'default-tenant' for default-tenant context, got: %v (%T)", db.lastArgs[8], db.lastArgs[8])
 		}
 	})
 
-	t.Run("passes valid UUID pointer when tenant is valid UUID", func(t *testing.T) {
+	t.Run("passes custom tenant string when tenant is provided", func(t *testing.T) {
 		db := &recordingAutomationDB{}
 		repo := postgres.NewAutomationRepo(db)
 
@@ -166,12 +164,9 @@ func TestAutomationRepo_CreateExecution_UUIDAndTenantHandling(t *testing.T) {
 			t.Fatalf("expected 9 arguments, got %d: %v", len(db.lastArgs), db.lastArgs)
 		}
 
-		tenantPtr, ok := db.lastArgs[8].(*string)
-		if !ok || tenantPtr == nil {
-			t.Fatalf("expected non-nil *string for valid tenant UUID, got: %v", db.lastArgs[8])
-		}
-		if *tenantPtr != validTenantUUID {
-			t.Fatalf("expected tenant_id to be %q, got: %q", validTenantUUID, *tenantPtr)
+		tenantStr, ok := db.lastArgs[8].(string)
+		if !ok || tenantStr != validTenantUUID {
+			t.Fatalf("expected string %q for tenant context, got: %v (%T)", validTenantUUID, db.lastArgs[8], db.lastArgs[8])
 		}
 	})
 
