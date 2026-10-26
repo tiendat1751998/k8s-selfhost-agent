@@ -285,13 +285,8 @@ func (r *automationRepo) CreateExecution(ctx context.Context, e *automation.Exec
 		RETURNING id
 	`
 	
-	var errDetail *string
-	if e.ErrorDetail != "" {
-		errDetail = &e.ErrorDetail
-	}
-
 	err := r.getDB(ctx).QueryRow(ctx, query,
-		e.ID, e.RuleID, e.RuleName, e.TriggerEvent, e.ActionTaken, e.Result, errDetail, e.CreatedAt, tenantID,
+		e.ID, e.RuleID, e.RuleName, e.TriggerEvent, e.ActionTaken, e.Result, e.ErrorDetail, e.CreatedAt, tenantID,
 	).Scan(&e.ID)
 	
 	if err != nil {
