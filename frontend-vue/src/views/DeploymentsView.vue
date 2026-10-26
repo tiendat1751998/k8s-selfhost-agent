@@ -4,6 +4,7 @@ import { useGlobalContext } from '../composables/useGlobalContext'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import DeploymentsTable from '../components/deployments/DeploymentsTable.vue'
 import DeploymentsMobileCards from '../components/deployments/DeploymentsMobileCards.vue'
+import WorkloadNamespaceTopology from '../components/deployments/WorkloadNamespaceTopology.vue'
 import CanaryStrategyModal from '../components/deployments/CanaryStrategyModal.vue'
 import DeployWorkloadModal from '../components/deployments/DeployWorkloadModal.vue'
 import ScaleResourceModal from '../components/deployments/ScaleResourceModal.vue'
@@ -13,6 +14,7 @@ import DeploymentsHeaderBar, { type WorkloadSegmentTab } from '../components/dep
 import { useDeployments } from '../composables/useDeployments'
 import type { DeploymentApp, DeploymentTemplate, UpdateResourcesPayload } from '../api/compute'
 import '../assets/styles/views/deployments.css'
+import '../assets/styles/views/deployments-topology.css'
 
 const {
   loading,
@@ -24,11 +26,14 @@ const {
   statusFilter,
   searchQuery,
   selectedNamespaceFilter,
+  viewMode,
   totalWorkloads,
   totalReplicas,
+  totalPodReplicas,
   readyReplicas,
   healthyCount,
   degradedCount,
+  attentionCount,
   k8sCount,
   swarmCount,
   namespaces,
@@ -149,6 +154,7 @@ async function onCreateApp(payload: DeploymentApp) {
       v-model:status-filter="statusFilter"
       v-model:active-filter-tab="activeFilterTab"
       v-model:selected-namespace-filter="selectedNamespaceFilter"
+      v-model:view-mode="viewMode"
       :namespaces="namespaces"
       :total-workloads="totalWorkloads"
       :total-replicas="totalReplicas"
@@ -172,8 +178,28 @@ async function onCreateApp(payload: DeploymentApp) {
       <button type="button" class="toast-close" @click="toastMessage = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Main Workload Section -->
-    <div class="section-box glass-panel table-box">
+    <!-- Main Workload Section: Topology Lanes vs Table Mode -->
+    <div v-if="viewMode === 'topology'" class="topology-view-container">
+      <WorkloadNamespaceTopology
+        :workloads="displayDeployments"
+        :loading="loading"
+        :error="error"
+        :action-loading="actionLoading"
+        :total-workloads="totalWorkloads"
+        :total-pod-replicas="totalPodReplicas"
+        :ready-replicas="readyReplicas"
+        :healthy-count="healthyCount"
+        :attention-count="attentionCount"
+        @inspect="openInspector($event)"
+        @logs="openLogsInspector($event)"
+        @scale="openScaleModal($event)"
+        @strategy="openStrategyModal($event)"
+        @restart="handleRestart($event)"
+        @delete="handleDelete($event)"
+      />
+    </div>
+
+    <div v-else-if="viewMode === 'table'" class="section-box glass-panel table-box">
       <!-- Desktop Data Table View (Completely suppressed on mobile <768px) -->
       <div class="desktop-table-container desktop-table-view">
         <DeploymentsTable
