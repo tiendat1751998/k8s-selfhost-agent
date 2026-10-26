@@ -261,4 +261,15 @@ describe('Task T068-2.2: Security Posture, Compliance Scorecards & Forensic Cock
       }
     }
   })
+
+  it('deduplicates severity filter: ComplianceControlsTable does not render duplicate severity pill strip and integrates Export Playbook into DataTable toolbar', () => {
+    const currentDir = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([a-zA-Z]:)/, '$1'))
+    const tablePath = path.resolve(currentDir, '../src/components/compliance/ComplianceControlsTable.vue')
+    const content = fs.readFileSync(tablePath, 'utf8')
+    assert.doesNotMatch(content, /filter-label.*Severity:/, 'Must not render duplicate Severity: filter label in table')
+    assert.doesNotMatch(content, /class="filter-pill"/, 'Must not render duplicate filter pills in table')
+    assert.match(content, /<template\s+#toolbar>/, 'Export Playbook must be inside DataTable #toolbar template for single-row alignment')
+    assert.match(content, /export-btn/, 'Export button must be present in DataTable #toolbar')
+  })
 })
+

@@ -141,4 +141,14 @@ describe('SloBurnDownBoard Urgency Sorting & Fleet Pulse Tests', () => {
       }
     }
   })
+
+  it('verifies slo-board.css mobile responsive rules enforce minmax(0, 1fr) 2x2 grid and pulse-card containment', () => {
+    const cssPath = path.resolve(import.meta.dirname, '../src/assets/styles/views/slo-board.css')
+    const content = fs.readFileSync(cssPath, 'utf-8')
+    assert.match(content, /repeat\(2,\s*minmax\(0,\s*1fr\)\)/, 'Must use minmax(0, 1fr) for 2x2 grid columns on mobile')
+    assert.match(content, /\.pulse-card\s*\{[^}]*min-width:\s*0/, 'pulse-card must have min-width: 0 on mobile')
+    assert.match(content, /\.pulse-card\s*\{[^}]*overflow:\s*hidden/, 'pulse-card must have overflow: hidden on mobile')
+    assert.match(content, /\.pulse-card-header\s+\.pulse-badge\s*\{[^}]*display:\s*none/, 'Secondary header badge must be hidden on mobile')
+  })
 })
+

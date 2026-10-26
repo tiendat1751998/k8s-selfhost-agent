@@ -71,12 +71,9 @@
           :violations="filteredViolations"
           :loading="complianceLoading"
           :error="complianceError"
-          :active-severity="activeSeverity"
-          :severity-filters="severityFilters"
           :selected-framework-name="selectedFrameworkName"
           :format-framework-tag="formatFrameworkTag"
           :format-date="formatDate"
-          @filter-severity="handleFilterSeverity"
           @clear-framework="selectFramework('')"
           @inspect="inspectControl"
           @remediate="handleRemediateViolation"
@@ -209,7 +206,6 @@ const {
   activeSeverity,
   selectedViolation,
   modalMode,
-  severityFilters,
   filteredViolations,
   fetchComplianceData,
   triggerScan,
