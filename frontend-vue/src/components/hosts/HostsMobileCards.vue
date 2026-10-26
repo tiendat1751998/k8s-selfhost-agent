@@ -31,12 +31,8 @@ const paginatedHosts = computed(() => {
   return props.hosts.slice(startIndex.value, endIndex.value)
 })
 
-function prevPage() {
-  if (currentPage.value > 1) currentPage.value--
-}
-function nextPage() {
-  if (currentPage.value < totalPages.value) currentPage.value++
-}
+function prevPage() { if (currentPage.value > 1) currentPage.value-- }
+function nextPage() { if (currentPage.value < totalPages.value) currentPage.value++ }
 
 const emit = defineEmits<{
   (e: 'test', host: ComputeHost): void
@@ -88,9 +84,7 @@ function getHw(host: ComputeHost): HostHardwareMetrics {
 }
 
 function getSaturationClass(pct: number): string {
-  if (pct >= 85) return 'm-meter-critical'
-  if (pct >= 70) return 'm-meter-warning'
-  return 'm-meter-healthy'
+  return pct >= 85 ? 'm-meter-critical' : pct >= 70 ? 'm-meter-warning' : 'm-meter-healthy'
 }
 </script>
 
@@ -461,23 +455,34 @@ function getSaturationClass(pct: number): string {
   border-radius: 999px;
   transition: width 0.3s ease;
 }
+.m-meter-fill.m-meter-healthy { background: var(--color-status-online); }
+.m-meter-fill.m-meter-warning { background: var(--color-status-warning); }
+.m-meter-fill.m-meter-critical { background: var(--color-status-offline); }
+
 .m-meter-val {
   font-size: 10px;
   font-weight: 700;
   flex-shrink: 0;
-  min-width: 24px;
+  min-width: 26px;
   text-align: right;
+  padding: 0 3px;
+  border-radius: 3px;
+  line-height: 1.2;
 }
-.m-meter-healthy {
-  background: var(--color-status-online);
+
+.m-meter-val.m-meter-healthy {
+  background: var(--color-status-online-bg);
+  border: 1px solid var(--color-status-online-border);
   color: var(--color-status-online);
 }
-.m-meter-warning {
-  background: var(--color-status-warning);
+.m-meter-val.m-meter-warning {
+  background: var(--color-status-warning-bg);
+  border: 1px solid var(--color-status-warning-border);
   color: var(--color-status-warning);
 }
-.m-meter-critical {
-  background: var(--color-status-offline);
+.m-meter-val.m-meter-critical {
+  background: var(--color-status-offline-bg);
+  border: 1px solid var(--color-status-offline-border);
   color: var(--color-status-offline);
 }
 </style>
