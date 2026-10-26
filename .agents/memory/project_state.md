@@ -6,6 +6,13 @@
 
 ---
 
+## 0. Runtime & Deployment Reality
+- **No Automated CI/CD**: Remote Linux nodes require explicit rollout via [`./deploy-agent.sh`](../../deploy-agent.sh).
+- **Canonical Agent Binary (`fd6155e5`)**: Static stripped `linux/amd64` `./k8s-agent` with embedded ClickHouse `MergeTree` `logengine` (hot in-memory buffer snapshot + compactor + 4-gram skip index + K8s LowCardinality metadata).
+- **Active Ports**: Central Server on `:8080`, Frontend Vite Dev on `:3000`, Node Agent on `:9100`.
+
+---
+
 ## 1. Mandatory Tooling & Guardrails
 - **CodeGraph Index Available (`.codegraph/` — `1,554 files, 25,609 nodes, 70,311 edges`)**:
   - Every subagent MUST call `codegraph_explore` (`ServerName: "codegraph"`, `projectPath: "d:\\project\\k8sseflhost"`) FIRST before grep/find/reading files (`LES-005`).
