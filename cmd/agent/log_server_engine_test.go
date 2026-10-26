@@ -291,3 +291,84 @@ func TestLogServer_HandleGetLogs_K8sPruningBeforeTail(t *testing.T) {
 	}
 }
 
+func TestLogServer_HandleSearchLogs_K8sRoundTrip(t *testing.T) {
+	tempDir := t.TempDir()
+	engineSrc, err := NewEngineLogSource(tempDir)
+	require.NoError(t, err)
+	defer engineSrc.Close()
+
+	now := time.Now().UTC()
+	err = engineSrc.Writer().Write(logengine.Entry{
+		Timestamp:     now,
+		Service:       "ingress-svc",
+		Level:         "warn",
+		Message:       "upstream connection reset by peer",
+		Namespace:     "kube-system",
+		PodName:       "traefik-router-9b87",
+		ContainerName: "traefik",
+		Stream:        "stderr",
+	})
+	require.NoError(t, err)
+	require.NoError(t, engineSrc.Writer().Flush())
+
+	srv := NewLogServer(WithLogSource(engineSrc))
+
+	t.Run("POST /logs/search matches with standard K8s JSON tags", func(t *testing.T) {
+		body := `{"namespace":"kube-system","pod":"traefik-router-9b87","container":"traefik","stream":"stderr","limit":10}`
+		req := httptest.NewRequest(http.MethodPost, "/logs/search", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		srv.HandleSearchLogs(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		var resp LogSearchResponse
+		err := json.NewDecoder(rec.Body).Decode(&resp)
+		require.NoError(t, err)
+
+		require.Equal(t, 1, resp.Total)
+		require.Len(t, resp.Results, 1)
+		res := resp.Results[0]
+		assert.Equal(t, "kube-system", res.Namespace)
+		assert.Equal(t, "traefik-router-9b87", res.PodName)
+		assert.Equal(t, "traefik", res.ContainerName)
+		assert.Equal(t, "stderr", res.Stream)
+		assert.Equal(t, "warn", res.Level)
+		assert.Equal(t, "upstream connection reset by peer", res.Message)
+	})
+
+	t.Run("POST /logs/search supports pod_name and container_name aliases", func(t *testing.T) {
+		body := `{"namespace":"kube-system","pod_name":"traefik-router-9b87","container_name":"traefik","stream":"stderr","limit":10}`
+		req := httptest.NewRequest(http.MethodPost, "/logs/search", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		srv.HandleSearchLogs(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		var resp LogSearchResponse
+		err := json.NewDecoder(rec.Body).Decode(&resp)
+		require.NoError(t, err)
+
+		require.Equal(t, 1, resp.Total)
+		require.Len(t, resp.Results, 1)
+		res := resp.Results[0]
+		assert.Equal(t, "kube-system", res.Namespace)
+		assert.Equal(t, "traefik-router-9b87", res.PodName)
+		assert.Equal(t, "traefik", res.ContainerName)
+	})
+
+	t.Run("GET /logs supports pod_name and container_name aliases", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/logs?namespace=kube-system&pod_name=traefik-router-9b87&container_name=traefik&stream=stderr&format=json", nil)
+		rec := httptest.NewRecorder()
+		srv.HandleGetLogs(rec, req)
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		var resp LogsResponse
+		err := json.NewDecoder(rec.Body).Decode(&resp)
+		require.NoError(t, err)
+		assert.Equal(t, 1, resp.Count)
+		assert.Len(t, resp.Lines, 1)
+		assert.Contains(t, resp.Lines[0], "upstream connection reset by peer")
+	})
+}
+
+

@@ -28,6 +28,26 @@ type LogEntry struct {
 	Stream        string    `json:"stream,omitempty"`
 }
 
+// UnmarshalJSON supports both "pod" / "pod_name" and "container" / "container_name".
+func (e *LogEntry) UnmarshalJSON(data []byte) error {
+	type Alias LogEntry
+	aux := struct {
+		*Alias
+		AltPodName       string `json:"pod_name,omitempty"`
+		AltContainerName string `json:"container_name,omitempty"`
+	}{Alias: (*Alias)(e)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if e.PodName == "" && aux.AltPodName != "" {
+		e.PodName = aux.AltPodName
+	}
+	if e.ContainerName == "" && aux.AltContainerName != "" {
+		e.ContainerName = aux.AltContainerName
+	}
+	return nil
+}
+
 // LogSearchRequest represents the search payload for POST /logs/search.
 type LogSearchRequest struct {
 	Query         string `json:"query"`
@@ -40,6 +60,26 @@ type LogSearchRequest struct {
 	PodName       string `json:"pod,omitempty"`
 	ContainerName string `json:"container,omitempty"`
 	Stream        string `json:"stream,omitempty"`
+}
+
+// UnmarshalJSON supports both "pod" / "pod_name" and "container" / "container_name".
+func (r *LogSearchRequest) UnmarshalJSON(data []byte) error {
+	type Alias LogSearchRequest
+	aux := struct {
+		*Alias
+		AltPodName       string `json:"pod_name,omitempty"`
+		AltContainerName string `json:"container_name,omitempty"`
+	}{Alias: (*Alias)(r)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if r.PodName == "" && aux.AltPodName != "" {
+		r.PodName = aux.AltPodName
+	}
+	if r.ContainerName == "" && aux.AltContainerName != "" {
+		r.ContainerName = aux.AltContainerName
+	}
+	return nil
 }
 
 // LogSearchResponse represents the search response for POST /logs/search.
@@ -273,7 +313,9 @@ func (s *LogServer) HandleGetLogs(w http.ResponseWriter, r *http.Request) {
 	levelStr := q.Get("level")
 	nsStr := q.Get("namespace")
 	podStr := q.Get("pod")
+	if podStr == "" { podStr = q.Get("pod_name") }
 	contStr := q.Get("container")
+	if contStr == "" { contStr = q.Get("container_name") }
 	streamStr := q.Get("stream")
 	format := strings.ToLower(q.Get("format"))
 

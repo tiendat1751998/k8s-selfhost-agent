@@ -101,13 +101,10 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 
 	// Prepare remote search request
 	searchReq := SearchLogsRequest{
-		Query: filter.SearchText,
-		App:   filter.ContainerName,
-		Level: string(filter.LogLevel),
-		Limit: filter.Limit,
-	}
-	if searchReq.App == "" {
-		searchReq.App = filter.PodName
+		Query:  filter.SearchText,
+		Level:  string(filter.LogLevel),
+		Limit:  filter.Limit,
+		Stream: filter.Stream,
 	}
 	if !filter.StartTime.IsZero() {
 		searchReq.Since = filter.StartTime.Format(time.RFC3339Nano)
@@ -122,6 +119,21 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 		searchReq.Limit += filter.Offset
 	}
 
+	if filter.Namespace != "" || filter.PodName != "" {
+		searchReq.Namespace = filter.Namespace
+		searchReq.PodName = filter.PodName
+		searchReq.ContainerName = filter.ContainerName
+	} else {
+		// Non-K8s systemd/docker nodes: preserve App fallback
+		searchReq.App = filter.ContainerName
+		if searchReq.App == "" {
+			searchReq.App = filter.PodName
+		}
+		if searchReq.App == "" {
+			searchReq.App = filter.ServiceName
+		}
+	}
+
 	var clusterEntries []domainLogging.LogEntry
 	if len(hosts) > 0 && r.logClient != nil {
 		clusterResults, err := r.logClient.SearchClusterLogs(ctx, hosts, searchReq)
@@ -131,20 +143,40 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 				if lvl == "" {
 					lvl = domainLogging.LogLevelInfo
 				}
+				ns := res.Namespace
+				if ns == "" {
+					ns = filter.Namespace
+				}
+				pod := res.PodName
+				if pod == "" {
+					pod = res.Service
+				}
+				cont := res.ContainerName
+				if cont == "" {
+					cont = res.Service
+				}
+				stream := res.Stream
+				if stream == "" {
+					stream = "stdout"
+				}
 				clusterEntries = append(clusterEntries, domainLogging.LogEntry{
 					Timestamp:     res.Timestamp,
 					TenantID:      filter.TenantID,
 					ClusterID:     filter.ClusterID,
-					Namespace:     filter.Namespace,
-					PodName:       res.Service,
-					ContainerName: res.Service,
-					Stream:        "stdout",
+					Namespace:     ns,
+					PodName:       pod,
+					ContainerName: cont,
+					Stream:        stream,
 					LogLevel:      lvl,
 					Message:       res.Message,
 					Attributes: map[string]string{
 						"node_id":   res.NodeID,
 						"node_name": res.NodeName,
 						"raw":       res.Raw,
+						"namespace": ns,
+						"pod":       pod,
+						"container": cont,
+						"stream":    stream,
 					},
 				})
 			}
@@ -180,7 +212,7 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 	seen := make(map[string]bool, len(allEntries))
 	deduped := make([]domainLogging.LogEntry, 0, len(allEntries))
 	for _, e := range allEntries {
-		key := fmt.Sprintf("%d|%s|%s", e.Timestamp.UnixNano(), e.ContainerName, e.Message)
+		key := fmt.Sprintf("%d|%s|%s|%s|%s", e.Timestamp.UnixNano(), e.Namespace, e.PodName, e.ContainerName, e.Message)
 		if !seen[key] {
 			seen[key] = true
 			deduped = append(deduped, e)

@@ -19,7 +19,7 @@ type mockRadarLogClient struct {
 	err     error
 }
 
-func (m *mockRadarLogClient) GetNodeLogs(ctx context.Context, hostEndpoint, authToken, app, tail, since, until, q, level string) (string, error) {
+func (m *mockRadarLogClient) GetNodeLogs(ctx context.Context, hostEndpoint, authToken, app, tail, since, until, q, level string, k8sMeta ...string) (string, error) {
 	return "", nil
 }
 
