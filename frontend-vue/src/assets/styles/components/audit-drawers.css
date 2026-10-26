@@ -150,7 +150,7 @@
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.45;
-  color: var(--accent-cyan, #38bdf8);
+  color: var(--color-endpoint-syntax, var(--color-text));
   overflow-x: auto;
   max-height: 380px;
   white-space: pre-wrap;

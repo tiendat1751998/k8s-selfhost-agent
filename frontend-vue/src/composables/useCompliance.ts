@@ -4,6 +4,7 @@ import {
   auditApi,
   type ComplianceFramework,
   type ComplianceViolation,
+  type AuditFinding,
   type AuditRun,
 } from '../api/governance'
 
@@ -13,6 +14,139 @@ export type AuditRunStatus = 'idle' | 'pending' | 'running' | 'completed' | 'fai
 
 export interface ComplianceControlItem extends ComplianceViolation {
   [key: string]: unknown
+}
+
+export interface SeverityDistribution {
+  critical: number
+  high: number
+  medium: number
+  low: number
+  total: number
+  criticalPct: number
+  highPct: number
+  mediumPct: number
+  lowPct: number
+  isClean: boolean
+}
+
+export function computeSeverityDistribution(
+  violations: ComplianceViolation[] = [],
+  findings: AuditFinding[] = []
+): SeverityDistribution {
+  const openViolations = (violations || []).filter(v => !v.resolved)
+  const openFindings = (findings || []).filter(f => f.status !== 'resolved')
+
+  const countBySev = (sev: string) => {
+    const vCount = openViolations.filter(v => (v.severity || '').toLowerCase() === sev).length
+    const fCount = openFindings.filter(f => (f.severity || '').toLowerCase() === sev).length
+    return vCount + fCount
+  }
+
+  const critical = countBySev('critical')
+  const high = countBySev('high')
+  const medium = countBySev('medium')
+  const low = countBySev('low')
+  const total = critical + high + medium + low
+
+  if (total === 0) {
+    return {
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+      total: 0,
+      criticalPct: 0,
+      highPct: 0,
+      mediumPct: 0,
+      lowPct: 0,
+      isClean: true,
+    }
+  }
+
+  return {
+    critical,
+    high,
+    medium,
+    low,
+    total,
+    criticalPct: (critical / total) * 100,
+    highPct: (high / total) * 100,
+    mediumPct: (medium / total) * 100,
+    lowPct: (low / total) * 100,
+    isClean: false,
+  }
+}
+
+export interface FrameworkSummary {
+  totalChecks: number
+  passedChecks: number
+  failedChecks: number
+  averageScore: number
+}
+
+export function calculateFrameworkSummary(frameworks: ComplianceFramework[] = []): FrameworkSummary {
+  if (!frameworks || frameworks.length === 0) {
+    return { totalChecks: 0, passedChecks: 0, failedChecks: 0, averageScore: 0 }
+  }
+
+  const totalChecks = frameworks.reduce((acc, f) => acc + (f.total_checks || 0), 0)
+  const passedChecks = frameworks.reduce((acc, f) => acc + (f.passed_checks || 0), 0)
+  const failedChecks = frameworks.reduce((acc, f) => acc + (f.failed_checks || 0), 0)
+  const averageScore = frameworks.reduce((acc, f) => acc + (f.score || 0), 0) / frameworks.length
+
+  return {
+    totalChecks,
+    passedChecks,
+    failedChecks,
+    averageScore,
+  }
+}
+
+export function getScoreRingColor(score: number): string {
+  if (score >= 90) return 'var(--color-status-online, #10b981)'
+  if (score >= 75) return 'var(--color-status-warning, #f59e0b)'
+  return 'var(--color-status-offline, #f43f5e)'
+}
+
+export function filterComplianceViolations(
+  violations: ComplianceViolation[] = [],
+  frameworkId: string = '',
+  severity: SeverityFilter = 'ALL',
+  query: string = ''
+): ComplianceViolation[] {
+  const q = query.trim().toLowerCase()
+  return (violations || []).filter(v => {
+    if (frameworkId && v.framework_id !== frameworkId) return false
+    if (severity !== 'ALL' && (v.severity || '').toUpperCase() !== severity) return false
+    if (q) {
+      const matchPolicy = (v.policy || '').toLowerCase().includes(q)
+      const matchResource = (v.resource || '').toLowerCase().includes(q)
+      const matchNamespace = (v.namespace || '').toLowerCase().includes(q)
+      const matchMessage = (v.message || '').toLowerCase().includes(q)
+      if (!matchPolicy && !matchResource && !matchNamespace && !matchMessage) return false
+    }
+    return true
+  })
+}
+
+export function filterAuditFindings(
+  findings: AuditFinding[] = [],
+  severity: SeverityFilter = 'ALL',
+  query: string = ''
+): AuditFinding[] {
+  const q = query.trim().toLowerCase()
+  return (findings || []).filter(f => {
+    if (f.status === 'resolved') return false
+    if (severity !== 'ALL' && (f.severity || '').toUpperCase() !== severity) return false
+    if (q) {
+      const matchId = (f.id || '').toLowerCase().includes(q)
+      const matchDesc = (f.description || '').toLowerCase().includes(q)
+      const matchRem = (f.remediation || '').toLowerCase().includes(q)
+      const matchCat = (f.category || '').toLowerCase().includes(q)
+      if (!matchId && !matchDesc && !matchRem && !matchCat) return false
+    }
+    return true
+  })
 }
 
 export const COMPLIANCE_STANDARDS: ComplianceStandard[] = [
@@ -51,17 +185,24 @@ export function useCompliance() {
     loading.value = true
     error.value = null
     try {
-      const [fwData, viData, runData] = await Promise.all([
+      const [fwResult, viResult, runResult] = await Promise.allSettled([
         complianceApi.getFrameworks(),
         complianceApi.getViolations(activeSeverity.value === 'ALL' ? undefined : activeSeverity.value.toLowerCase()),
-        auditApi.getLatestRun().catch(() => null),
+        auditApi.getLatestRun(),
       ])
 
-      frameworks.value = fwData || []
+      frameworks.value = fwResult.status === 'fulfilled' && fwResult.value ? fwResult.value : []
+      const viData = viResult.status === 'fulfilled' ? viResult.value : null
       violations.value = viData?.data || []
       totalViolations.value = viData?.total ?? (viData?.data?.length || 0)
+      const runData = runResult.status === 'fulfilled' ? runResult.value : null
       latestRun.value = runData
       auditStatus.value = runData ? runData.status : 'completed'
+
+      if (fwResult.status === 'rejected' && viResult.status === 'rejected') {
+        const fwErr = fwResult.reason instanceof Error ? fwResult.reason.message : 'Service error'
+        error.value = `Failed to load compliance data: ${fwErr}`
+      }
     } catch (err: unknown) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch compliance data'
       frameworks.value = []
