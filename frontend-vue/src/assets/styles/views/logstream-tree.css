@@ -388,7 +388,7 @@
 .node-expand-btn {
   background: transparent;
   border: none;
-  color: var(--text-muted, #64748b);
+  color: var(--color-muted);
   cursor: pointer;
   padding: 4px 6px;
   font-size: 10px;
@@ -430,18 +430,18 @@
   justify-content: center;
   padding: 4px 8px;
   margin-top: 4px;
-  background: var(--color-surface-inset, rgba(15, 23, 42, 0.4));
-  border: 1px dashed var(--color-border-subtle, rgba(148, 163, 184, 0.2));
+  background: var(--color-surface-inset);
+  border: 1px dashed var(--color-border-subtle);
   border-radius: 4px;
-  color: var(--text-muted, #94a3b8);
+  color: var(--color-muted);
   font-size: 10.5px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .idle-nodes-toggle-btn:hover {
-  background: var(--color-surface-hover, rgba(30, 41, 59, 0.6));
-  color: var(--text-primary, #f1f5f9);
-  border-color: var(--color-border, rgba(148, 163, 184, 0.4));
+  background: var(--color-surface-hover);
+  color: var(--color-body);
+  border-color: var(--color-border-strong);
 }
 

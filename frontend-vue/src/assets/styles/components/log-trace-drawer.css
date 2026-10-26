@@ -19,9 +19,9 @@
   bottom: 0;
   width: 860px;
   max-width: 96vw;
-  background: var(--color-surface-card, #080c16);
-  border-left: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.2));
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.8);
+  background: var(--color-surface-card);
+  border-left: 1px solid var(--color-border-subtle);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.4);
   z-index: 100;
   display: flex;
   flex-direction: column;
@@ -31,8 +31,8 @@
 
 .trace-drawer-header {
   padding: 12px 16px;
-  background: var(--color-surface-elevated, rgba(15, 23, 42, 0.95));
-  border-bottom: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.15));
+  background: var(--color-surface-elevated);
+  border-bottom: 1px solid var(--color-border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -48,7 +48,7 @@
 .trace-title {
   font-size: 13px;
   font-weight: 700;
-  color: var(--color-heading, #f8fafc);
+  color: var(--color-body);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -56,9 +56,9 @@
 
 .trace-id-badge {
   font-size: 11px;
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: var(--color-badge-agent-text);
+  background: var(--color-badge-agent-bg);
+  border: 1px solid var(--color-badge-agent-border);
   padding: 2px 8px;
   border-radius: 4px;
 }
@@ -66,7 +66,7 @@
 .trace-close-btn {
   background: transparent;
   border: none;
-  color: var(--color-muted, #94a3b8);
+  color: var(--color-muted);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -74,15 +74,15 @@
 }
 
 .trace-close-btn:hover {
-  background: var(--color-surface-hover, rgba(255, 255, 255, 0.1));
-  color: var(--color-heading, #f8fafc);
+  background: var(--color-surface-hover);
+  color: var(--color-body);
 }
 
 /* Summary Header Strip */
 .trace-summary-grid {
   padding: 10px 16px;
-  background: var(--color-surface-inset, rgba(15, 23, 42, 0.6));
-  border-bottom: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.1));
+  background: var(--color-surface-inset);
+  border-bottom: 1px solid var(--color-border-subtle);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 10px;
@@ -90,8 +90,8 @@
 }
 
 .trace-summary-card {
-  background: var(--color-surface-elevated, rgba(30, 41, 59, 0.4));
-  border: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.12));
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
   padding: 6px 10px;
   display: flex;
@@ -152,11 +152,11 @@
 
 .trace-jump-btn:hover {
   background: rgba(244, 63, 94, 0.3);
-  color: var(--text-primary);
+  color: var(--color-body);
 }
 
 .span-row:hover .span-op-name {
-  color: var(--text-primary);
+  color: var(--color-body);
 }
 
 /* Timeline / Waterfall logs container */
