@@ -11,9 +11,94 @@ import {
 export type { FilterTab, StatusFilter, ToastMessage, RolloutState }
 export { getRolloutState }
 
-// Documentation: FALLBACK_SAMPLE_WORKLOADS purged to satisfy zero-mock enterprise standard.
-// Historical workloads referenced: ingress-traefik, api-gateway (restarts: 0, age: '1d').
-// When live list is empty or cluster disconnected, deployments.value remains empty [] with descriptive error.
+export interface NamespaceGroup {
+  namespace: string
+  cluster: string
+  workloads: DeploymentApp[]
+  totalReplicas: number
+  healthyWorkloads: number
+  degradedWorkloads: number
+  overallHealth: 'healthy' | 'degraded' | 'down'
+}
+
+export interface ReplicaBlock {
+  index: number
+  state: 'online' | 'warning' | 'offline' | 'scaled-0'
+  isZero: boolean
+}
+
+export interface ReplicaCellsInfo {
+  blocks: ReplicaBlock[]
+  overflowCount: number
+  readyCount: number
+  desiredCount: number
+  label: string
+}
+
+const PRIORITY_NAMESPACES = ['kube-system', 'platform', 'ingress', 'database', 'observability']
+
+export function groupDeploymentsByNamespace(apps: DeploymentApp[]): NamespaceGroup[] {
+  const map = new Map<string, DeploymentApp[]>()
+  for (const app of apps) {
+    const ns = app.namespace || 'default'
+    const list = map.get(ns) || []
+    list.push(app)
+    map.set(ns, list)
+  }
+
+  const sortedNs = Array.from(map.keys()).sort((a, b) => {
+    const idxA = PRIORITY_NAMESPACES.indexOf(a.toLowerCase())
+    const idxB = PRIORITY_NAMESPACES.indexOf(b.toLowerCase())
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB
+    if (idxA !== -1) return -1
+    if (idxB !== -1) return 1
+    return a.localeCompare(b)
+  })
+
+  return sortedNs.map(ns => {
+    const workloads = map.get(ns)!
+    const totalReplicas = workloads.reduce((sum, w) => sum + (w.replicas || 0), 0)
+    const healthyWorkloads = workloads.filter(w => w.status === 'healthy').length
+    const degradedWorkloads = workloads.filter(w => w.status !== 'healthy').length
+    const cluster = workloads[0]?.target || 'k8snode'
+    let overallHealth: 'healthy' | 'degraded' | 'down' = 'healthy'
+    if (workloads.length > 0 && healthyWorkloads === 0) overallHealth = 'down'
+    else if (degradedWorkloads > 0) overallHealth = 'degraded'
+    return { namespace: ns, cluster, workloads, totalReplicas, healthyWorkloads, degradedWorkloads, overallHealth }
+  })
+}
+
+export function computeReplicaCells(app: { replicas?: number; readyReplicas?: number; status?: string }): ReplicaCellsInfo {
+  const replicas = app.replicas ?? 0
+  const status = app.status ?? 'healthy'
+  const ready = app.readyReplicas !== undefined ? app.readyReplicas : (status === 'healthy' ? replicas : 0)
+
+  if (replicas <= 0) {
+    return {
+      blocks: [{ index: 0, state: 'scaled-0', isZero: true }],
+      overflowCount: 0,
+      readyCount: 0,
+      desiredCount: 0,
+      label: '0 / 0 Pods (Scaled)'
+    }
+  }
+
+  const displayLimit = 12
+  const visibleCount = Math.min(replicas, displayLimit)
+  const blocks: ReplicaBlock[] = []
+  for (let i = 0; i < visibleCount; i++) {
+    const state: 'online' | 'warning' | 'offline' = status === 'down' ? 'offline' : i < ready ? 'online' : 'warning'
+    blocks.push({ index: i, state, isZero: false })
+  }
+
+  return {
+    blocks,
+    overflowCount: Math.max(0, replicas - displayLimit),
+    readyCount: ready,
+    desiredCount: replicas,
+    label: `${ready} / ${replicas} Pods Ready`
+  }
+}
 
 export function useDeployments() {
   const loading = ref(false)
@@ -28,6 +113,7 @@ export function useDeployments() {
   const statusFilter = ref<StatusFilter>('all')
   const searchQuery = ref('')
   const selectedNamespaceFilter = ref<string>('all')
+  const viewMode = ref<'topology' | 'table'>('topology')
 
   let toastTimer: ReturnType<typeof setTimeout> | null = null
   function showToast(text: string, type: 'success' | 'error' | 'info' = 'success') {
@@ -137,6 +223,11 @@ export function useDeployments() {
   const filteredDeployments = computed(() =>
     filterDeploymentsList(deployments.value, activeFilterTab.value, selectedNamespaceFilter.value, searchQuery.value, statusFilter.value)
   )
+
+  const totalPodReplicas = computed(() => totalReplicas.value)
+  const attentionCount = computed(() => degradedCount.value)
+  const namespaceCount = computed(() => namespaces.value.length)
+  const namespaceGroups = computed(() => groupDeploymentsByNamespace(filteredDeployments.value))
 
   // Operations
   async function handleApplyResources(payload: UpdateResourcesPayload) {
@@ -378,7 +469,8 @@ export function useDeployments() {
   return {
     loading, error, actionLoading, toastMessage, deployments, templates,
     activeFilterTab, statusFilter, searchQuery, selectedNamespaceFilter,
-    totalWorkloads, totalReplicas, readyReplicas, healthyCount, degradedCount,
+    viewMode, namespaceGroups,
+    totalWorkloads, totalReplicas, totalPodReplicas, readyReplicas, healthyCount, degradedCount, attentionCount, namespaceCount,
     canaryCount, blueGreenCount, k8sCount, swarmCount, namespaces,
     filteredDeployments, showToast, fetchDeployments, getRolloutState,
     handleApplyResources, handleScale, handleRestart,

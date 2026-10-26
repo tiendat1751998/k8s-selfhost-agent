@@ -4,7 +4,7 @@ import BaseIcon from '../ui/BaseIcon.vue'
 
 export type WorkloadSegmentTab = 'All' | 'Deployments' | 'StatefulSets' | 'DaemonSets' | 'CronJobs'
 
-const props = defineProps<{
+interface Props {
   searchQuery: string
   selectedSegmentTab: WorkloadSegmentTab
   statusFilter: string
@@ -20,7 +20,12 @@ const props = defineProps<{
   swarmCount: number
   loading: boolean
   segmentCounts: Record<WorkloadSegmentTab, number>
-}>()
+  viewMode?: 'topology' | 'table'
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  viewMode: 'topology'
+})
 
 const emit = defineEmits<{
   (e: 'update:searchQuery', val: string): void
@@ -28,6 +33,7 @@ const emit = defineEmits<{
   (e: 'update:statusFilter', val: string): void
   (e: 'update:activeFilterTab', val: string): void
   (e: 'update:selectedNamespaceFilter', val: string): void
+  (e: 'update:viewMode', val: 'topology' | 'table'): void
   (e: 'deploy'): void
   (e: 'openYaml'): void
   (e: 'openBlueprints'): void
@@ -84,6 +90,16 @@ onUnmounted(() => {
         <span class="pill-sep">·</span>
         <span class="pill-ok">{{ healthyCount }} ok</span>
       </div>
+
+      <button
+        type="button"
+        class="btn-filters-toggle btn-view-mode-mobile"
+        :title="viewMode === 'topology' ? 'Switch to Table View' : 'Switch to Topology View'"
+        aria-label="Toggle View Mode"
+        @click="emit('update:viewMode', viewMode === 'topology' ? 'table' : 'topology')"
+      >
+        <BaseIcon :name="viewMode === 'topology' ? 'layers' : 'grid'" size="xs" />
+      </button>
 
       <button
         type="button"
@@ -233,6 +249,32 @@ onUnmounted(() => {
         <option value="healthy">Healthy ({{ healthyCount }})</option>
         <option value="degraded">Degraded ({{ degradedCount }})</option>
       </select>
+
+      <!-- View Mode Toggle (Topology | Table) -->
+      <div class="view-mode-toggle" role="group" aria-label="View Mode">
+        <button
+          type="button"
+          class="view-mode-btn"
+          :class="{ 'is-active': viewMode === 'topology' }"
+          title="Topology View (ArgoCD / Lens Namespace Lanes)"
+          aria-label="Topology View"
+          @click="emit('update:viewMode', 'topology')"
+        >
+          <BaseIcon name="layers" size="xs" />
+          <span>Topology</span>
+        </button>
+        <button
+          type="button"
+          class="view-mode-btn"
+          :class="{ 'is-active': viewMode === 'table' }"
+          title="Compact Table View"
+          aria-label="Table View"
+          @click="emit('update:viewMode', 'table')"
+        >
+          <BaseIcon name="grid" size="xs" />
+          <span>Table</span>
+        </button>
+      </div>
 
       <!-- Action buttons -->
       <div class="toolbar-actions-group">

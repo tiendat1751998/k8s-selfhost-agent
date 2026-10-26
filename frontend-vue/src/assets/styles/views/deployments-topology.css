@@ -1,0 +1,300 @@
+/* Deployments Namespace Topology & Pod Replica Matrix Stylesheet */
+
+/* Workload Fleet Posture Strip */
+.topology-posture-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-card, var(--color-surface-card));
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.posture-metric-group { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.posture-item { display: flex; flex-direction: column; gap: 2px; }
+.posture-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, var(--color-muted));
+  font-weight: 600;
+}
+.posture-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary, var(--color-body));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.posture-status-pills { display: flex; align-items: center; gap: 8px; }
+.posture-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+.posture-pill-healthy {
+  background: var(--color-status-online-bg, rgba(46, 160, 67, 0.15));
+  color: var(--color-status-online, #3fb950);
+  border: 1px solid var(--color-status-online-border, rgba(63, 185, 80, 0.35));
+}
+.posture-pill-attention {
+  background: var(--color-status-warning-bg, rgba(245, 158, 11, 0.15));
+  color: var(--color-status-warning, #f59e0b);
+  border: 1px solid var(--color-status-warning-border, rgba(245, 158, 11, 0.35));
+}
+
+/* Namespace Topology Lanes */
+.topology-lanes-container { display: flex; flex-direction: column; gap: 16px; width: 100%; }
+.namespace-lane {
+  background: var(--bg-card, var(--color-surface-card));
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+.namespace-lane:hover { border-color: var(--color-border-strong); }
+.namespace-lane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-elevated, var(--color-surface-elevated));
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.namespace-lane-header:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+.lane-header-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.namespace-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary, var(--color-body));
+}
+.ns-prefix { color: var(--text-muted, var(--color-muted)); font-weight: 500; }
+.cluster-tag {
+  font-size: 11px;
+  color: var(--text-muted, var(--color-muted));
+  padding: 1px 6px;
+  background: var(--color-surface-inset);
+  border-radius: 4px;
+  border: 1px solid var(--color-border-subtle);
+}
+.workload-count-badge { font-size: 11px; color: var(--text-secondary, var(--color-muted-strong)); }
+.lane-header-right { display: flex; align-items: center; gap: 12px; }
+.lane-replica-summary { font-size: 11px; color: var(--text-muted, var(--color-muted)); }
+.lane-health-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot-healthy { background: var(--color-status-online, #3fb950); box-shadow: 0 0 6px var(--color-status-online, #3fb950); }
+.dot-degraded { background: var(--color-status-warning, #f59e0b); box-shadow: 0 0 6px var(--color-status-warning, #f59e0b); }
+.dot-down { background: var(--color-status-offline, #f85149); box-shadow: 0 0 6px var(--color-status-offline, #f85149); }
+.chevron-icon { color: var(--text-muted, var(--color-muted)); transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+.chevron-icon.is-collapsed { transform: rotate(-90deg); }
+
+/* Workload Cards Grid (2 cols on desktop, 1 on mobile) */
+.namespace-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 16px;
+}
+.workload-topology-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+.workload-topology-card:hover {
+  border-color: var(--color-border-strong);
+  background: var(--bg-card, var(--color-surface-card));
+}
+.card-top-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.workload-name-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.workload-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary, var(--color-body));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.workload-title:hover { color: var(--color-primary); text-decoration: underline; }
+.card-pills-wrap { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.pill-runtime {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--color-surface-elevated);
+  color: var(--text-secondary, var(--color-muted-strong));
+  border: 1px solid var(--color-border-subtle);
+}
+.pill-port {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--color-badge-k8s-bg, rgba(50, 108, 229, 0.15));
+  color: var(--color-badge-k8s-text, #58a6ff);
+  border: 1px solid var(--color-badge-k8s-border, rgba(50, 108, 229, 0.40));
+}
+.pill-status { font-size: 9.5px; font-weight: 700; padding: 1px 5px; border-radius: 3px; }
+.status-healthy {
+  background: var(--color-status-online-bg, rgba(46, 160, 67, 0.15));
+  color: var(--color-status-online, #3fb950);
+  border: 1px solid var(--color-status-online-border, rgba(63, 185, 80, 0.35));
+}
+.status-degraded {
+  background: var(--color-status-warning-bg, rgba(245, 158, 11, 0.15));
+  color: var(--color-status-warning, #f59e0b);
+  border: 1px solid var(--color-status-warning-border, rgba(245, 158, 11, 0.35));
+}
+.status-scaled-zero {
+  background: var(--color-surface-elevated);
+  color: var(--text-muted, var(--color-muted));
+  border: 1px solid var(--color-border-subtle);
+}
+
+/* Image Spec Line */
+.card-image-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted, var(--color-muted));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.image-icon { flex-shrink: 0; color: var(--text-muted, var(--color-muted)); }
+.image-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Pod Replica Matrix (ArgoCD / K9s style) */
+.replica-matrix-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--color-surface-elevated);
+  border-radius: 4px;
+  border: 1px solid var(--color-border-subtle);
+}
+.replica-matrix { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.replica-block { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+.replica-block.state-online { background: var(--color-status-online, #3fb950); }
+.replica-block.state-warning { background: var(--color-status-warning, #f59e0b); }
+.replica-block.state-offline { background: var(--color-status-offline, #f85149); }
+.replica-block.state-scaled-0 {
+  width: 10px;
+  height: 10px;
+  border: 1px dashed var(--text-muted, var(--color-muted));
+  background: transparent;
+}
+.replica-overflow-badge { font-size: 9px; font-weight: 700; color: var(--text-muted, var(--color-muted)); padding: 0 3px; }
+.replica-label { font-size: 11px; font-weight: 600; color: var(--text-primary, var(--color-body)); white-space: nowrap; }
+
+/* Resource Badges & Clean Actions Footer */
+.card-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+}
+.resource-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.res-badge {
+  font-size: 10px;
+  color: var(--text-secondary, var(--color-muted-strong));
+  background: var(--bg-card, var(--color-surface-card));
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--color-border-subtle);
+  white-space: nowrap;
+}
+.card-actions-group { display: flex; align-items: center; gap: 4px; margin-left: auto; flex-shrink: 0; }
+.card-actions-group .btn {
+  padding: 2px 6px !important;
+  font-size: 10px !important;
+  height: 22px !important;
+  min-height: 22px !important;
+  gap: 3px !important;
+}
+
+/* Empty Topology State */
+.topology-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--text-muted, var(--color-muted));
+  background: var(--bg-card, var(--color-surface-card));
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+}
+.empty-state-title { font-size: 14px; font-weight: 600; color: var(--text-primary, var(--color-body)); }
+.empty-state-desc { font-size: 12px; color: var(--text-muted, var(--color-muted)); max-width: 380px; }
+
+/* View Mode Switcher in Header */
+.view-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+  height: 32px;
+  box-sizing: border-box;
+}
+.view-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted, var(--color-muted));
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.view-mode-btn:hover { color: var(--text-primary, var(--color-body)); }
+.view-mode-btn.is-active {
+  background: var(--color-surface-elevated);
+  color: var(--text-primary, var(--color-body));
+  border: 1px solid var(--color-border-subtle);
+}
+
+/* RWD for Topology */
+@media (max-width: 1024px) {
+  .namespace-cards-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 639px) {
+  .topology-posture-strip { padding: 8px 12px; gap: 8px; }
+  .posture-metric-group { gap: 12px; }
+  .namespace-lane-header { padding: 8px 12px; }
+  .namespace-cards-grid { padding: 10px 12px; gap: 10px; }
+  .workload-topology-card { padding: 10px 12px; }
+}
