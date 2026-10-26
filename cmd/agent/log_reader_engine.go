@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -12,9 +13,10 @@ import (
 
 // EngineLogSource wraps the embedded columnar log engine as a LogSource.
 type EngineLogSource struct {
-	writer *logengine.Writer
-	reader *logengine.Reader
-	dict   *logengine.LabelDictionary
+	writer    *logengine.Writer
+	reader    *logengine.Reader
+	compactor *logengine.Compactor
+	dict      *logengine.LabelDictionary
 }
 
 // NewEngineLogSource creates a new EngineLogSource backed by logengine.
@@ -38,18 +40,39 @@ func NewEngineLogSource(engineDir string) (*EngineLogSource, error) {
 		_ = w.Close()
 		return nil, err
 	}
-	return &EngineLogSource{writer: w, reader: r, dict: dict}, nil
+
+	compactInterval := 30 * time.Second
+	if envVal := os.Getenv("AGENT_LOG_COMPACT_INTERVAL_SEC"); envVal != "" {
+		if sec, err := strconv.Atoi(envVal); err == nil && sec > 0 {
+			compactInterval = time.Duration(sec) * time.Second
+		}
+	}
+	partsDir := filepath.Join(engineDir, "parts")
+	compactor := logengine.NewCompactor(partsDir, w, r)
+	compactor.Start(compactInterval)
+
+	return &EngineLogSource{writer: w, reader: r, compactor: compactor, dict: dict}, nil
 }
 
-func (e *EngineLogSource) Writer() *logengine.Writer { return e.writer }
-func (e *EngineLogSource) Reader() *logengine.Reader { return e.reader }
+func (e *EngineLogSource) Writer() *logengine.Writer       { return e.writer }
+func (e *EngineLogSource) Reader() *logengine.Reader       { return e.reader }
+func (e *EngineLogSource) Compactor() *logengine.Compactor { return e.compactor }
 
 func (e *EngineLogSource) Close() error {
-	if e.writer != nil {
-		return e.writer.Close()
+	var compactorErr error
+	if e.compactor != nil {
+		compactorErr = e.compactor.Close()
 	}
-	return nil
+	var writerErr error
+	if e.writer != nil {
+		writerErr = e.writer.Close()
+	}
+	if compactorErr != nil {
+		return compactorErr
+	}
+	return writerErr
 }
+
 
 // BlockCount returns total indexed blocks in the embedded columnar log engine.
 func (e *EngineLogSource) BlockCount() int {
