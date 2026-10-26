@@ -222,6 +222,25 @@ function getSaturationClass(pct: number): string {
 .metric-pct {
   font-size: 11px;
   font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  line-height: 1.2;
+}
+
+.metric-pct.saturation-healthy {
+  background: var(--color-status-online-bg);
+  border: 1px solid var(--color-status-online-border);
+  color: var(--color-status-online);
+}
+.metric-pct.saturation-warning {
+  background: var(--color-status-warning-bg);
+  border: 1px solid var(--color-status-warning-border);
+  color: var(--color-status-warning);
+}
+.metric-pct.saturation-critical {
+  background: var(--color-status-offline-bg);
+  border: 1px solid var(--color-status-offline-border);
+  color: var(--color-status-offline);
 }
 
 .micro-meter-track {
@@ -241,17 +260,14 @@ function getSaturationClass(pct: number): string {
   transition: width 0.3s ease;
 }
 
-.saturation-healthy {
+.micro-meter-fill.saturation-healthy {
   background: var(--color-status-online);
-  color: var(--color-status-online);
 }
-.saturation-warning {
+.micro-meter-fill.saturation-warning {
   background: var(--color-status-warning);
-  color: var(--color-status-warning);
 }
-.saturation-critical {
+.micro-meter-fill.saturation-critical {
   background: var(--color-status-offline);
-  color: var(--color-status-offline);
 }
 
 .metric-subtext {
@@ -270,9 +286,35 @@ function getSaturationClass(pct: number): string {
 
 @media (max-width: 640px) {
   .fleet-capacity-strip {
-    grid-template-columns: 1fr;
-    padding: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
+    padding: 8px 10px;
+  }
+  .capacity-metric-card {
+    padding: 6px 8px;
+    gap: 0;
+  }
+  .metric-icon-wrap {
+    display: none;
+  }
+  .metric-subtext {
+    display: none;
+  }
+  .metric-label {
+    font-size: 9px;
+  }
+  .metric-pct {
+    font-size: 10px;
+    padding: 0 4px;
+  }
+  .val-number {
+    font-size: 15px;
+  }
+  .val-sub {
+    font-size: 10px;
+  }
+  .metric-primary-val {
+    margin-top: 2px;
   }
 }
 </style>
