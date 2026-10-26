@@ -19,28 +19,76 @@ import (
 
 // SearchLogsRequest represents parameters for distributed log search.
 type SearchLogsRequest struct {
-	Query string `json:"query"`
-	App   string `json:"app,omitempty"`
-	Since string `json:"since,omitempty"`
-	Until string `json:"until,omitempty"`
-	Level string `json:"level,omitempty"`
-	Limit int    `json:"limit,omitempty"`
+	Query         string `json:"query"`
+	App           string `json:"app,omitempty"`
+	Since         string `json:"since,omitempty"`
+	Until         string `json:"until,omitempty"`
+	Level         string `json:"level,omitempty"`
+	Limit         int    `json:"limit,omitempty"`
+	Namespace     string `json:"namespace,omitempty"`
+	PodName       string `json:"pod,omitempty"`
+	ContainerName string `json:"container,omitempty"`
+	Stream        string `json:"stream,omitempty"`
+}
+
+// UnmarshalJSON supports both "pod" / "pod_name" and "container" / "container_name".
+func (r *SearchLogsRequest) UnmarshalJSON(data []byte) error {
+	type Alias SearchLogsRequest
+	aux := struct {
+		*Alias
+		AltPodName       string `json:"pod_name,omitempty"`
+		AltContainerName string `json:"container_name,omitempty"`
+	}{Alias: (*Alias)(r)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if r.PodName == "" && aux.AltPodName != "" {
+		r.PodName = aux.AltPodName
+	}
+	if r.ContainerName == "" && aux.AltContainerName != "" {
+		r.ContainerName = aux.AltContainerName
+	}
+	return nil
 }
 
 // LogSearchResult represents a single search match across nodes.
 type LogSearchResult struct {
-	Timestamp time.Time `json:"timestamp"`
-	NodeID    string    `json:"node_id,omitempty"`
-	NodeName  string    `json:"node_name,omitempty"`
-	Service   string    `json:"service"`
-	Message   string    `json:"message"`
-	Level     string    `json:"level,omitempty"`
-	Raw       string    `json:"raw,omitempty"`
+	Timestamp     time.Time `json:"timestamp"`
+	NodeID        string    `json:"node_id,omitempty"`
+	NodeName      string    `json:"node_name,omitempty"`
+	Service       string    `json:"service"`
+	Message       string    `json:"message"`
+	Level         string    `json:"level,omitempty"`
+	Raw           string    `json:"raw,omitempty"`
+	Namespace     string    `json:"namespace,omitempty"`
+	PodName       string    `json:"pod,omitempty"`
+	ContainerName string    `json:"container,omitempty"`
+	Stream        string    `json:"stream,omitempty"`
+}
+
+// UnmarshalJSON supports both "pod" / "pod_name" and "container" / "container_name".
+func (r *LogSearchResult) UnmarshalJSON(data []byte) error {
+	type Alias LogSearchResult
+	aux := struct {
+		*Alias
+		AltPodName       string `json:"pod_name,omitempty"`
+		AltContainerName string `json:"container_name,omitempty"`
+	}{Alias: (*Alias)(r)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if r.PodName == "" && aux.AltPodName != "" {
+		r.PodName = aux.AltPodName
+	}
+	if r.ContainerName == "" && aux.AltContainerName != "" {
+		r.ContainerName = aux.AltContainerName
+	}
+	return nil
 }
 
 // LogClientInterface defines the interface for interacting with node agent log endpoints.
 type LogClientInterface interface {
-	GetNodeLogs(ctx context.Context, hostEndpoint, authToken, app, tail, since, until, q, level string) (string, error)
+	GetNodeLogs(ctx context.Context, hostEndpoint, authToken, app, tail, since, until, q, level string, k8sMeta ...string) (string, error)
 	SearchNodeLogs(ctx context.Context, hostEndpoint, authToken string, req SearchLogsRequest) ([]LogSearchResult, error)
 	SearchClusterLogs(ctx context.Context, hosts []docker.ComputeHost, req SearchLogsRequest) ([]LogSearchResult, error)
 	ListNodeServices(ctx context.Context, hostEndpoint, authToken string) ([]string, error)
@@ -62,35 +110,27 @@ type AgentLogClientOption func(*AgentLogClient)
 // WithHTTPClient overrides the HTTP client.
 func WithHTTPClient(client *http.Client) AgentLogClientOption {
 	return func(c *AgentLogClient) {
-		if client != nil {
-			c.httpClient = client
-		}
+		if client != nil { c.httpClient = client }
 	}
 }
 
 // WithClusterTimeout sets timeout for parallel scatter-gather cluster queries.
 func WithClusterTimeout(d time.Duration) AgentLogClientOption {
 	return func(c *AgentLogClient) {
-		if d > 0 {
-			c.clusterTimeout = d
-		}
+		if d > 0 { c.clusterTimeout = d }
 	}
 }
 
 // WithNodeTimeout sets timeout for single node queries.
 func WithNodeTimeout(d time.Duration) AgentLogClientOption {
 	return func(c *AgentLogClient) {
-		if d > 0 {
-			c.nodeTimeout = d
-		}
+		if d > 0 { c.nodeTimeout = d }
 	}
 }
 
 // WithAuthToken sets default authentication token for agent requests.
 func WithAuthToken(token string) AgentLogClientOption {
-	return func(c *AgentLogClient) {
-		c.authToken = token
-	}
+	return func(c *AgentLogClient) { c.authToken = token }
 }
 
 func (c *AgentLogClient) getAuthToken() string {
@@ -140,7 +180,7 @@ func NormalizeHostEndpoint(endpoint string) string {
 }
 
 // GetNodeLogs queries logs directly from a single node agent.
-func (c *AgentLogClient) GetNodeLogs(ctx context.Context, hostEndpoint, authToken, app, tail, since, until, q, level string) (string, error) {
+func (c *AgentLogClient) GetNodeLogs(ctx context.Context, hostEndpoint, authToken, app, tail, since, until, q, level string, k8sMeta ...string) (string, error) {
 	baseURL := NormalizeHostEndpoint(hostEndpoint)
 	if baseURL == "" {
 		return "", fmt.Errorf("invalid or empty host endpoint: %q", hostEndpoint)
@@ -152,24 +192,16 @@ func (c *AgentLogClient) GetNodeLogs(ctx context.Context, hostEndpoint, authToke
 	}
 
 	query := reqURL.Query()
-	if app != "" {
-		query.Set("app", app)
-	}
-	if tail != "" {
-		query.Set("tail", tail)
-	}
-	if since != "" {
-		query.Set("since", since)
-	}
-	if until != "" {
-		query.Set("until", until)
-	}
-	if q != "" {
-		query.Set("q", q)
-	}
-	if level != "" {
-		query.Set("level", level)
-	}
+	if app != "" { query.Set("app", app) }
+	if tail != "" { query.Set("tail", tail) }
+	if since != "" { query.Set("since", since) }
+	if until != "" { query.Set("until", until) }
+	if q != "" { query.Set("q", q) }
+	if level != "" { query.Set("level", level) }
+	if len(k8sMeta) > 0 && k8sMeta[0] != "" { query.Set("namespace", k8sMeta[0]) }
+	if len(k8sMeta) > 1 && k8sMeta[1] != "" { query.Set("pod", k8sMeta[1]) }
+	if len(k8sMeta) > 2 && k8sMeta[2] != "" { query.Set("container", k8sMeta[2]) }
+	if len(k8sMeta) > 3 && k8sMeta[3] != "" { query.Set("stream", k8sMeta[3]) }
 	reqURL.RawQuery = query.Encode()
 
 	reqCtx := ctx

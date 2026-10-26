@@ -1,4 +1,4 @@
-﻿package agent_test
+package agent_test
 
 import (
 	"context"
@@ -62,7 +62,7 @@ type mockLogClient struct {
 	lastReq        agent.SearchLogsRequest
 }
 
-func (m *mockLogClient) GetNodeLogs(ctx context.Context, hostEndpoint, authToken, app, tail, since, until, q, level string) (string, error) {
+func (m *mockLogClient) GetNodeLogs(ctx context.Context, hostEndpoint, authToken, app, tail, since, until, q, level string, k8sMeta ...string) (string, error) {
 	return "", nil
 }
 
