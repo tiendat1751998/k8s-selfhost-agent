@@ -266,17 +266,6 @@ func (r *automationRepo) ListExecutions(ctx context.Context, limit, offset int) 
 	return execs, total, nil
 }
 
-func parseTenantUUIDOrNil(tid string) *string {
-	if tid == "" {
-		return nil
-	}
-	if u, err := uuid.Parse(tid); err == nil {
-		s := u.String()
-		return &s
-	}
-	return nil
-}
-
 func (r *automationRepo) CreateExecution(ctx context.Context, e *automation.Execution) error {
 	if e.ID == "" {
 		e.ID = uuid.NewString()
@@ -285,7 +274,10 @@ func (r *automationRepo) CreateExecution(ctx context.Context, e *automation.Exec
 		e.CreatedAt = time.Now().UTC()
 	}
 
-	tenantID := parseTenantUUIDOrNil(tenancy.TenantIDFromContext(ctx))
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
 
 	query := `
 		INSERT INTO automation_executions (id, rule_id, rule_name, trigger_event, action_taken, result, error_detail, created_at, tenant_id)
@@ -306,13 +298,19 @@ func (r *automationRepo) CreateExecution(ctx context.Context, e *automation.Exec
 		return fmt.Errorf("inserting automation execution: %w", err)
 	}
 	
+	// Fallback context with default tenant if empty so BuildTenantQuery doesn't filter out the rule when updating stats
+	updateCtx := ctx
+	if tenancy.TenantIDFromContext(ctx) == "" && tenancy.UserRoleFromContext(ctx) == "" {
+		updateCtx = tenancy.WithTenantID(ctx, "default-tenant")
+	}
+
 	// Update the rule stats
 	updateQuery := `
 		UPDATE automation_rules 
 		SET executions = executions + 1, last_triggered = NOW() 
 		WHERE id = $1
 	`
-	updateQuery, updateArgs := BuildTenantQuery(ctx, updateQuery, e.RuleID)
+	updateQuery, updateArgs := BuildTenantQuery(updateCtx, updateQuery, e.RuleID)
 	if _, err := r.getDB(ctx).Exec(ctx, updateQuery, updateArgs...); err != nil {
 		return fmt.Errorf("updating rule stats: %w", err)
 	}
