@@ -37,8 +37,10 @@ type Compactor struct {
 	opts     CompactorOptions
 	stopCh   chan struct{}
 	wg       sync.WaitGroup
+	running  bool
 	closed   bool
 }
+
 
 // NewCompactor initializes a MergeTree part compactor for partsDir.
 func NewCompactor(partsDir string, writer *Writer, reader *Reader, opts ...CompactorOptions) *Compactor {
@@ -278,12 +280,25 @@ func (c *Compactor) CompactOnce() (int, error) {
 
 // StartBackground runs periodic compaction in the background until Stop is called or ctx is canceled.
 func (c *Compactor) StartBackground(ctx context.Context, interval time.Duration) {
+	c.mu.Lock()
+	if c.closed || c.running {
+		c.mu.Unlock()
+		return
+	}
+	c.running = true
+	c.mu.Unlock()
+
 	if interval <= 0 {
 		interval = 30 * time.Second
 	}
 	c.wg.Add(1)
 	go func() {
-		defer c.wg.Done()
+		defer func() {
+			c.mu.Lock()
+			c.running = false
+			c.mu.Unlock()
+			c.wg.Done()
+		}()
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -299,6 +314,11 @@ func (c *Compactor) StartBackground(ctx context.Context, interval time.Duration)
 	}()
 }
 
+// Start begins periodic background compaction with the specified interval.
+func (c *Compactor) Start(interval time.Duration) {
+	c.StartBackground(context.Background(), interval)
+}
+
 // Stop terminates background compaction.
 func (c *Compactor) Stop() {
 	c.mu.Lock()
@@ -307,7 +327,29 @@ func (c *Compactor) Stop() {
 		return
 	}
 	c.closed = true
+	c.running = false
 	close(c.stopCh)
 	c.mu.Unlock()
 	c.wg.Wait()
 }
+
+// Close terminates background compaction, implementing io.Closer.
+func (c *Compactor) Close() error {
+	c.Stop()
+	return nil
+}
+
+// IsRunning reports whether the compactor background loop is active.
+func (c *Compactor) IsRunning() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.running && !c.closed
+}
+
+// IsClosed reports whether the compactor has been closed or stopped.
+func (c *Compactor) IsClosed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
+}
+

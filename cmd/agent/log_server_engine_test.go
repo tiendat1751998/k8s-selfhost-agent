@@ -371,4 +371,27 @@ func TestLogServer_HandleSearchLogs_K8sRoundTrip(t *testing.T) {
 	})
 }
 
+func TestEngineLogSource_CompactorLifecycle(t *testing.T) {
+	tempDir := t.TempDir()
+	src, err := NewEngineLogSource(tempDir)
+	require.NoError(t, err)
+	require.NotNil(t, src)
+
+	compactor := src.Compactor()
+	require.NotNil(t, compactor, "compactor must be instantiated and wired")
+	assert.True(t, compactor.IsRunning(), "compactor background loop should be active")
+	assert.False(t, compactor.IsClosed(), "compactor should not be closed initially")
+
+	// Close must cleanly shut down compactor before closing writer with 0 errors
+	err = src.Close()
+	require.NoError(t, err)
+	assert.False(t, compactor.IsRunning(), "compactor background loop should stop after Close")
+	assert.True(t, compactor.IsClosed(), "compactor should be marked closed after Close")
+
+	// Verify Close idempotency
+	err = src.Close()
+	assert.NoError(t, err)
+}
+
+
 
