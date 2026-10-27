@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 	usecaseCompliance "github.com/datdt/k8sselfhost/internal/usecase/compliance"
 )
 
@@ -173,5 +175,61 @@ func (s *complianceScannerStore) InsertAuditLog(ctx context.Context, log *usecas
 	if err != nil {
 		return fmt.Errorf("inserting audit log: %w", err)
 	}
+	return nil
+}
+
+func (s *complianceScannerStore) ReplaceAuditFindings(ctx context.Context, findings []usecaseCompliance.AuditFindingRecord) error {
+	tenantID := tenancy.TenantIDFromContext(ctx)
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
+	delQuery := `
+		DELETE FROM audit_findings 
+		WHERE status = 'open' 
+		  AND category IN ('runtime_security', 'database_network', 'database_transport', 'kubelet_api', 'control_plane', 'container_runtime', 'process_table')
+	`
+	delQuery, delArgs := BuildTenantQuery(ctx, delQuery)
+	if _, err := s.getDB(ctx).Exec(ctx, delQuery, delArgs...); err != nil {
+		return fmt.Errorf("deleting stale runtime audit findings: %w", err)
+	}
+
+	insertQuery := `
+		INSERT INTO audit_findings (id, category, severity, description, remediation, status, detected_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (id) DO UPDATE SET
+			category = EXCLUDED.category,
+			severity = EXCLUDED.severity,
+			description = EXCLUDED.description,
+			remediation = EXCLUDED.remediation,
+			status = EXCLUDED.status,
+			detected_at = EXCLUDED.detected_at,
+			tenant_id = EXCLUDED.tenant_id
+	`
+	for _, f := range findings {
+		fID := f.ID
+		if fID == "" {
+			fID = uuid.NewString()
+		}
+		fTenant := f.TenantID
+		if fTenant == "" {
+			fTenant = tenantID
+		}
+		fDetected := f.DetectedAt
+		if fDetected.IsZero() {
+			fDetected = time.Now().UTC()
+		}
+		fStatus := f.Status
+		if fStatus == "" {
+			fStatus = "open"
+		}
+		_, err := s.getDB(ctx).Exec(ctx, insertQuery,
+			fID, f.Category, f.Severity, f.Description, f.Remediation, fStatus, fDetected, fTenant,
+		)
+		if err != nil {
+			return fmt.Errorf("inserting audit finding %s: %w", fID, err)
+		}
+	}
+
 	return nil
 }

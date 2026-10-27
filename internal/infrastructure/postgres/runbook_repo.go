@@ -20,6 +20,11 @@ func NewRunbookRepo(db DBTX) runbook.Repository {
 	return &runbookRepo{db: db}
 }
 
+// DB returns the underlying DBTX.
+func (r *runbookRepo) DB() DBTX {
+	return r.db
+}
+
 func (r *runbookRepo) getDB(ctx context.Context) DBTX {
 	return ExtractTx(ctx, r.db)
 }

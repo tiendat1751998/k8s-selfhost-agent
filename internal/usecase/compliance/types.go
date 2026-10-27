@@ -54,6 +54,18 @@ type AuditLogRecord struct {
 	TenantID   string         `json:"tenant_id"`
 }
 
+// AuditFindingRecord represents a runtime daemon or workload security posture finding for audit_findings table.
+type AuditFindingRecord struct {
+	ID          string    `json:"id"`
+	Category    string    `json:"category"`
+	Severity    string    `json:"severity"`
+	Description string    `json:"description"`
+	Remediation string    `json:"remediation"`
+	Status      string    `json:"status"`
+	DetectedAt  time.Time `json:"detected_at"`
+	TenantID    string    `json:"tenant_id"`
+}
+
 // Store defines repository access for the compliance scanner.
 type Store interface {
 	ListHosts(ctx context.Context) ([]ComputeHostRow, error)
@@ -61,6 +73,7 @@ type Store interface {
 	CountAuditLogs(ctx context.Context) (int, error)
 	UpsertFramework(ctx context.Context, fw *FrameworkRecord) error
 	ReplaceViolations(ctx context.Context, violations []ViolationRecord) error
+	ReplaceAuditFindings(ctx context.Context, findings []AuditFindingRecord) error
 	InsertAuditLog(ctx context.Context, log *AuditLogRecord) error
 }
 

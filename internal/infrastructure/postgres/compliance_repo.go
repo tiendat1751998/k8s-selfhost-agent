@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/datdt/k8sselfhost/internal/domain/compliance"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
@@ -136,6 +138,21 @@ func (r *ComplianceRepo) CreateViolation(ctx context.Context, v *compliance.Viol
 		return errors.Wrap(err, "inserting compliance violation")
 	}
 	return nil
+}
+
+func (r *ComplianceRepo) GetViolation(ctx context.Context, id string) (*compliance.Violation, error) {
+	ctx = EnsureTenantContext(ctx)
+	query := `SELECT id, framework_id, severity, policy, resource, namespace, cluster, message, resolved, detected_at FROM compliance_violations WHERE id = $1`
+	query, args := BuildTenantQuery(ctx, query, id)
+	var v compliance.Violation
+	err := r.getDB(ctx).QueryRow(ctx, query, args...).Scan(&v.ID, &v.FrameworkID, &v.Severity, &v.Policy, &v.Resource, &v.Namespace, &v.Cluster, &v.Message, &v.Resolved, &v.DetectedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errors.ErrNotFound
+		}
+		return nil, errors.Wrap(err, "getting compliance violation")
+	}
+	return &v, nil
 }
 
 func (r *ComplianceRepo) ResolveViolation(ctx context.Context, id string) error {

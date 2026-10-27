@@ -9,6 +9,7 @@ type Repository interface {
 	UpsertFramework(ctx context.Context, f *Framework) error
 
 	ListViolations(ctx context.Context, severity *ViolationSeverity, limit, offset int) ([]Violation, int, error)
+	GetViolation(ctx context.Context, id string) (*Violation, error)
 	CreateViolation(ctx context.Context, v *Violation) error
 	ResolveViolation(ctx context.Context, id string) error
 }
