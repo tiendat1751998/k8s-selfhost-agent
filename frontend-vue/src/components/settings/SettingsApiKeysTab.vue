@@ -60,6 +60,16 @@ onMounted(() => {
   }
 })
 
+const newlyCreatedKey = ref<{ name: string; token: string } | null>(null)
+const copiedNewKey = ref(false)
+
+async function copyNewKey() {
+  if (!newlyCreatedKey.value) return
+  await navigator.clipboard.writeText(newlyCreatedKey.value.token)
+  copiedNewKey.value = true
+  setTimeout(() => { copiedNewKey.value = false }, 2000)
+}
+
 async function handleCreateKey() {
   if (!newKeyName.value.trim()) return
   isCreating.value = true
@@ -72,6 +82,9 @@ async function handleCreateKey() {
     })
     if (created && created.id) {
       activeKeys.value = [...activeKeys.value, created]
+      if (created.token) {
+        newlyCreatedKey.value = { name: created.name, token: created.token }
+      }
       newKeyName.value = ''
       showCreateForm.value = false
       emit('save', 'apikeys')
@@ -149,60 +162,58 @@ async function handleRevokeKey(id: string) {
     </div>
 
     <!-- Generate API Key Form -->
-    <div
-      v-if="showCreateForm"
-      class="create-key-panel glass-panel animate-fade-in"
-      style="padding: 16px; margin-bottom: 20px; border-radius: 12px; background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle);"
-    >
+    <div v-if="showCreateForm" class="create-key-panel glass-panel animate-fade-in" style="padding: 16px; margin-bottom: 20px; border-radius: 12px; background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle);">
       <h3 class="subsection-title" style="margin-bottom: 12px;">Generate New Machine-to-Machine Token</h3>
-      <div
-        v-if="createError"
-        class="alert-banner alert-banner-danger"
-        style="margin-bottom: 12px; padding: 8px 12px; border-radius: 6px; font-size: 13px; background: rgba(225, 29, 72, 0.15); border: 1px solid rgba(225, 29, 72, 0.3); color: #f43f5e;"
-      >
+      <div v-if="createError" class="alert-banner alert-banner-danger" style="margin-bottom: 12px; padding: 8px 12px; border-radius: 6px; font-size: 13px; background: rgba(225, 29, 72, 0.15); border: 1px solid rgba(225, 29, 72, 0.3); color: #f43f5e;">
         {{ createError }}
       </div>
       <form class="settings-form" @submit.prevent="handleCreateKey">
         <div class="form-row" style="align-items: flex-end; gap: 16px;">
           <div class="form-group" style="max-width: 360px; flex: 1;">
             <label class="form-label" for="api-key-name">Key Name / Description</label>
-            <input
-              id="api-key-name"
-              v-model="newKeyName"
-              type="text"
-              required
-              class="input-glass form-input"
-              style="max-width: 360px;"
-              placeholder="e.g. Jenkins Staging Runner"
-              :disabled="isCreating || saving"
-            />
+            <input id="api-key-name" v-model="newKeyName" type="text" required class="input-glass form-input" style="max-width: 360px;" placeholder="e.g. Jenkins Staging Runner" :disabled="isCreating || saving" />
           </div>
           <div class="form-group" style="max-width: 200px; flex: 1;">
             <label class="form-label" for="api-key-role">Permission Scope</label>
-            <select
-              id="api-key-role"
-              v-model="newKeyRole"
-              class="input-glass form-select"
-              style="max-width: 200px;"
-              :disabled="isCreating || saving"
-            >
+            <select id="api-key-role" v-model="newKeyRole" class="input-glass form-select" style="max-width: 200px;" :disabled="isCreating || saving">
               <option value="developer">Operator (Read/Write)</option>
               <option value="admin">Admin (Full Access)</option>
               <option value="readonly">Auditor (Read-Only)</option>
             </select>
           </div>
           <div class="form-group" style="flex: 0 0 auto;">
-            <button
-              type="submit"
-              class="btn btn-primary btn-sm"
-              style="min-height: 40px;"
-              :disabled="saving || isCreating"
-            >
+            <button type="submit" class="btn btn-primary btn-sm" style="min-height: 40px;" :disabled="saving || isCreating">
               <span>{{ isCreating ? 'Generating...' : (saving ? 'Saving...' : 'Confirm Key Creation') }}</span>
             </button>
           </div>
         </div>
       </form>
+    </div>
+
+    <!-- Prominent New API Key Callout (Token Only Visible Once) -->
+    <div
+      v-if="newlyCreatedKey"
+      class="new-key-callout glass-panel animate-fade-in"
+      style="margin-bottom: 16px; padding: 12px 16px; border-radius: 8px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.35);"
+    >
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <span style="font-weight: 700; font-size: 13px; color: var(--color-status-online);">API Key Generated: {{ newlyCreatedKey.name }}</span>
+        <button type="button" class="btn-action-compact" @click="newlyCreatedKey = null">
+          <BaseIcon name="x" size="xs" /> <span>Dismiss</span>
+        </button>
+      </div>
+      <p style="margin: 0 0 8px 0; font-size: 11.5px; color: var(--text-muted);">
+        Copy this API key now — only its SHA-256 hash is stored and it cannot be viewed again.
+      </p>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <code class="font-mono" style="flex: 1; padding: 6px 10px; border-radius: 6px; background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle); color: #38bdf8; font-size: 12px; word-break: break-all;">
+          {{ newlyCreatedKey.token }}
+        </code>
+        <button type="button" class="btn btn-primary btn-xs" @click="copyNewKey">
+          <BaseIcon :name="copiedNewKey ? 'check' : 'copy'" size="xs" />
+          <span>{{ copiedNewKey ? 'Copied!' : 'Copy Key' }}</span>
+        </button>
+      </div>
     </div>
 
     <!-- API Keys Data Table (Fixed 100% Column Widths & Zero Horizontal Overflow) -->

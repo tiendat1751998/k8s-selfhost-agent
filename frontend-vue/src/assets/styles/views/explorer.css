@@ -145,3 +145,64 @@
   .explorer-desktop-table { display: none !important; }
   .explorer-mobile-cards { display: block !important; }
 }
+
+/* Control Plane (:6443) Offline Banner */
+.control-plane-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
+  border-left: 4px solid var(--color-status-amber);
+}
+
+.cp-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cp-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-status-amber);
+}
+
+.cp-title {
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  color: var(--color-body);
+}
+
+.cp-badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: var(--color-status-amber);
+}
+
+.cp-desc {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-muted-strong);
+  line-height: 1.4;
+}
+
+.cp-reason {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.cp-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+

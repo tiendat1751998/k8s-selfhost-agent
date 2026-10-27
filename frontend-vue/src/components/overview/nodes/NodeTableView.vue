@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { NodeMetrics } from '../../../api/overview'
 import BaseIcon from '../../ui/BaseIcon.vue'
 import ActionDropdown, { type ActionItem } from '../../ui/ActionDropdown.vue'
+import { extractNodeIp } from '../overviewMobileUtils'
 
 const props = defineProps<{
   nodes: NodeMetrics[]
@@ -119,12 +120,7 @@ function getRoleBadge(role?: string): { label: string; cls: string } {
 }
 
 function getNodeIp(node: NodeMetrics): string {
-  const anyNode = node as any
-  if (anyNode.ip) return anyNode.ip
-  if (anyNode.ip_address) return anyNode.ip_address
-  if (anyNode.internal_ip) return anyNode.internal_ip
-  if (anyNode.endpoint) return anyNode.endpoint.replace(/^https?:\/\//, '').split(':')[0]
-  return '--'
+  return extractNodeIp(node as any)
 }
 
 function getOsDistro(node: NodeMetrics): string {

@@ -10,6 +10,10 @@ import {
 export type { SimulationScenario, RcaTimelineEvent, BlastRadiusInfo, PRFormData, CreateIncidentPayload }
 export { SIMULATION_SCENARIOS }
 
+export function isSimulationAllowed(query?: Record<string, unknown> | null): boolean {
+  return query?.debug === '1'
+}
+
 export function useIncidents() {
   const loading = ref(false)
   const error = ref<string | null>(null)

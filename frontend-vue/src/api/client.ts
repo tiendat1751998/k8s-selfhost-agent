@@ -4,6 +4,8 @@ export interface ApiResponse<T> {
   data: T
   total?: number
   error?: string
+  k8s_degraded?: boolean
+  degraded_reason?: string
 }
 
 interface RequestOptions extends RequestInit {

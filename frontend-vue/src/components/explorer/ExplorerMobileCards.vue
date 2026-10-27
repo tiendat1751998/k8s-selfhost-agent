@@ -1,11 +1,12 @@
-﻿<template>
+<template>
   <div class="mobile-cards-stream">
     <div v-if="loading" class="stream-status font-mono">
       <BaseIcon name="clock" size="xs" class="spin-icon" /> Loading resources...
     </div>
     <div v-else-if="resources.length === 0" class="stream-empty glass-panel font-mono">
-      <span class="empty-icon"><BaseIcon name="box" size="lg" /></span>
-      <p class="empty-text">{{ emptyMessage || 'No Kubernetes resources found' }}</p>
+      <span class="empty-icon"><BaseIcon :name="k8sDegraded ? 'alert-triangle' : 'box'" size="lg" :class="{ 'text-amber': k8sDegraded }" /></span>
+      <p class="empty-text">{{ k8sDegraded ? 'Control Plane (:6443) Unreachable' : (emptyMessage || 'No Kubernetes resources found') }}</p>
+      <span v-if="k8sDegraded && degradedReason" class="font-small text-muted">{{ degradedReason }}</span>
     </div>
     <div v-else class="cards-list">
       <div
@@ -49,8 +50,15 @@ import { ref } from 'vue'
 import type { K8sResource, ResourceKind } from '../../api/k8s'
 
 const props = withDefaults(
-  defineProps<{ resources: K8sResource[]; selectedKind: ResourceKind; loading?: boolean; emptyMessage?: string }>(),
-  { loading: false, emptyMessage: '' }
+  defineProps<{
+    resources: K8sResource[]
+    selectedKind: ResourceKind
+    loading?: boolean
+    emptyMessage?: string
+    k8sDegraded?: boolean
+    degradedReason?: string | null
+  }>(),
+  { loading: false, emptyMessage: '', k8sDegraded: false, degradedReason: null }
 )
 
 defineEmits<{

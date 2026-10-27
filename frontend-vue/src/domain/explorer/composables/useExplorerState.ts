@@ -8,6 +8,8 @@ export function useExplorerState() {
   const toastMessage = ref<ToastMessage | null>(null)
   const clusterOffline = ref(false)
   const offlineErrorMessage = ref<string | null>(null)
+  const k8sDegraded = ref(false)
+  const degradedReason = ref<string | null>(null)
 
   const clusters = ref<Cluster[]>([])
   const selectedCluster = ref<string>('primary-cluster')
@@ -54,6 +56,8 @@ export function useExplorerState() {
     toastMessage,
     clusterOffline,
     offlineErrorMessage,
+    k8sDegraded,
+    degradedReason,
     clusters,
     selectedCluster,
     namespaces,

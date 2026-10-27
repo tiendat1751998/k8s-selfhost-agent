@@ -38,6 +38,7 @@ export interface ApiKeyItem {
   role: string
   created_at: string
   last_used: string
+  token?: string
 }
 
 export const apiKeysApi = {

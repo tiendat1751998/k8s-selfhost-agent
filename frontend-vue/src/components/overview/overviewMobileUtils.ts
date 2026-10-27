@@ -34,14 +34,56 @@ export function getNodeRole(node: NodeMetrics): string {
   return role || 'worker'
 }
 
+export function extractNodeIp(node?: (Partial<NodeMetrics> & Record<string, unknown>) | null): string {
+  if (!node) return '--'
+  if (typeof node.ip === 'string' && node.ip.trim()) return node.ip.trim()
+  if (typeof node.ip_address === 'string' && node.ip_address.trim()) return node.ip_address.trim()
+  if (typeof node.internal_ip === 'string' && node.internal_ip.trim()) return node.internal_ip.trim()
+  
+  const rawAddr = (typeof node.address === 'string' ? node.address : typeof node.endpoint === 'string' ? node.endpoint : '').trim()
+  if (rawAddr) {
+    const stripped = rawAddr.replace(/^https?:\/\//i, '').split('/')[0]
+    const host = stripped.split(':')[0]
+    if (host) return host
+  }
+  return '--'
+}
+
 export function getNodeIdentifier(node: NodeMetrics): string {
-  const n = node as unknown as Record<string, unknown>
-  const ip = (n.ip as string) || (n.ip_address as string) || (n.internal_ip as string) || (typeof n.endpoint === 'string' ? n.endpoint.replace(/^https?:\/\//, '').split(':')[0] : '')
-  if (ip) return ip
+  const ip = extractNodeIp(node as unknown as Record<string, unknown>)
+  if (ip !== '--') return ip
   if (node.node_id) {
     return node.node_id.length > 8 ? node.node_id.slice(0, 8) : node.node_id
   }
   return '--'
+}
+
+export interface ContainerKpiStatus {
+  primaryText: string
+  badgeText: string
+  badgeVariant: 'badge-cyan' | 'badge-amber' | 'badge-muted'
+}
+
+export function resolveContainerKpi(runningContainers: number, totalContainers: number, healthyNodes: number): ContainerKpiStatus {
+  if (totalContainers === 0 && healthyNodes > 0) {
+    return {
+      primaryText: '0 PODS',
+      badgeText: 'K8S :6443 OFFLINE',
+      badgeVariant: 'badge-amber',
+    }
+  }
+  if (totalContainers === 0 && healthyNodes === 0) {
+    return {
+      primaryText: '0/0',
+      badgeText: 'STOPPED',
+      badgeVariant: 'badge-muted',
+    }
+  }
+  return {
+    primaryText: `${runningContainers}/${totalContainers}`,
+    badgeText: runningContainers === totalContainers ? 'RUNNING' : 'DEGRADED',
+    badgeVariant: runningContainers === totalContainers ? 'badge-cyan' : 'badge-amber',
+  }
 }
 
 export function getCpuColorClass(cpu?: number): string {
@@ -50,3 +92,4 @@ export function getCpuColorClass(cpu?: number): string {
   if (val >= 50) return 'text-amber'
   return 'text-emerald'
 }
+

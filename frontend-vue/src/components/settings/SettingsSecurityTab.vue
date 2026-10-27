@@ -2,6 +2,7 @@
 import { useRouter } from 'vue-router'
 import BaseIcon from '../ui/BaseIcon.vue'
 import type { TOTPStatusResponse } from '../../api/auth'
+import SettingsPasswordCard from './SettingsPasswordCard.vue'
 
 const router = useRouter()
 
@@ -25,7 +26,8 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="settings-card glass-panel animate-fade-in">
+  <div class="settings-security-tab-wrap">
+    <div class="settings-card glass-panel animate-fade-in">
     <div class="card-header">
       <div>
         <h2 class="card-title">Security & Access Policy</h2>
@@ -189,4 +191,7 @@ const emit = defineEmits<{
       </div>
     </form>
   </div>
+
+  <SettingsPasswordCard />
+</div>
 </template>

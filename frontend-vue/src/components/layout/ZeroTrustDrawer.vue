@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import { securityApi } from '../../api/security'
+import { resolveKmsProviderTelemetry, downloadAttestationDocument, type KmsDetails } from './zeroTrustUtils'
 
 const props = defineProps<{ show: boolean }>()
 const emit = defineEmits<{ (e: 'update:show', val: boolean): void; (e: 'close'): void }>()
 
+const kmsDetails = ref<KmsDetails | null>(null)
 const activeKeyId = ref('--')
 const keyVersion = ref(0)
 const rotationStatus = ref<'idle' | 'rotating' | 'rotated' | 'error'>('idle')
 const verificationStatus = ref<'idle' | 'verifying' | 'verified'>('idle')
 const copiedKey = ref(false)
 const kmsError = ref<string | null>(null)
+
+const kmsTelemetry = computed(() => resolveKmsProviderTelemetry(kmsDetails.value))
 
 function handleClose() {
   emit('update:show', false)
@@ -26,6 +30,7 @@ async function loadKmsStatus() {
   kmsError.value = null
   try {
     const k = await securityApi.getKmsKey()
+    kmsDetails.value = k
     if (k?.key_id) activeKeyId.value = k.key_id
     if (k?.version) keyVersion.value = k.version
   } catch (err: unknown) {
@@ -58,6 +63,7 @@ async function rotateKey() {
     const res = await securityApi.rotateKmsKey()
     if (res?.key_id) activeKeyId.value = res.key_id
     if (res?.version) keyVersion.value = res.version
+    kmsDetails.value = { ...kmsDetails.value, key_id: res?.key_id, version: res?.version }
     rotationStatus.value = 'rotated'
   } catch (err: unknown) {
     activeKeyId.value = '--'
@@ -78,67 +84,8 @@ async function verifyChecksum() {
   }
 }
 
-async function computeSha256(message: string): Promise<string> {
-  if (typeof crypto !== 'undefined' && crypto.subtle) {
-    const msgBuffer = new TextEncoder().encode(message)
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
-    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
-  }
-  let hash = 0
-  for (let i = 0; i < message.length; i++) {
-    hash = ((hash << 5) - hash) + message.charCodeAt(i)
-    hash |= 0
-  }
-  return Math.abs(hash).toString(16).padStart(64, '0')
-}
-
-async function downloadAttestation() {
-  const timestamp = new Date().toISOString()
-  const payloadSeed = `k8s-kms:${activeKeyId.value}:v${keyVersion.value}:${timestamp}`
-  const digest = await computeSha256(payloadSeed)
-  const s3Digest = await computeSha256(`k8scontrol-cold-raft-airgap:${timestamp}`)
-
-  const attestationData = {
-    schema_version: 'v1alpha1',
-    attestation_timestamp: timestamp,
-    kms_enclave: {
-      status: 'ARMED',
-      provider: 'Hardware Security Module (HSM PKCS#11) / Vault KMS Provider',
-      key_id: activeKeyId.value,
-      key_version: 'v' + keyVersion.value,
-      cipher: 'AES-256-GCM',
-      rotation_policy: '90-day automatic',
-      envelope_digest: `sha256:${digest}`,
-      secret_protection: 'KMS v2 Envelope Encryption (0 Plaintext Secrets in etcd)'
-    },
-    cluster_security: {
-      mtls_certificate_expiry: '2027-03-15T00:00:00Z',
-      mtls_days_remaining: 543,
-      secret_status: 'ENCRYPTED_AT_REST'
-    },
-    dual_sync_targets: {
-      primary: { type: 'NVMe Local Raft', status: 'SYNCED', commit_index: 4892104, latency_ms: 1.14 },
-      secondary: {
-        type: 'S3 Air-Gapped Sync', status: 'INTEGRITY_VERIFIED',
-        bucket: 'k8scontrol-cold-raft-airgap', tls_version: 'TLSv1.3',
-        integrity_checksum: `sha256:${s3Digest}`
-      }
-    },
-    network_mesh: {
-      mode: 'mTLS v1.3 with WireGuard/eBPF kernel enforcement',
-      cert_valid_until: '2027-03-15 (543d remaining)',
-      spiffe_spire: { trust_domain: 'spiffe://k8scontrol.prod', peer_verification: 'STRICT' }
-    }
-  }
-  const blob = new Blob([JSON.stringify(attestationData, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'zerotrust-attestation-' + Date.now() + '.json'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+async function handleDownloadAttestation() {
+  await downloadAttestationDocument(activeKeyId.value, keyVersion.value, kmsTelemetry.value)
 }
 </script>
 
@@ -152,7 +99,7 @@ async function downloadAttestation() {
             <div class="header-icon-wrap"><BaseIcon name="shield" size="md" /></div>
             <div>
               <h2 id="zt-drawer-title" class="drawer-title">ZeroTrust KMS &amp; Dual-Sync</h2>
-              <p class="drawer-subtitle font-mono">Hardware Security Module &amp; Air-Gapped Raft</p>
+              <p class="drawer-subtitle font-mono">{{ kmsTelemetry.isHardware ? 'Hardware Security Module' : 'Envelope Encryption' }} &amp; Air-Gapped Raft</p>
             </div>
           </div>
           <button class="drawer-close-btn" aria-label="Close ZeroTrust Drawer" title="Close Drawer" @click="handleClose">
@@ -173,8 +120,8 @@ async function downloadAttestation() {
               <span class="status-pill status-armed"><span class="pulse-dot pulse-dot-emerald"></span>ARMED</span>
             </div>
             <div class="zt-card">
-              <div class="card-row"><span class="row-label">Provider</span><span class="row-val">Hardware Security Module / Vault KMS Provider</span></div>
-              <div class="card-row"><span class="row-label">Enclave Isolation</span><span class="row-val text-emerald font-mono">Hardware Ring-0 HSM</span></div>
+              <div class="card-row"><span class="row-label">Provider</span><span class="row-val font-mono font-small">{{ kmsTelemetry.title }}</span></div>
+              <div class="card-row"><span class="row-label">Enclave Isolation</span><span class="row-val font-mono" :class="kmsTelemetry.isHardware ? 'text-emerald' : 'text-cyan'">{{ kmsTelemetry.enclaveIsolation }}</span></div>
               <div class="card-row"><span class="row-label">Secret Protection</span><span class="row-val text-emerald font-mono">KMS v2 (0 Plaintext)</span></div>
               <div class="card-row"><span class="row-label">Attestation Digest</span><span class="row-val font-mono text-muted">sha256:d8a2...9f1e</span></div>
             </div>
@@ -252,7 +199,7 @@ async function downloadAttestation() {
               <BaseIcon :name="verificationStatus === 'verifying' ? 'refresh' : 'check-circle'" size="xs" />
               <span>{{ verificationStatus === 'verifying' ? 'Verifying S3 Integrity...' : verificationStatus === 'verified' ? 'Checksum SHA-256 Valid!' : 'Verify S3 Integrity Checksum' }}</span>
             </button>
-            <button class="btn-zt-action btn-download" @click="downloadAttestation">
+            <button class="btn-zt-action btn-download" @click="handleDownloadAttestation">
               <BaseIcon name="download" size="xs" />
               <span>Download Attestation (JSON)</span>
             </button>
@@ -266,8 +213,8 @@ async function downloadAttestation() {
 <style scoped>
 .zt-error-alert { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 6px; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); color: #fb7185; font-size: 11px; margin-bottom: 12px; }
 .zerotrust-drawer-root { position: fixed; inset: 0; z-index: 10000; display: flex; justify-content: flex-end; }
-.drawer-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: fadeIn 0.2s ease; }
-.zerotrust-drawer { position: relative; width: 440px; max-width: 100vw; height: 100vh; background: var(--bg-card); border-left: 1px solid var(--color-border-subtle); box-shadow: var(--shadow-xl); display: flex; flex-direction: column; z-index: 10001; animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+.drawer-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.zerotrust-drawer { position: relative; width: 440px; max-width: 100vw; height: 100vh; background: var(--bg-card); border-left: 1px solid var(--color-border-subtle); box-shadow: var(--shadow-xl); display: flex; flex-direction: column; z-index: 10001; }
 .drawer-header { padding: 16px 20px; border-bottom: 1px solid var(--color-border-subtle); display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--color-surface-inset); }
 .header-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .header-icon-wrap { width: 36px; height: 36px; border-radius: 8px; background: rgba(6, 182, 212, 0.15); border: 1px solid rgba(6, 182, 212, 0.4); color: #38bdf8; display: flex; align-items: center; justify-content: center; }
@@ -308,6 +255,4 @@ async function downloadAttestation() {
 .btn-download { background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle); color: var(--text-primary); }
 .btn-download:hover { background: var(--bg-card-hover); color: var(--text-primary); }
 .btn-zt-action:disabled { opacity: 0.6; cursor: not-allowed; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
 </style>

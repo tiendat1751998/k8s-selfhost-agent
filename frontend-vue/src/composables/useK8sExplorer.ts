@@ -23,6 +23,8 @@ export function useK8sExplorer() {
   const toastMessage = ref<{ text: string; type: 'success' | 'error' } | null>(null)
   const clusterOffline = ref(false)
   const offlineErrorMessage = ref<string | null>(null)
+  const k8sDegraded = ref(false)
+  const degradedReason = ref<string | null>(null)
 
   // Core State
   const clusters = ref<Cluster[]>([])
@@ -167,20 +169,28 @@ export function useK8sExplorer() {
     error.value = null
     clusterOffline.value = false
     offlineErrorMessage.value = null
+    k8sDegraded.value = false
+    degradedReason.value = null
 
     try {
       const ns = selectedNamespace.value !== 'all' ? selectedNamespace.value : undefined
       const list = await k8sApi.listResources(selectedCluster.value, selectedKind.value, ns)
       if (Array.isArray(list)) {
         resources.value = list
+        if ((list as any).k8s_degraded) {
+          k8sDegraded.value = true
+          degradedReason.value = (list as any).degraded_reason || 'kube-apiserver (:6443) connection refused'
+        }
       } else {
         resources.value = []
       }
     } catch (err: unknown) {
       resources.value = []
       clusterOffline.value = true
+      k8sDegraded.value = true
       const msg = err instanceof Error ? err.message : 'Failed to query Kubernetes cluster'
       offlineErrorMessage.value = msg
+      degradedReason.value = msg
       error.value = msg
       showToast(msg, 'error')
     } finally {
@@ -408,6 +418,8 @@ export function useK8sExplorer() {
     toastMessage,
     clusterOffline,
     offlineErrorMessage,
+    k8sDegraded,
+    degradedReason,
     clusters,
     selectedCluster,
     namespaces,

@@ -5,6 +5,7 @@ import type { TrendPoint } from '../../../composables/useOverviewDashboard'
 import BaseIcon from '../../ui/BaseIcon.vue'
 import PercentageBar from '../../ui/PercentageBar.vue'
 import MetricSparkline from '../../ui/MetricSparkline.vue'
+import { resolveContainerKpi } from '../overviewMobileUtils'
 
 interface Props {
   overview: SystemOverview
@@ -29,6 +30,10 @@ const containersPct = computed(() => {
   if (!props.totalContainers) return 0
   return (props.runningContainers / props.totalContainers) * 100
 })
+
+const containerKpi = computed(() =>
+  resolveContainerKpi(props.runningContainers, props.totalContainers, props.overview?.healthy_nodes || 0)
+)
 
 const nodesHistory = ref<number[]>([])
 const containersHistory = ref<number[]>([])
@@ -120,13 +125,14 @@ function getRiskStroke(pct: number): string {
           <BaseIcon name="box" size="sm" />
           <span class="hud-label">Containers</span>
         </div>
-        <span class="status-indicator-dot status-cyan" />
+        <span class="status-indicator-dot" :class="totalContainers === 0 && overview.healthy_nodes > 0 ? 'status-amber' : runningContainers > 0 ? 'status-cyan' : 'status-rose'" />
       </div>
       <div class="hud-value-row">
-        <span class="hud-value font-mono" :class="runningContainers === totalContainers && totalContainers > 0 ? 'text-emerald' : runningContainers > 0 ? 'text-cyan' : 'text-rose'">
-          {{ runningContainers }}<span class="hud-total font-mono">/{{ totalContainers }}</span>
+        <span class="hud-value font-mono" :class="totalContainers === 0 && overview.healthy_nodes > 0 ? 'text-amber' : runningContainers === totalContainers && totalContainers > 0 ? 'text-emerald' : runningContainers > 0 ? 'text-cyan' : 'text-rose'">
+          <template v-if="containerKpi.primaryText === '0 PODS'">0<span class="hud-total font-mono"> PODS</span></template>
+          <template v-else>{{ runningContainers }}<span class="hud-total font-mono">/{{ totalContainers }}</span></template>
         </span>
-        <span class="hud-badge badge-cyan font-mono">{{ runningContainers > 0 ? 'RUNNING' : 'STOPPED' }}</span>
+        <span class="hud-badge font-mono" :class="containerKpi.badgeVariant">{{ containerKpi.badgeText }}</span>
       </div>
       <div class="hud-card-bottom">
         <PercentageBar :value="containersPct" :height="3" variant="cyan" class="hud-bar" />

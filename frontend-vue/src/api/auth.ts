@@ -11,6 +11,7 @@ export interface UserInfo {
   role: string
   tenant_id: string
   mfa_enabled?: boolean
+  requires_password_change?: boolean
 }
 
 export interface LoginResponse {
@@ -45,6 +46,11 @@ export interface TOTPStatusResponse {
   verified_at: string | null
 }
 
+export interface ChangePasswordRequest {
+  current_password: string
+  new_password: string
+}
+
 export const authApi = {
   login: (data: LoginRequest) => api.post<LoginResponse>('/auth/login', data),
   verifyMFA: (data: VerifyMFARequest) => api.post<LoginResponse>('/auth/verify-mfa', data),
@@ -55,4 +61,5 @@ export const authApi = {
   verifyTOTPSetup: (code: string) => api.post<TOTPVerifyResponse>('/auth/totp/verify-setup', { code }),
   getTOTPStatus: () => api.get<TOTPStatusResponse>('/auth/totp/status'),
   disableTOTP: (password: string, code: string) => api.post<{ message: string }>('/auth/totp/disable', { password, code }),
+  changePassword: (data: ChangePasswordRequest) => api.post<{ message?: string; status?: string }>('/auth/change-password', data),
 }
