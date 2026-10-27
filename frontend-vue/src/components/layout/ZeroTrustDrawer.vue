@@ -98,8 +98,8 @@ async function handleDownloadAttestation() {
           <div class="header-brand">
             <div class="header-icon-wrap"><BaseIcon name="shield" size="md" /></div>
             <div>
-              <h2 id="zt-drawer-title" class="drawer-title">ZeroTrust KMS &amp; Dual-Sync</h2>
-              <p class="drawer-subtitle font-mono">{{ kmsTelemetry.isHardware ? 'Hardware Security Module' : 'Envelope Encryption' }} &amp; Air-Gapped Raft</p>
+              <h2 id="zt-drawer-title" class="drawer-title">ZeroTrust KMS &amp; State Posture</h2>
+              <p class="drawer-subtitle font-mono">{{ kmsTelemetry.isHardware ? 'Hardware Security Module' : 'Envelope Encryption' }} &amp; Cluster State</p>
             </div>
           </div>
           <button class="drawer-close-btn" aria-label="Close ZeroTrust Drawer" title="Close Drawer" @click="handleClose">
@@ -122,8 +122,8 @@ async function handleDownloadAttestation() {
             <div class="zt-card">
               <div class="card-row"><span class="row-label">Provider</span><span class="row-val font-mono font-small">{{ kmsTelemetry.title }}</span></div>
               <div class="card-row"><span class="row-label">Enclave Isolation</span><span class="row-val font-mono" :class="kmsTelemetry.isHardware ? 'text-emerald' : 'text-cyan'">{{ kmsTelemetry.enclaveIsolation }}</span></div>
-              <div class="card-row"><span class="row-label">Secret Protection</span><span class="row-val text-emerald font-mono">KMS v2 (0 Plaintext)</span></div>
-              <div class="card-row"><span class="row-label">Attestation Digest</span><span class="row-val font-mono text-muted">sha256:d8a2...9f1e</span></div>
+              <div class="card-row"><span class="row-label">Secret Protection</span><span class="row-val text-emerald font-mono">KMS Envelope Encryption</span></div>
+              <div class="card-row"><span class="row-label">Rotation Posture</span><span class="row-val font-mono text-muted">90-day automatic</span></div>
             </div>
           </section>
 
@@ -148,44 +148,44 @@ async function handleDownloadAttestation() {
             </div>
           </section>
 
-          <!-- Dual-Sync Targets -->
+          <!-- Cluster State Storage Posture -->
           <section class="zt-section">
             <div class="section-badge-row">
-              <span class="section-tag">DUAL-SYNC TARGETS</span>
-              <span class="status-pill status-synced font-mono">&lt; 1.2ms Latency</span>
+              <span class="section-tag">CLUSTER STATE STORE</span>
+              <span class="status-pill status-synced font-mono">WAL Synced</span>
             </div>
             <div class="zt-card">
               <div class="sync-item">
                 <div class="sync-icon"><BaseIcon name="database" size="sm" /></div>
                 <div class="sync-info">
-                  <div class="sync-title">Primary NVMe (Local Raft)</div>
-                  <div class="sync-sub font-mono">Commit Index #4,892,104 · 1.14ms write</div>
+                  <div class="sync-title">PostgreSQL Primary State Store</div>
+                  <div class="sync-sub font-mono">10.10.10.133:5432 · ACID Multi-Tenant Persistence</div>
                 </div>
-                <span class="sync-status-badge text-emerald">SYNCED</span>
+                <span class="sync-status-badge text-emerald">CONNECTED</span>
               </div>
               <div class="sync-divider" />
               <div class="sync-item">
-                <div class="sync-icon"><BaseIcon name="cloud" size="sm" /></div>
+                <div class="sync-icon"><BaseIcon name="archive" size="sm" /></div>
                 <div class="sync-info">
-                  <div class="sync-title">Secondary S3 (Air-Gapped Sync)</div>
-                  <div class="sync-sub font-mono">TLS 1.3 Immutable WORM · 0 byte lag</div>
+                  <div class="sync-title">Automated DR &amp; Backup Engine</div>
+                  <div class="sync-sub font-mono">Scheduled State Dump · Encrypted Volume Snapshots</div>
                 </div>
-                <span class="sync-status-badge text-cyan">VERIFIED</span>
+                <span class="sync-status-badge text-cyan">ACTIVE</span>
               </div>
             </div>
           </section>
 
-          <!-- ZeroTrust Network Mesh -->
+          <!-- Edge Agent & Network Security Posture -->
           <section class="zt-section">
             <div class="section-badge-row">
-              <span class="section-tag">ZEROTRUST NETWORK MESH</span>
-              <span class="status-pill status-mesh font-mono">mTLS v1.3</span>
+              <span class="section-tag">EDGE AGENT &amp; NETWORK POSTURE</span>
+              <span class="status-pill status-mesh font-mono">Token / TLS</span>
             </div>
             <div class="zt-card">
-              <div class="card-row"><span class="row-label">Identity Attestation</span><span class="row-val">SPIFFE/SPIRE Dynamic Attestations</span></div>
-              <div class="card-row"><span class="row-label">Trust Domain</span><span class="row-val font-mono text-cyan">spiffe://k8scontrol.prod</span></div>
-              <div class="card-row"><span class="row-label">Peer Enforcement</span><span class="row-val text-emerald">Strict Zero-Implicit-Trust</span></div>
-              <div class="card-row"><span class="row-label">mTLS Cert Expiry</span><span class="row-val text-emerald font-mono">2027-03-15 (543d valid)</span></div>
+              <div class="card-row"><span class="row-label">Edge Agent Auth</span><span class="row-val font-mono text-cyan">Bearer AGENT_AUTH_TOKEN</span></div>
+              <div class="card-row"><span class="row-label">Transport Posture</span><span class="row-val font-mono">Optional TLS via AGENT_TLS_CERT</span></div>
+              <div class="card-row"><span class="row-label">Telemetry &amp; Remediation</span><span class="row-val font-mono text-emerald">:9100 Host Agent RPC</span></div>
+              <div class="card-row"><span class="row-label">Session Token Posture</span><span class="row-val text-emerald font-mono">In-Memory JWT · HttpOnly Cookie</span></div>
             </div>
           </section>
 
@@ -197,7 +197,7 @@ async function handleDownloadAttestation() {
             </button>
             <button class="btn-zt-action btn-verify" :disabled="verificationStatus === 'verifying'" @click="verifyChecksum">
               <BaseIcon :name="verificationStatus === 'verifying' ? 'refresh' : 'check-circle'" size="xs" />
-              <span>{{ verificationStatus === 'verifying' ? 'Verifying S3 Integrity...' : verificationStatus === 'verified' ? 'Checksum SHA-256 Valid!' : 'Verify S3 Integrity Checksum' }}</span>
+              <span>{{ verificationStatus === 'verifying' ? 'Verifying Integrity...' : verificationStatus === 'verified' ? 'Integrity Validated!' : 'Verify KMS Integrity' }}</span>
             </button>
             <button class="btn-zt-action btn-download" @click="handleDownloadAttestation">
               <BaseIcon name="download" size="xs" />

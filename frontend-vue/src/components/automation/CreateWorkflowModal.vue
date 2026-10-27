@@ -130,9 +130,15 @@ function handleSubmit() {
             <option v-for="a in ACTION_OPTIONS" :key="a.value" :value="a.value">
               {{ a.label }}
             </option>
+            <option
+              v-if="formData.action_type && !ACTION_OPTIONS.some(a => a.value === formData.action_type)"
+              :value="formData.action_type"
+            >
+              {{ formData.action_type }} (Persisted Rule Action)
+            </option>
           </select>
           <span class="form-hint">
-            {{ ACTION_OPTIONS.find(o => o.value === formData.action_type)?.description }}
+            {{ ACTION_OPTIONS.find(o => o.value === formData.action_type)?.description || (formData.action_type ? `Configured action: ${formData.action_type}` : '') }}
           </span>
         </div>
 

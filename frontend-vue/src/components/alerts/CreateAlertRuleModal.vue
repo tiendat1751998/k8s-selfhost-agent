@@ -124,6 +124,7 @@ function handleSubmit() {
           <input 
             v-model.number="form.threshold" 
             type="number" 
+            min="0"
             step="any" 
             class="input-glass" 
             required 
@@ -134,6 +135,8 @@ function handleSubmit() {
           <input 
             v-model.number="form.duration_seconds" 
             type="number" 
+            min="1"
+            max="86400"
             placeholder="300" 
             class="input-glass" 
             required 

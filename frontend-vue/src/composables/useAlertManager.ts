@@ -163,7 +163,17 @@ export function useAlertManager() {
     const originalState = rule.Enabled
     rule.Enabled = !originalState
     try {
-      await alertsApi.updateRule(rule.ID, { enabled: rule.Enabled })
+      await alertsApi.updateRule(rule.ID, {
+        name: rule.Name,
+        description: rule.Description,
+        metric_name: rule.MetricName,
+        condition: rule.Condition,
+        threshold: rule.Threshold,
+        duration_seconds: rule.DurationSeconds,
+        severity: rule.Severity,
+        channel_ids: rule.ChannelIDs || [],
+        enabled: rule.Enabled
+      })
       showFeedback(`Rule "${rule.Name}" ${rule.Enabled ? 'ARMED' : 'PAUSED'}.`)
     } catch (e: unknown) {
       rule.Enabled = originalState

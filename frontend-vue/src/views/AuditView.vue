@@ -38,7 +38,7 @@
         @click="switchTab('compliance')"
       >
         <BaseIcon name="shield" size="xs" />
-        <span>Compliance & Controls ({{ filteredViolations.length }})</span>
+        <span>Compliance & Controls ({{ activeViolationsCount }})</span>
       </button>
       <button
         type="button"
@@ -208,18 +208,23 @@ const remediationTargetViolation = ref<ComplianceViolation | null>(null)
 const remediationSummary = ref('')
 const remediationCommands = ref<string[]>([])
 
-function onManualRemediated() {
-  fetchComplianceData()
-  statusMessage.value = { type: 'success', text: 'Violation marked as remediated.' }
-}
-
 // Compliance Composable
 const {
   frameworks, violations, loading: complianceLoading, isScanning, error: complianceError,
   selectedFrameworkId, activeSeverity, selectedViolation, modalMode, filteredViolations,
-  fetchComplianceData, triggerComplianceScan, selectFramework, getSelectedFrameworkName,
-  inspectControl, closeModal, exportRemediationReport, formatFrameworkTag, formatDate,
+  activeViolationsCount, fetchComplianceData, triggerComplianceScan, selectFramework,
+  getSelectedFrameworkName, inspectControl, closeModal, exportRemediationReport,
+  formatFrameworkTag, formatDate,
 } = useCompliance()
+
+function onManualRemediated() {
+  if (remediationTargetViolation.value) {
+    const targetId = remediationTargetViolation.value.id
+    violations.value = violations.value.map(v => v.id === targetId ? { ...v, resolved: true } : v)
+  }
+  fetchComplianceData()
+  statusMessage.value = { type: 'success', text: 'Violation marked as remediated.' }
+}
 
 // Audit Trail Composable
 const {
@@ -286,6 +291,7 @@ async function handleRemediateViolation(violation: ComplianceViolation) {
       showRemediationDrawer.value = true
     } else {
       closeModal()
+      violations.value = violations.value.map(v => v.id === violation.id ? { ...v, resolved: true } : v)
       await fetchComplianceData()
       statusMessage.value = { type: 'success', text: res?.message || `Policy remediation triggered for ${violation.resource}.` }
     }

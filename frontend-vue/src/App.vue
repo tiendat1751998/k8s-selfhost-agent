@@ -22,24 +22,15 @@ import { navGroups } from './config/navigation'
 import '@/assets/styles/layout/app-shell.css'
 
 const routeBreadcrumbs: Record<string, { category: string; title: string }> = {
-  '/': { category: 'Observability', title: 'Fleet Overview' },
-  '/incidents': { category: 'Observability', title: 'Incidents & RCA' },
-  '/slo': { category: 'Observability', title: 'SLOs & Budgets' },
-  '/logs': { category: 'Observability', title: 'Real-Time Logs' },
-  '/fleet': { category: 'Compute & Fleet', title: 'Fleet Clusters' },
-  '/hosts': { category: 'Infrastructure', title: 'Hosts' },
-  '/deployments': { category: 'Compute', title: 'Deployments & Workloads' },
-  '/explorer': { category: 'Cluster', title: 'Cluster Explorer' },
-  '/helm': { category: 'Compute', title: 'Helm Catalog' },
-  '/audit': { category: 'Governance', title: 'Audit & CVEs' },
-  '/security': { category: 'Governance', title: 'Security Gates' },
-  '/devsecops': { category: 'Governance', title: 'Security Gates' },
-  '/automation': { category: 'Automation', title: 'Automation Rules' },
-  '/runbooks': { category: 'Automation', title: 'SRE Runbooks' },
-  '/cost': { category: 'FinOps', title: 'Cost Optimization' },
-  '/capacity': { category: 'Compute', title: 'Capacity Planning' },
-  '/tenancy': { category: 'Management', title: 'Tenancy & RBAC' },
-  '/alerts': { category: 'Management', title: 'Alerts & Channels' },
+  '/': { category: 'Observability', title: 'Fleet Overview' }, '/incidents': { category: 'Observability', title: 'Incidents & RCA' },
+  '/slo': { category: 'Observability', title: 'SLOs & Budgets' }, '/logs': { category: 'Observability', title: 'Real-Time Logs' },
+  '/fleet': { category: 'Compute & Fleet', title: 'Fleet Clusters' }, '/hosts': { category: 'Infrastructure', title: 'Hosts' },
+  '/deployments': { category: 'Compute', title: 'Deployments & Workloads' }, '/explorer': { category: 'Cluster', title: 'Cluster Explorer' },
+  '/helm': { category: 'Compute', title: 'Helm Catalog' }, '/audit': { category: 'Governance', title: 'Audit & CVEs' },
+  '/security': { category: 'Governance', title: 'Security Gates' }, '/devsecops': { category: 'Governance', title: 'Security Gates' },
+  '/automation': { category: 'Automation', title: 'Automation Rules' }, '/runbooks': { category: 'Automation', title: 'SRE Runbooks' },
+  '/cost': { category: 'FinOps', title: 'Cost Optimization' }, '/capacity': { category: 'Compute', title: 'Capacity Planning' },
+  '/tenancy': { category: 'Management', title: 'Tenancy & RBAC' }, '/alerts': { category: 'Management', title: 'Alerts & Channels' },
   '/settings': { category: 'Management', title: 'System Settings' },
 }
 
@@ -285,12 +276,23 @@ function handleNavigateToHost(nodeNameOrId: string) {
           <!-- Top HUD Global Alert Bell & Dropdown Toast -->
           <TopHudAlertBell />
 
+          <!-- ZeroTrust Security Shield Trigger -->
+          <button
+            class="theme-toggle-btn"
+            type="button"
+            @click="showZeroTrustDrawer = true"
+            title="ZeroTrust Security & KMS Enclave Posture"
+            aria-label="Open ZeroTrust Security Drawer"
+          >
+            <BaseIcon name="shield" size="xs" />
+          </button>
+
           <!-- 1-Click Dark/Light Theme Toggle (Visible on Desktop & Mobile) -->
           <button
             class="theme-toggle-btn"
             type="button"
             @click="toggleTheme"
-            :title="uiTheme === 'dark' ? 'Switch to Cloud Console Light Mode' : 'Switch to K8s Dark Mode'"
+            :title="uiTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
             aria-label="Toggle color theme"
           >
             <BaseIcon :name="uiTheme === 'dark' ? 'sun' : 'moon'" size="xs" />

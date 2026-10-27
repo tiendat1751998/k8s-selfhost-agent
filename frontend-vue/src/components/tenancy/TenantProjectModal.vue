@@ -51,7 +51,7 @@ const emit = defineEmits<{
       </div>
       <div class="form-group">
         <label>Initial Workload Pod Capacity</label>
-        <input v-model="newProj.workloads" type="number" min="1" max="500" class="input-glass" />
+        <input v-model.number="newProj.workloads" type="number" min="1" max="500" class="input-glass" />
       </div>
     </form>
     <template #footer="{ close }">
