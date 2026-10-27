@@ -30,7 +30,7 @@ import {
   initInstallWizardForm,
   buildInstallPayload,
 } from './helmCatalogConstants'
-import { sanitizeHelmRelease } from './useHelm'
+import { sanitizeHelmRelease, normalizeHelmChart } from './useHelm'
 
 export { REPO_PRESETS, CATEGORY_TAGS, type ActiveTab, type ActiveDrawerTab }
 
@@ -62,7 +62,7 @@ export function useHelmCatalog() {
   const charts = ref<HelmChart[]>([]), chartSearch = ref(''), loadingCharts = ref(false)
   const selectedRepoFilter = ref('all'), selectedCategoryTag = ref('all')
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
-  const showInstallModal = ref(false), installing = ref(false), installStep = ref<1 | 2 | 3>(1)
+  const showInstallModal = ref(false), installing = ref(false), installStep = ref<1 | 2 | 3>(1), installError = ref<string | null>(null)
   const selectedChartForInstall = ref<HelmChart | null>(null)
   const installForm = reactive<InstallFormData>({ releaseName: '', namespace: 'default', createNamespace: true, version: '', values: '', loadingDefaultValues: false })
 
@@ -109,7 +109,10 @@ export function useHelmCatalog() {
 
   async function fetchCharts(keyword?: string) {
     loadingCharts.value = true
-    try { charts.value = (await helmApi.searchCharts(keyword)) || [] }
+    try {
+      const raw = (await helmApi.searchCharts(keyword)) || []
+      charts.value = raw.map(c => normalizeHelmChart(c))
+    }
     catch (err: unknown) { showToast(getErrorMessage(err, 'Failed to search Helm charts'), 'error'); charts.value = [] }
     finally { loadingCharts.value = false }
   }
@@ -214,6 +217,7 @@ export function useHelmCatalog() {
 
   async function openInstallWizard(chart: HelmChart) {
     selectedChartForInstall.value = chart; installStep.value = 1
+    installError.value = null
     Object.assign(installForm, initInstallWizardForm(chart, selectedNamespace.value))
     showInstallModal.value = true
     try {
@@ -231,11 +235,16 @@ export function useHelmCatalog() {
       return showToast('Release name and namespace are required', 'error')
     }
     installing.value = true
+    installError.value = null
     try {
       await helmApi.installRelease(selectedCluster.value, buildInstallPayload(selectedChartForInstall.value, installForm))
       showToast(`Chart ${selectedChartForInstall.value.name} installed as ${installForm.releaseName}!`)
       showInstallModal.value = false; activeTab.value = 'releases'; await fetchReleases()
-    } catch (err: unknown) { showToast(getErrorMessage(err, 'Installation failed'), 'error') }
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Installation failed')
+      installError.value = msg
+      showToast(msg, 'error')
+    }
     finally { installing.value = false }
   }
 
@@ -319,7 +328,7 @@ export function useHelmCatalog() {
     showRollbackModal, rollbackTarget, rollbackRevision, rollbackHistoryList, loadingRollbackHistory, rollingBack,
     showUninstallModal, uninstallTarget, uninstalling,
     charts, chartSearch, selectedRepoFilter, selectedCategoryTag, loadingCharts,
-    showInstallModal, selectedChartForInstall, installStep, installForm, installing,
+    showInstallModal, selectedChartForInstall, installStep, installForm, installing, installError,
     repos, loadingRepos, showAddRepoModal, addRepoForm, addingRepo, updatingAllRepos, showRemoveRepoModal, repoToRemove, removingRepo,
     repoPresets: REPO_PRESETS, categoryTags: CATEGORY_TAGS,
     totalReleasesCount, deployedReleasesCount, failedReleasesCount, deployedRate, filteredReleases, filteredCharts,

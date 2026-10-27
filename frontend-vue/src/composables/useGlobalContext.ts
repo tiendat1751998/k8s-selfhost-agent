@@ -7,6 +7,7 @@ export interface ClusterContextItem {
   id: string
   name: string
   status: string
+  health_status?: string
   region?: string
 }
 
@@ -112,7 +113,8 @@ async function loadClusters(): Promise<void> {
       availableClusters.value = list.map(c => ({
         id: c.id,
         name: c.name || c.id,
-        status: (c.health_status || c.status || 'unknown').toLowerCase(),
+        status: (c.status || 'unknown').toLowerCase(),
+        health_status: (c.health_status || 'unknown').toLowerCase(),
         region: c.region
       }))
       const activeCluster = availableClusters.value.find(c => ['active', 'healthy', 'ready'].includes(c.status)) || availableClusters.value[0]
@@ -128,7 +130,8 @@ async function loadClusters(): Promise<void> {
       availableClusters.value = [{
         id: 'default',
         name: 'default',
-        status: 'unknown'
+        status: 'unknown',
+        health_status: 'unknown',
       }]
     }
   } catch (err: unknown) {
@@ -138,7 +141,8 @@ async function loadClusters(): Promise<void> {
     availableClusters.value = [{
       id: 'default',
       name: 'default',
-      status: 'unknown'
+      status: 'unknown',
+      health_status: 'unknown',
     }]
   }
   await loadNamespacesForCluster(activeClusterId.value)

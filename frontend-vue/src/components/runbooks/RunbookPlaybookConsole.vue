@@ -142,6 +142,29 @@
               <span class="step-title" :class="{ 'text-strikethrough': completedSteps.has(idx) }">
                 {{ step.title }}
               </span>
+              <div class="step-meta-badges">
+                <span v-if="step.durationMs" class="step-duration font-mono text-muted">
+                  {{ step.durationMs }}ms
+                </span>
+                <span
+                  v-if="step.status === 'succeeded' || step.status === 'completed'"
+                  class="badge-status badge-emerald font-mono"
+                >
+                  SUCCEEDED
+                </span>
+                <span
+                  v-else-if="step.status === 'degraded'"
+                  class="badge-status badge-amber font-mono"
+                >
+                  DEGRADED
+                </span>
+                <span
+                  v-else-if="step.status === 'failed'"
+                  class="badge-status badge-rose font-mono"
+                >
+                  FAILED
+                </span>
+              </div>
               <button
                 v-if="step.command"
                 type="button"
@@ -167,6 +190,13 @@
                 >
                   <BaseIcon name="copy" size="xs" /> Copy
                 </button>
+              </div>
+              <div v-if="step.output" class="step-output-box font-mono">
+                <div class="step-output-header">
+                  <BaseIcon name="terminal" size="xs" /> OUTPUT
+                  <span v-if="step.durationMs" class="output-duration">({{ step.durationMs }}ms)</span>
+                </div>
+                <pre class="step-output-pre">{{ step.output }}</pre>
               </div>
             </div>
           </article>

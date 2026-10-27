@@ -157,12 +157,22 @@
     </section>
 
     <!-- Violation Inspection / Remediation Drawer -->
+    <!-- Violation Inspection / Remediation Drawer -->
     <ComplianceViolationDrawer
       :violation="selectedViolation"
       :mode="modalMode"
       :format-framework-tag="formatFrameworkTag"
       @close="closeModal"
       @remediate="handleRemediateViolation"
+    />
+
+    <!-- Manual Remediation Action Drawer -->
+    <RemediationActionDrawer
+      v-model:show="showRemediationDrawer"
+      :violation="remediationTargetViolation"
+      :summary="remediationSummary"
+      :commands="remediationCommands"
+      @remediated="onManualRemediated"
     />
   </div>
 </template>
@@ -172,11 +182,7 @@ import { ref, computed, onMounted } from 'vue'
 import '../assets/styles/views/audit.css'
 import '../assets/styles/views/compliance.css'
 import { useAuditLogs } from '../composables/useAuditLogs'
-import {
-  useCompliance,
-  type SeverityFilter,
-  filterAuditFindings,
-} from '../composables/useCompliance'
+import { useCompliance, type SeverityFilter, filterAuditFindings } from '../composables/useCompliance'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import AuditTrailTable from '../components/audit/AuditTrailTable.vue'
 import AuditFilterToolbar from '../components/audit/AuditFilterToolbar.vue'
@@ -187,6 +193,7 @@ import CompliancePostureHeader from '../components/compliance/CompliancePostureH
 import ComplianceControlsTable from '../components/compliance/ComplianceControlsTable.vue'
 import ComplianceMobileCards from '../components/compliance/ComplianceMobileCards.vue'
 import ComplianceViolationDrawer from '../components/compliance/ComplianceViolationDrawer.vue'
+import RemediationActionDrawer from '../components/compliance/RemediationActionDrawer.vue'
 import { auditApi, complianceApi, type AuditFinding, type ComplianceViolation } from '../api/governance'
 
 const activeTab = ref<'compliance' | 'findings' | 'logs'>('compliance')
@@ -195,55 +202,32 @@ const findingsLoading = ref(false)
 const findingsError = ref<string | null>(null)
 const resolvingFindingId = ref<string | null>(null)
 
+// Remediation Drawer State
+const showRemediationDrawer = ref(false)
+const remediationTargetViolation = ref<ComplianceViolation | null>(null)
+const remediationSummary = ref('')
+const remediationCommands = ref<string[]>([])
+
+function onManualRemediated() {
+  fetchComplianceData()
+  statusMessage.value = { type: 'success', text: 'Violation marked as remediated.' }
+}
+
 // Compliance Composable
 const {
-  frameworks,
-  violations,
-  loading: complianceLoading,
-  isScanning,
-  error: complianceError,
-  selectedFrameworkId,
-  activeSeverity,
-  selectedViolation,
-  modalMode,
-  filteredViolations,
-  fetchComplianceData,
-  triggerComplianceScan,
-  selectFramework,
-  getSelectedFrameworkName,
-  inspectControl,
-  closeModal,
-  exportRemediationReport,
-  formatFrameworkTag,
-  formatDate,
+  frameworks, violations, loading: complianceLoading, isScanning, error: complianceError,
+  selectedFrameworkId, activeSeverity, selectedViolation, modalMode, filteredViolations,
+  fetchComplianceData, triggerComplianceScan, selectFramework, getSelectedFrameworkName,
+  inspectControl, closeModal, exportRemediationReport, formatFrameworkTag, formatDate,
 } = useCompliance()
 
 // Audit Trail Composable
 const {
-  filteredLogs,
-  isLoading,
-  isTriggeringScan,
-  error,
-  statusMessage,
-  selectedEvent,
-  isDrawerOpen,
-  isLiveTailing,
-  searchQuery,
-  selectedActionType,
-  selectedSeverity,
-  selectedActor,
-  dateRange,
-  uniqueActors,
-  actionTypeFilters,
-  kpiMetrics,
-  fetchLogs,
-  triggerAuditScan,
-  toggleLiveTail,
-  openPayloadDrawer,
-  closePayloadDrawer,
-  exportToJson,
-  exportToCsv,
-  resetFilters,
+  filteredLogs, isLoading, isTriggeringScan, error, statusMessage, selectedEvent,
+  isDrawerOpen, isLiveTailing, searchQuery, selectedActionType, selectedSeverity,
+  selectedActor, dateRange, uniqueActors, actionTypeFilters, kpiMetrics,
+  fetchLogs, triggerAuditScan, toggleLiveTail, openPayloadDrawer, closePayloadDrawer,
+  exportToJson, exportToCsv, resetFilters,
 } = useAuditLogs()
 
 const selectedFrameworkName = computed(() => getSelectedFrameworkName())
@@ -294,10 +278,17 @@ async function handleResolveFinding(id: string) {
 
 async function handleRemediateViolation(violation: ComplianceViolation) {
   try {
-    await complianceApi.remediateViolation(violation.id)
-    closeModal()
-    await fetchComplianceData()
-    statusMessage.value = { type: 'success', text: `Policy remediation triggered for ${violation.resource}.` }
+    const res = await complianceApi.remediateViolation(violation.id)
+    if (res?.status === 'manual_action_required') {
+      remediationTargetViolation.value = violation
+      remediationSummary.value = res.summary || `Manual action required for ${violation.resource}.`
+      remediationCommands.value = res.commands || []
+      showRemediationDrawer.value = true
+    } else {
+      closeModal()
+      await fetchComplianceData()
+      statusMessage.value = { type: 'success', text: res?.message || `Policy remediation triggered for ${violation.resource}.` }
+    }
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Failed to remediate'
     statusMessage.value = { type: 'error', text: `Remediation failed: ${errorMsg}` }

@@ -56,44 +56,8 @@ function getChartIcon(chart: HelmChart): string {
 
 <template>
   <div class="helm-charts-grid-container">
-    <!-- Search & Filters Toolbar -->
+    <!-- Quick Category Chips Bar -->
     <div class="catalog-filters-panel glass-panel">
-      <div class="search-row">
-        <div class="catalog-search-box">
-          <BaseIcon name="search" size="xs" class="search-icon" />
-          <input
-            :value="search"
-            type="text"
-            placeholder="Search Helm charts (e.g. nginx, redis, postgres, prometheus)..."
-            class="input-glass catalog-search-input"
-            @input="emit('update:search', ($event.target as HTMLInputElement).value); emit('searchInput')"
-          />
-          <button
-            v-if="search"
-            type="button"
-            class="btn-clear"
-            @click="emit('update:search', ''); emit('searchInput')"
-          >
-            <BaseIcon name="x" size="xs" />
-          </button>
-        </div>
-
-        <div class="repo-filter-box">
-          <label class="filter-label">Repository:</label>
-          <select
-            :value="selectedRepo"
-            class="input-glass select-repo"
-            @change="emit('update:selectedRepo', ($event.target as HTMLSelectElement).value)"
-          >
-            <option value="all">All Repositories</option>
-            <option v-for="repo in repos" :key="repo.name" :value="repo.name">
-              {{ repo.name }}
-            </option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Quick Category Chips -->
       <div class="category-chips-row">
         <button
           v-for="cat in categoryTags"

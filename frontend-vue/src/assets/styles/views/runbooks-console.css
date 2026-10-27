@@ -335,3 +335,83 @@
     max-height: 240px;
   }
 }
+
+/* Step status badges & telemetry */
+.step-meta-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
+.step-duration {
+  font-size: 11px;
+}
+
+.badge-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs, 4px);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.badge-emerald {
+  background: var(--color-success-subtle, rgba(16, 185, 129, 0.12));
+  color: var(--color-success, #10b981);
+  border: 1px solid var(--color-success, #10b981);
+}
+
+.badge-amber {
+  background: var(--color-warning-subtle, rgba(245, 158, 11, 0.12));
+  color: var(--color-warning, #f59e0b);
+  border: 1px solid var(--color-warning, #f59e0b);
+}
+
+.badge-rose {
+  background: var(--color-danger-subtle, rgba(244, 63, 94, 0.12));
+  color: var(--color-danger, #f43f5e);
+  border: 1px solid var(--color-danger, #f43f5e);
+}
+
+/* Output terminal box within step card */
+.step-output-box {
+  margin-top: 8px;
+  background: var(--color-surface-inset, #0d1117);
+  border: 1px solid var(--color-border-subtle, #30363d);
+  border-radius: var(--radius-xs, 4px);
+  overflow: hidden;
+}
+
+.step-output-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--color-surface-elevated, #161b22);
+  border-bottom: 1px solid var(--color-border-subtle, #30363d);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted, #8b949e);
+}
+
+.output-duration {
+  margin-left: auto;
+  font-weight: 400;
+}
+
+.step-output-pre {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary, #c9d1d9);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 140px;
+  overflow-y: auto;
+}

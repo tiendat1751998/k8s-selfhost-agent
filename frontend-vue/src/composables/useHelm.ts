@@ -1,4 +1,4 @@
-﻿import type { HelmRelease } from '../api/helm'
+import type { HelmRelease, HelmChart } from '../api/helm'
 
 export interface ParsedHelmChart {
   name: string
@@ -171,11 +171,88 @@ export function sanitizeHelmRelease<T extends HelmRelease>(rel: T): T & {
   }
 }
 
+/**
+ * Normalizes both flat camelCase and Go Helm SDK PascalCase/nested Chart shapes
+ * into a uniform HelmChart model so all 120 charts render valid metadata.
+ */
+export function normalizeHelmChart(raw: unknown): HelmChart {
+  if (!raw || typeof raw !== 'object') {
+    return { name: 'unknown', repo: 'unknown', version: '1.0.0', description: '' }
+  }
+
+  const obj = raw as Record<string, any>
+  // Handle Go Helm SDK search.Result: obj.Name is e.g. "bitnami/postgresql", obj.Chart is chart version/metadata
+  const rawChart = obj.Chart || obj.chart || null
+  const meta = (rawChart && typeof rawChart === 'object')
+    ? (rawChart.Metadata || rawChart.metadata || rawChart)
+    : obj
+
+  // Name & Repo resolution
+  const fullName = String(obj.Name || obj.name || meta.Name || meta.name || '').trim()
+  let repo = String(obj.Repo || obj.repo || meta.Repo || meta.repo || '').trim()
+  let chartName = String(meta.Name || meta.name || '').trim()
+
+  if (fullName.includes('/')) {
+    const parts = fullName.split('/')
+    if (!repo) repo = parts[0]
+    if (!chartName || chartName === fullName) chartName = parts.slice(1).join('/')
+  }
+
+  if (!chartName) {
+    chartName = fullName || 'chart'
+  }
+  if (!repo) {
+    repo = 'custom'
+  }
+
+  // Version resolution (strip leading 'v' so template 'v{{ version }}' renders as vX.Y.Z without vvX.Y.Z)
+  let rawVersion = String(meta.Version || meta.version || obj.Version || obj.version || '1.0.0').trim()
+  if (rawVersion.startsWith('v') || rawVersion.startsWith('V')) {
+    rawVersion = rawVersion.slice(1).trim()
+  }
+  if (!rawVersion) rawVersion = '1.0.0'
+
+  // App version
+  const appVersion = String(meta.AppVersion || meta.appVersion || meta.app_version || obj.AppVersion || obj.appVersion || obj.app_version || '').trim()
+
+  // Description
+  let description = String(meta.Description || meta.description || obj.Description || obj.description || '').trim()
+  if (description.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(description)
+      description = parsed.description || parsed.message || description
+    } catch {
+      // Keep as-is
+    }
+  }
+
+  // Icon
+  const icon = String(meta.Icon || meta.icon || obj.Icon || obj.icon || '').trim()
+
+  // Keywords
+  const rawKeywords = meta.Keywords || meta.keywords || obj.Keywords || obj.keywords || []
+  const keywords = Array.isArray(rawKeywords) ? rawKeywords.map(String) : []
+
+  return {
+    name: chartName,
+    repo,
+    version: rawVersion,
+    appVersion,
+    app_version: appVersion,
+    description,
+    icon,
+    home: String(meta.Home || meta.home || obj.Home || obj.home || '').trim(),
+    keywords,
+    deprecated: Boolean(meta.Deprecated || meta.deprecated || obj.Deprecated || obj.deprecated),
+  }
+}
+
 export function useHelm() {
   return {
     parseHelmChart,
     getFormattedReleaseChart,
     getFormattedReleaseDescription,
     sanitizeHelmRelease,
+    normalizeHelmChart,
   }
 }
