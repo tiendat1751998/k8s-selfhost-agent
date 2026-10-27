@@ -190,7 +190,7 @@ func (r *fleetRepo) UpdateClusterStatus(ctx context.Context, id, status, version
 	query := `
 		UPDATE fleet_clusters
 		SET status = $2, version = $3, nodes = $4, updated_at = $5
-		WHERE id = $1
+		WHERE (id = $1 OR name = $1)
 	`
 	query, args := BuildTenantQuery(ctx, query, id, status, version, nodes, time.Now().UTC())
 
@@ -205,7 +205,7 @@ func (r *fleetRepo) UpdateHealth(ctx context.Context, id, healthStatus string, l
 	query := `
 		UPDATE fleet_clusters
 		SET health_status = $2, last_health_check = $3, updated_at = $4
-		WHERE id = $1
+		WHERE (id = $1 OR name = $1)
 	`
 	query, args := BuildTenantQuery(ctx, query, id, healthStatus, lastCheck, time.Now().UTC())
 
@@ -225,7 +225,7 @@ func (r *fleetRepo) UpdateDiscoveredResources(ctx context.Context, id string, re
 	query := `
 		UPDATE fleet_clusters
 		SET discovered_resources = $2, updated_at = $3
-		WHERE id = $1
+		WHERE (id = $1 OR name = $1)
 	`
 	query, args := BuildTenantQuery(ctx, query, id, discoveredJSON, time.Now().UTC())
 
@@ -237,7 +237,7 @@ func (r *fleetRepo) UpdateDiscoveredResources(ctx context.Context, id string, re
 }
 
 func (r *fleetRepo) RemoveCluster(ctx context.Context, id string) error {
-	query := `DELETE FROM fleet_clusters WHERE id = $1`
+	query := `DELETE FROM fleet_clusters WHERE (id = $1 OR name = $1)`
 	query, args := BuildTenantQuery(ctx, query, id)
 
 	_, err := r.getDB(ctx).Exec(ctx, query, args...)

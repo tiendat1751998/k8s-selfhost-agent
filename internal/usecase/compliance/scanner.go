@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // ScannerOption configures the FleetComplianceScanner.
@@ -108,6 +110,9 @@ type agentHealthData struct {
 
 // Scan executes the complete live fleet security and hardening scanner.
 func (sc *FleetComplianceScanner) Scan(ctx context.Context) (*ScanResult, error) {
+	if tenancy.TenantIDFromContext(ctx) == "" {
+		ctx = tenancy.WithPlatformAdminContext(ctx)
+	}
 	now := time.Now().UTC()
 	var hosts []ComputeHostRow
 	var err error
@@ -359,12 +364,22 @@ func (sc *FleetComplianceScanner) Scan(ctx context.Context) (*ScanResult, error)
 
 	// 4. Persistence
 	if sc.store != nil {
-		for i := range frameworks {
-			_ = sc.store.UpsertFramework(ctx, &frameworks[i])
+		tenantID := tenancy.TenantIDFromContext(ctx)
+		if tenantID == "" {
+			tenantID = tenancy.DefaultTenantID
 		}
-		_ = sc.store.ReplaceViolations(ctx, violations)
+		for i := range frameworks {
+			if err := sc.store.UpsertFramework(ctx, &frameworks[i]); err != nil {
+				return nil, fmt.Errorf("upserting framework %s: %w", frameworks[i].Name, err)
+			}
+		}
+		if err := sc.store.ReplaceViolations(ctx, violations); err != nil {
+			return nil, fmt.Errorf("persisting violations: %w", err)
+		}
 		runtimeFindings := DetectRuntimeFindings(ctx, sc, hosts)
-		_ = sc.store.ReplaceAuditFindings(ctx, runtimeFindings)
+		if err := sc.store.ReplaceAuditFindings(ctx, runtimeFindings); err != nil {
+			return nil, fmt.Errorf("persisting runtime audit findings: %w", err)
+		}
 		_ = sc.store.InsertAuditLog(ctx, &AuditLogRecord{
 			Actor:      "compliance-scanner",
 			Action:     "scan",
@@ -379,7 +394,7 @@ func (sc *FleetComplianceScanner) Scan(ctx context.Context) (*ScanResult, error)
 			},
 			IPAddress: "127.0.0.1",
 			UserAgent: "k8s-compliance-scanner/1.0",
-			TenantID:  "default-tenant",
+			TenantID:  tenantID,
 		})
 	}
 
