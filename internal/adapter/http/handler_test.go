@@ -198,6 +198,9 @@ func TestSimulateIncident_InvalidJSON(t *testing.T) {
 }
 
 func TestAnalyzeIncident_Standalone_FallbackAndPRCreation(t *testing.T) {
+	t.Setenv("GITOPS_REPO_URL", "https://github.com/org/k8s-manifests")
+	t.Setenv("GITHUB_TOKEN", "mock-token")
+
 	incRepo := newMockIncidentRepo()
 	reportRepo := newMockReportRepo()
 	prRepo := newMockPRRepo()
@@ -272,6 +275,9 @@ func TestAnalyzeIncident_Standalone_FallbackAndPRCreation(t *testing.T) {
 }
 
 func TestAnalyzeIncident_WithRCAPipeline_LLMFailureFallback(t *testing.T) {
+	t.Setenv("GITOPS_REPO_URL", "https://github.com/org/k8s-manifests")
+	t.Setenv("GITHUB_TOKEN", "mock-token")
+
 	incRepo := newMockIncidentRepo()
 	reportRepo := newMockReportRepo()
 	prRepo := newMockPRRepo()

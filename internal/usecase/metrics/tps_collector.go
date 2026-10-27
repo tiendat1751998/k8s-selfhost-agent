@@ -291,12 +291,10 @@ func (c *TPSCollector) Collect(ctx context.Context) (*TPSSnapshot, error) {
 	httpTPS := c.collectHTTPTPS(ctx, now)
 
 	// 2b. Override with Load Balancer aggregate stats from Prometheus entrypoints when available
-	lbReportedRPS := false
 	if c.lbProvider != nil {
 		aggStats, err := c.lbProvider.GetAggregateStats(ctx)
 		if err == nil && aggStats != nil {
 			httpTPS.RequestsPerSec = aggStats.TotalRequestsPerSec
-			lbReportedRPS = true
 			httpTPS.ActiveConnections = aggStats.ActiveConnections
 			httpTPS.ErrorRate = aggStats.ErrorRate
 			if aggStats.AvgLatencyMs > 0 {
@@ -310,21 +308,6 @@ func (c *TPSCollector) Collect(ctx context.Context) (*TPSSnapshot, error) {
 			}
 		} else if err != nil {
 			c.logger.Debug("Failed to get load balancer aggregate stats", zap.Error(err))
-		}
-	}
-
-	// Fallback only if Load Balancer is NOT available or errored:
-	if !lbReportedRPS {
-		var traefikRx int64
-		for _, s := range services {
-			if isTraefikService(s.ServiceName) {
-				traefikRx += s.RxBytesPerSec
-			}
-		}
-		if traefikRx > 10000 {
-			// Estimate real HTTP throughput: ~1.2 KB average request size
-			estimatedRPS := math.Round((float64(traefikRx)/1200.0)*100) / 100
-			httpTPS.RequestsPerSec = estimatedRPS
 		}
 	}
 

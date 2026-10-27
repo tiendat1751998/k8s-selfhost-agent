@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"net"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -73,6 +75,28 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 			}
 		}
 
+		// When K8s :6443 or container runtime listing is offline, expose live running daemons
+		// reported by :9100 node metrics (running_containers / active_daemons / detected_services)
+		// accurately without fabricating pods.
+		if nodeContainerCount == 0 && am != nil {
+			if am.RunningContainers > 0 {
+				nodeContainerCount = am.RunningContainers
+				nodeRunningCount = am.RunningContainers
+			} else if am.ActiveDaemons > 0 {
+				nodeContainerCount = am.ActiveDaemons
+				nodeRunningCount = am.ActiveDaemons
+			} else if am.ContainerCount > 0 {
+				nodeContainerCount = am.ContainerCount
+				nodeRunningCount = am.ContainerCount
+			} else if am.PodCount > 0 {
+				nodeContainerCount = am.PodCount
+				nodeRunningCount = am.PodCount
+			} else if len(am.DetectedServices) > 0 {
+				nodeContainerCount = len(am.DetectedServices)
+				nodeRunningCount = len(am.DetectedServices)
+			}
+		}
+
 		osName := am.OS
 		if osName == "" {
 			osName = "linux"
@@ -97,11 +121,19 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 			diskDevices = make([]DiskIOStats, 0)
 		}
 
+		nodeIP := am.IP
+		if nodeIP == "" {
+			nodeIP = ExtractCleanHostIP(am.IPAddress, am.Endpoint, hostID, am.Hostname)
+		}
+
 		nodeMetricsList = append(nodeMetricsList, NodeMetrics{
 			NodeID:               hostID,
 			NodeName:             am.Hostname,
 			Role:                 "agent",
 			Status:               status,
+			IP:                   nodeIP,
+			IPAddress:            nodeIP,
+			Endpoint:             am.Endpoint,
 			OS:                   osName,
 			Arch:                 arch,
 			OSDistro:             distro,
@@ -138,11 +170,14 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 	// 3b. If no agent nodes reported and host probe is enabled, probe local host telemetry
 	if len(nodeMetricsList) == 0 && c.hostProbeEnabled {
 		hTel := getHostTelemetry(ctx)
+		cleanHostIP := ExtractCleanHostIP(hTel.Hostname)
 		nodeMetricsList = append(nodeMetricsList, NodeMetrics{
 			NodeID:            "host-" + hTel.Hostname,
 			NodeName:          hTel.Hostname,
 			Role:              "standalone",
 			Status:            "ready",
+			IP:                cleanHostIP,
+			IPAddress:         cleanHostIP,
 			OS:                hTel.OS,
 			Arch:              hTel.Arch,
 			OSDistro:          hTel.OSDistro,
@@ -214,13 +249,22 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 		avgCPU = totalCPU / float64(len(nodeMetricsList))
 	}
 
+	totalContainers := len(containerMetricsList)
+	runningContainers := runningContainersCount
+	if totalContainers == 0 {
+		for _, nm := range nodeMetricsList {
+			totalContainers += nm.ContainerCount
+			runningContainers += nm.RunningCount
+		}
+	}
+
 	overview := &SystemOverview{
 		Nodes:                     nodeMetricsList,
 		Containers:                containerMetricsList,
 		TotalNodes:                len(nodeMetricsList),
 		HealthyNodes:              healthyNodesCount,
-		TotalContainers:           len(containerMetricsList),
-		RunningContainers:         runningContainersCount,
+		TotalContainers:           totalContainers,
+		RunningContainers:         runningContainers,
 		TotalCPUPercent:           math.Round(avgCPU*100) / 100,
 		TotalMemPercent:           math.Round(totalMemPct*100) / 100,
 		TotalDiskPercent:          math.Round(totalDiskPct*100) / 100,
@@ -296,3 +340,44 @@ func (c *Collector) generateAlerts(overview *SystemOverview) []MetricAlert {
 	return alerts
 }
 
+// ExtractCleanHostIP extracts a clean IPv4 or IPv6 address or hostname from candidates (e.g. "http://10.10.10.60:9100" -> "10.10.10.60").
+func ExtractCleanHostIP(inputs ...string) string {
+	for _, raw := range inputs {
+		s := strings.TrimSpace(raw)
+		if s == "" {
+			continue
+		}
+
+		if strings.Contains(s, "://") {
+			if u, err := url.Parse(s); err == nil {
+				h := u.Hostname()
+				if h != "" {
+					return h
+				}
+			}
+		}
+
+		s = strings.TrimPrefix(s, "http://")
+		s = strings.TrimPrefix(s, "https://")
+		s = strings.TrimPrefix(s, "tcp://")
+
+		if idx := strings.IndexAny(s, "/?#"); idx != -1 {
+			s = s[:idx]
+		}
+
+		if host, _, err := net.SplitHostPort(s); err == nil && host != "" {
+			s = host
+		} else if strings.Count(s, ":") == 1 {
+			parts := strings.Split(s, ":")
+			if parts[0] != "" {
+				s = parts[0]
+			}
+		}
+
+		s = strings.Trim(s, "[]")
+		if s != "" && s != "0.0.0.0" {
+			return s
+		}
+	}
+	return ""
+}

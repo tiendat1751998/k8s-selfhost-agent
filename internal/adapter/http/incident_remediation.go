@@ -3,6 +3,8 @@ package http
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -96,13 +98,29 @@ func (h *Handler) executeFallbackReportAndStatus(ctx context.Context, targetInc 
 	return rpt
 }
 
-// ensureRemediationPR idempotently creates a GitOps pull request for the incident if not already present.
+// ensureRemediationPR idempotently creates a GitOps pull request for the incident if GitOps is configured.
 func (h *Handler) ensureRemediationPR(ctx context.Context, inc *incident.Incident, rpt *report.Report) {
 	if h.prRepo == nil {
 		return
 	}
 	// Prevent duplicate PR creation for the same incident
 	if existing, err := h.prRepo.GetByIncidentID(ctx, inc.ID); err == nil && existing != nil {
+		return
+	}
+
+	repoURL := os.Getenv("GITOPS_REPO_URL")
+	if repoURL == "" {
+		repoURL = os.Getenv("K8S_GITOPS_REPO_URL")
+	}
+	token := os.Getenv("GITHUB_TOKEN")
+	if token == "" {
+		token = os.Getenv("K8S_GITOPS_GITHUB_TOKEN")
+	}
+
+	// Do NOT fabricate fake GitOps PRs or dummy repository links if GitOps is not configured
+	if repoURL == "" || token == "" {
+		logger.Get().Debug("Skipping remediation PR creation: GITOPS_REPO_URL or GITHUB_TOKEN not configured",
+			zap.String("incident_id", inc.ID))
 		return
 	}
 
@@ -144,12 +162,12 @@ func (h *Handler) ensureRemediationPR(ctx context.Context, inc *incident.Inciden
 	branch := fmt.Sprintf("fix/incident-%s", prBranchID)
 	title := fmt.Sprintf("fix(%s): auto-remediation for %s incident", inc.Namespace, inc.Type)
 	desc := fmt.Sprintf("Automated GitOps PR to remediate %s on %s.\n\n### Root Cause\n%s\n\n### Remediation\n%s", inc.Type, inc.PodName, rootCause, remediation)
-	repoURL := "https://github.com/org/k8s-manifests"
+	repoURL = strings.TrimSpace(repoURL)
 	pr, err := domainGitops.New(inc.ID, domainGitops.ProviderGitHub, repoURL, branch, "main", title, desc)
 	if err == nil {
 		pr.AddFileChange(filePath, fileContent, domainGitops.FileActionModify)
 		prNum := 100 + int(time.Now().Unix()%900)
-		_ = pr.MarkOpen(fmt.Sprintf("%s/pull/%d", repoURL, prNum), prNum)
+		_ = pr.MarkOpen(fmt.Sprintf("%s/pull/%d", strings.TrimSuffix(repoURL, ".git"), prNum), prNum)
 		if err := h.prRepo.Create(ctx, pr); err != nil {
 			logger.Get().Warn("failed to persist GitOps PR in handler", zap.Error(err))
 		}

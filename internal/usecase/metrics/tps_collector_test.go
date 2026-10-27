@@ -1274,12 +1274,11 @@ func TestTPSCollector_IntelligentContainerNetworkFallback(t *testing.T) {
 		t.Fatalf("Collect failed: %v", err)
 	}
 
-	// Throughput should estimate real traffic (1,200,000 / 1200 = 1000 RPS) rather than 5 req/s
-	if snap.HTTP.RequestsPerSec != 1000.0 {
-		t.Errorf("expected HTTP RequestsPerSec = 1000.0 via container network fallback, got %f", snap.HTTP.RequestsPerSec)
+	// Task 070: Throughput must NOT fabricate synthetic 1000 RPS from rx bytes (1,200,000 / 1200)
+	if snap.HTTP.RequestsPerSec == 1000.0 {
+		t.Errorf("expected no synthetic RPS fabrication (1000 RPS from rx bytes), but got %f", snap.HTTP.RequestsPerSec)
 	}
 
-	// Verify tiki_traefik in Services also reflects 1000 RPS
 	var traefikSvc *ServiceTPS
 	for i := range snap.Services {
 		if snap.Services[i].ServiceName == "tiki_traefik" {
@@ -1290,8 +1289,8 @@ func TestTPSCollector_IntelligentContainerNetworkFallback(t *testing.T) {
 	if traefikSvc == nil {
 		t.Fatal("expected tiki_traefik service in snapshot")
 	}
-	if traefikSvc.RequestsPerSec != 1000.0 {
-		t.Errorf("expected tiki_traefik RequestsPerSec = 1000.0, got %f", traefikSvc.RequestsPerSec)
+	if traefikSvc.RequestsPerSec == 1000.0 {
+		t.Errorf("expected no synthetic tiki_traefik RequestsPerSec = 1000.0, but got %f", traefikSvc.RequestsPerSec)
 	}
 }
 
@@ -1641,6 +1640,34 @@ func TestTPSCollector_NoFabricatedRPS_WhenHTTPZero(t *testing.T) {
 	// tiki_orders must be 0 (never fabricated when HTTP is 0)
 	if ord, ok := svcMap["tiki_orders"]; !ok || ord.RequestsPerSec != 0 {
 		t.Errorf("expected tiki_orders RequestsPerSec = 0 when HTTP is 0, got %f", ord.RequestsPerSec)
+	}
+}
+
+func TestTPSCollector_NoEstimatedRPSFromTraefikRxBytes(t *testing.T) {
+	collector := NewTPSCollector(nil, nil, zap.NewNop())
+
+	// Services with Traefik high network bytes (> 10000 bytes/sec) but no load balancer counter
+	services := []ServiceTPS{
+		{
+			ServiceName:   "traefik_lb",
+			RxBytesPerSec: 120000, // previously: 120000 / 1200 = 100.0 RPS!
+		},
+	}
+
+	snapshot := &TPSSnapshot{
+		Timestamp: time.Now().UTC(),
+		Network:   NetworkTPS{TotalRxBytesPerSec: 120000},
+		HTTP:      HTTPTPS{RequestsPerSec: 0},
+		Services:  services,
+	}
+
+	// Verify that when collecting or enriching without LB request counter,
+	// HTTPTPS RequestsPerSec remains 0 and is NEVER fabricated by dividing by 1200.
+	enriched := collector.enrichServicesWithLBStats(context.Background(), services, snapshot.HTTP, DatabaseTPS{}, MessagingTPS{})
+	for _, s := range enriched {
+		if s.ServiceName == "traefik_lb" && s.RequestsPerSec != 0 {
+			t.Errorf("expected traefik_lb RequestsPerSec = 0 without real LB counter, got %f", s.RequestsPerSec)
+		}
 	}
 }
 

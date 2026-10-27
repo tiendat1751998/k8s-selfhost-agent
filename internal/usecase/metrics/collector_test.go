@@ -2454,3 +2454,147 @@ func TestCollector_RunCollection_OncePerInterval(t *testing.T) {
 		t.Fatalf("expected at most 3 collections for 2 intervals (1 per interval + initial), got %d (double collection detected)", len(msgs))
 	}
 }
+
+func TestExtractCleanHostIP(t *testing.T) {
+	tests := []struct {
+		inputs   []string
+		expected string
+	}{
+		{[]string{"http://10.10.10.60:9100"}, "10.10.10.60"},
+		{[]string{"https://10.10.10.133:9100/metrics"}, "10.10.10.133"},
+		{[]string{"10.10.10.80:9100"}, "10.10.10.80"},
+		{[]string{"10.10.10.80"}, "10.10.10.80"},
+		{[]string{"", "http://10.10.10.60:9100"}, "10.10.10.60"},
+		{[]string{"tcp://192.168.1.100:2375"}, "192.168.1.100"},
+		{[]string{""}, ""},
+	}
+
+	for _, tc := range tests {
+		actual := ExtractCleanHostIP(tc.inputs...)
+		if actual != tc.expected {
+			t.Errorf("ExtractCleanHostIP(%v) = %q, expected %q", tc.inputs, actual, tc.expected)
+		}
+	}
+}
+
+func TestCollector_OverviewHostIP_AndLiveDaemons_WhenK8sOffline(t *testing.T) {
+	collector := NewCollector(nil, nil, nil, zap.NewNop())
+
+	// Simulate an agent node with host endpoint http://10.10.10.60:9100, active daemons / detected services
+	collector.SetAgentMetric("node-master", &AgentMetrics{
+		Hostname:         "k8smasterdeb",
+		Status:           "online",
+		Endpoint:         "http://10.10.10.60:9100",
+		ActiveDaemons:    3,
+		DetectedServices: []string{"postgres", "traefik", "k8s-agent"},
+		LastSeen:         time.Now().UTC(),
+	})
+
+	// Collect overview when container listing is empty (K8s API :6443 offline)
+	overview, err := collector.CollectOnce(context.Background())
+	if err != nil {
+		t.Fatalf("CollectOnce failed: %v", err)
+	}
+
+	if len(overview.Nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(overview.Nodes))
+	}
+
+	node := overview.Nodes[0]
+	if node.IP != "10.10.10.60" {
+		t.Errorf("expected node IP '10.10.10.60', got %q", node.IP)
+	}
+	if node.IPAddress != "10.10.10.60" {
+		t.Errorf("expected node IPAddress '10.10.10.60', got %q", node.IPAddress)
+	}
+	if node.RunningCount != 3 {
+		t.Errorf("expected node RunningCount = 3 from active daemons, got %d", node.RunningCount)
+	}
+	if overview.RunningContainers != 3 {
+		t.Errorf("expected overview RunningContainers = 3, got %d", overview.RunningContainers)
+	}
+	if overview.TotalContainers != 3 {
+		t.Errorf("expected overview TotalContainers = 3, got %d", overview.TotalContainers)
+	}
+}
+
+func TestCollector_ScrapeAgent_HostIP_AndLiveDaemons(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"hostname": "k8s-worker-1",
+			"os": "linux",
+			"arch": "amd64",
+			"uptime_seconds": 3600,
+			"active_daemons": 4,
+			"running_containers": 4,
+			"detected_services": ["docker", "kubelet", "postgres", "redis"],
+			"collected_at": "2026-03-30T10:00:00Z"
+		}`))
+	}))
+	defer srv.Close()
+
+	host := docker.ComputeHost{
+		ID:       "host-worker-1",
+		Name:     "k8s-worker-1",
+		HostType: "agent",
+		Endpoint: srv.URL,
+		Address:  "http://10.10.10.133:9100",
+	}
+
+	collector := NewCollector(nil, nil, nil, zap.NewNop(), WithHTTPClient(srv.Client()))
+	collector.ScrapeAgent(context.Background(), host)
+
+	m, ok := collector.GetAgentMetrics()["host-worker-1"]
+	if !ok {
+		t.Fatalf("expected agent metrics for host-worker-1")
+	}
+
+	if m.IP != "10.10.10.133" {
+		t.Errorf("expected IP '10.10.10.133', got %q", m.IP)
+	}
+	if m.IPAddress != "10.10.10.133" {
+		t.Errorf("expected IPAddress '10.10.10.133', got %q", m.IPAddress)
+	}
+	if m.Endpoint != srv.URL {
+		t.Errorf("expected Endpoint %q, got %q", srv.URL, m.Endpoint)
+	}
+	if m.ActiveDaemons != 4 {
+		t.Errorf("expected ActiveDaemons = 4, got %d", m.ActiveDaemons)
+	}
+	if len(m.DetectedServices) != 4 {
+		t.Errorf("expected 4 detected services, got %d", len(m.DetectedServices))
+	}
+}
+
+func TestCollector_ScrapeAgent_Failure_HostIP(t *testing.T) {
+	host := docker.ComputeHost{
+		ID:       "host-worker-2",
+		Name:     "k8s-worker-2",
+		HostType: "agent",
+		Endpoint: "http://10.10.80.5:9100",
+		Address:  "http://10.10.80.5:9100",
+	}
+
+	collector := NewCollector(nil, nil, nil, zap.NewNop(), WithHTTPClient(&http.Client{Timeout: 10 * time.Millisecond}))
+	collector.ScrapeAgent(context.Background(), host)
+
+	m, ok := collector.GetAgentMetrics()["host-worker-2"]
+	if !ok {
+		t.Fatalf("expected agent metrics for host-worker-2")
+	}
+
+	if m.Status != "offline" {
+		t.Errorf("expected status 'offline', got %q", m.Status)
+	}
+	if m.IP != "10.10.80.5" {
+		t.Errorf("expected IP '10.10.80.5', got %q", m.IP)
+	}
+	if m.IPAddress != "10.10.80.5" {
+		t.Errorf("expected IPAddress '10.10.80.5', got %q", m.IPAddress)
+	}
+	if m.Endpoint != "http://10.10.80.5:9100" {
+		t.Errorf("expected Endpoint 'http://10.10.80.5:9100', got %q", m.Endpoint)
+	}
+}

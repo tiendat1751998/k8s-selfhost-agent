@@ -81,3 +81,19 @@ func TestSanitizeComputeHost(t *testing.T) {
 	assert.Equal(t, "private-key-material", host.TLSKey)
 	assert.Equal(t, "raw-key-value", host.Labels["api_key"])
 }
+
+func TestSanitizeComputeHost_ExtractsCleanIP(t *testing.T) {
+	host := &docker.ComputeHost{
+		ID:       "host-2",
+		Name:     "worker-2",
+		Endpoint: "http://10.10.10.60:9100",
+		Address:  "http://10.10.10.60:9100",
+	}
+
+	sanitized := SanitizeComputeHost(host)
+	require.NotNil(t, sanitized)
+	assert.Equal(t, "10.10.10.60", sanitized.IP)
+	assert.Equal(t, "10.10.10.60", sanitized.IPAddress)
+	assert.Equal(t, "10.10.10.60", sanitized.Address)
+}
+
