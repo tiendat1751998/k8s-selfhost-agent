@@ -1,5 +1,6 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick, type Ref } from 'vue'
 import { api } from '../api/client'
+import { useAuthStore } from '../stores/authStore'
 
 export interface PodLogProps {
   cluster: string
@@ -39,7 +40,7 @@ export function usePodLogs(
   const logsCopied = ref<boolean>(false)
 
   const logContainerRef = containerRef || ref<HTMLElement | null>(null)
-  let eventSource: EventSource | null = null
+  let streamAbortController: AbortController | null = null
   let fetchAbortController: AbortController | null = null
 
   const ANSI_REGEX = /\u001b\[[0-9;]*m/g
@@ -167,77 +168,99 @@ export function usePodLogs(
     const ns = props.namespace || 'default'
     const containerParam = selectedContainer.value ? `&container=${encodeURIComponent(selectedContainer.value)}` : ''
     const prevParam = showPrevious.value ? '&previous=true' : ''
-    const token = localStorage.getItem('k8s_token')
-    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : ''
 
-    return `${base}/k8s/${encodeURIComponent(props.cluster)}/pods/${encodeURIComponent(props.pod)}/logs?namespace=${encodeURIComponent(ns)}${containerParam}&follow=${follow}&tailLines=${tailLines.value}${prevParam}${tokenParam}`
+    return `${base}/k8s/${encodeURIComponent(props.cluster)}/pods/${encodeURIComponent(props.pod)}/logs?namespace=${encodeURIComponent(ns)}${containerParam}&follow=${follow}&tailLines=${tailLines.value}${prevParam}`
   }
 
-  function startStreaming() {
+  async function startStreaming() {
     stopStreaming()
     isLoading.value = true
     streamError.value = null
     isConnected.value = false
 
     const url = buildLogsUrl(true)
+    const token = api.getToken() || (typeof window !== 'undefined' ? useAuthStore().token : null)
+    streamAbortController = new AbortController()
 
     try {
-      eventSource = new EventSource(url)
-
-      eventSource.onopen = () => {
-        isConnected.value = true
-        isLoading.value = false
-        streamError.value = null
+      const headers: Record<string, string> = {
+        Accept: 'text/event-stream',
+      }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
       }
 
-      eventSource.onmessage = (event: MessageEvent) => {
-        isLoading.value = false
-        if (typeof event.data === 'string') {
-          // SSE lines may come single or multiple
-          const parts = event.data.split('\n')
-          for (const p of parts) {
-            if (p !== undefined) {
-              rawLines.value.push(p)
+      const response = await fetch(url, {
+        headers,
+        signal: streamAbortController.signal,
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      if (!response.body) {
+        throw new Error('Response body is unavailable for streaming')
+      }
+
+      isConnected.value = true
+      isLoading.value = false
+      streamError.value = null
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed) continue
+          if (trimmed.startsWith('data:')) {
+            const dataContent = line.replace(/^data:\s?/, '')
+            rawLines.value.push(dataContent)
+            if (rawLines.value.length > 10000) {
+              rawLines.value = rawLines.value.slice(rawLines.value.length - 8000)
             }
           }
-          // Limit buffer to 10000 lines
-          if (rawLines.value.length > 10000) {
-            rawLines.value = rawLines.value.slice(rawLines.value.length - 8000)
-          }
+        }
 
-          if (autoScroll.value && !userScrolledUp.value) {
-            nextTick(() => {
-              scrollToBottom()
-            })
-          }
+        if (autoScroll.value && !userScrolledUp.value) {
+          nextTick(() => {
+            scrollToBottom()
+          })
         }
       }
 
-      eventSource.onerror = () => {
-        isConnected.value = false
-        // If we haven't received anything yet or connection closed
-        if (rawLines.value.length === 0 && isLoading.value) {
-          streamError.value = 'Failed to stream logs. Switching to static fetch...'
-          isLoading.value = false
-          // Fallback to static fetch
-          fetchStaticLogs()
-        }
+      if (buffer.trim().startsWith('data:')) {
+        rawLines.value.push(buffer.replace(/^data:\s?/, ''))
       }
+      isConnected.value = false
     } catch (err: unknown) {
+      if (streamAbortController?.signal.aborted) {
+        return
+      }
+      isConnected.value = false
       isLoading.value = false
-      const msg = err instanceof Error ? err.message : 'EventSource creation failed'
-      streamError.value = msg
-      fetchStaticLogs()
+      if (rawLines.value.length === 0) {
+        streamError.value = 'Failed to stream logs. Switching to static fetch...'
+        fetchStaticLogs()
+      } else {
+        streamError.value = err instanceof Error ? err.message : 'Stream error occurred'
+      }
     }
   }
 
   function stopStreaming() {
-    if (eventSource) {
-      eventSource.onopen = null
-      eventSource.onmessage = null
-      eventSource.onerror = null
-      eventSource.close()
-      eventSource = null
+    if (streamAbortController) {
+      streamAbortController.abort()
+      streamAbortController = null
     }
     isConnected.value = false
   }

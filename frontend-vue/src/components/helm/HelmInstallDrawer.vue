@@ -183,8 +183,11 @@ const emit = defineEmits<{
         </div>
 
         <div v-if="installError" class="install-error-banner font-mono" role="alert">
-          <BaseIcon name="alert-triangle" size="xs" />
-          <span>{{ installError }}</span>
+          <BaseIcon name="alert-triangle" size="xs" class="install-error-icon" />
+          <div class="install-error-content">
+            <span class="install-error-title font-bold">Deployment Failed:</span>
+            <span class="install-error-msg">{{ installError }}</span>
+          </div>
         </div>
 
         <div class="modal-footer-actions">
@@ -208,4 +211,30 @@ const emit = defineEmits<{
 
 <style scoped>
 @import '../../assets/styles/components/helm-drawers.css';
+
+.install-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2, 8px);
+  padding: var(--space-3, 12px);
+  margin-top: var(--space-3, 12px);
+  background: var(--color-danger-subtle, rgba(239, 68, 68, 0.12));
+  border: 1px solid var(--color-border-danger, rgba(239, 68, 68, 0.4));
+  border-radius: var(--radius-md, 6px);
+  color: var(--color-danger, #ef4444);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.install-error-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.install-error-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 </style>

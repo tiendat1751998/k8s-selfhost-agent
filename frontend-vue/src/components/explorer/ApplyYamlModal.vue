@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import YamlEditorModal from '../k8s/YamlEditorModal.vue'
+import { sanitizeNamespace } from '../../utils/yaml'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     show: boolean
     cluster: string
@@ -18,6 +20,8 @@ withDefaults(
   }
 )
 
+const safeNamespace = computed(() => sanitizeNamespace(props.namespace))
+
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'applied', result: { message: string }): void
@@ -28,7 +32,7 @@ const emit = defineEmits<{
   <YamlEditorModal
     :show="show"
     :cluster="cluster"
-    :namespace="namespace"
+    :namespace="safeNamespace"
     :initial-yaml="initialYaml"
     :title="title"
     :mode="mode"

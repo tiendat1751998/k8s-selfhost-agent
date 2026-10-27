@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { reactive, watch } from 'vue'
 import type { CreateSLOPayload } from '../../api/compute'
 
@@ -47,18 +47,25 @@ watch([() => newSLO.selectedService, () => newSLO.indicator_type], ([newSvc, new
   newSLO.query = getPromQLTemplate(svc, newInd)
 })
 
+function setPresetTarget(val: number) {
+  newSLO.target = Number(val.toFixed(2))
+}
+
 function handleSubmit() {
   const targetService = newSLO.selectedService === 'custom' 
     ? newSLO.customServiceName.trim() 
     : newSLO.selectedService
 
+  const sanitizedTarget = Number(Number(newSLO.target).toFixed(3))
+  const sanitizedAlertThreshold = Number(Number(newSLO.alert_threshold).toFixed(2))
+
   emit('create', {
     service: targetService,
     indicator_type: newSLO.indicator_type,
-    target: newSLO.target,
+    target: sanitizedTarget,
     window: newSLO.window,
     query: newSLO.query.trim(),
-    alert_threshold: newSLO.alert_threshold,
+    alert_threshold: sanitizedAlertThreshold,
   })
 }
 </script>
@@ -109,18 +116,18 @@ function handleSubmit() {
           <div class="label-with-presets">
             <label class="form-label">Target Objective % (Compliance Goal):</label>
             <div class="preset-buttons">
-              <button type="button" class="btn-preset" @click="newSLO.target = 99.00">99.0%</button>
-              <button type="button" class="btn-preset" @click="newSLO.target = 99.50">99.5%</button>
-              <button type="button" class="btn-preset" @click="newSLO.target = 99.90">99.9%</button>
-              <button type="button" class="btn-preset" @click="newSLO.target = 99.95">99.95%</button>
-              <button type="button" class="btn-preset" @click="newSLO.target = 99.99">99.99%</button>
+              <button type="button" class="btn-preset" @click="setPresetTarget(99.00)">99.0%</button>
+              <button type="button" class="btn-preset" @click="setPresetTarget(99.50)">99.5%</button>
+              <button type="button" class="btn-preset" @click="setPresetTarget(99.90)">99.9%</button>
+              <button type="button" class="btn-preset" @click="setPresetTarget(99.95)">99.95%</button>
+              <button type="button" class="btn-preset" @click="setPresetTarget(99.99)">99.99%</button>
             </div>
           </div>
           <input 
             v-model.number="newSLO.target" 
             type="number" 
             step="0.01" 
-            min="50" 
+            min="0" 
             max="100" 
             required 
             class="input-glass font-mono" 

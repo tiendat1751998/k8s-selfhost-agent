@@ -246,6 +246,10 @@ export function useDeployments() {
   }
 
   async function handleScale(payload: ScaleDeploymentPayload) {
+    if (payload.type === 'daemon' || payload.type === 'host-daemon') {
+      showToast('Scale not supported: Managed via Linux systemd on host', 'info')
+      return false
+    }
     actionLoading.value = 'scale'
     try {
       await deploymentsApi.scale(payload)
@@ -274,7 +278,8 @@ export function useDeployments() {
           namespace: app.namespace,
           name: app.rawId || app.name
         })
-        showToast(`Rolling restart dispatched for ${app.name}!`, 'success')
+        const isDaemon = app.type === 'daemon' || app.type === 'host-daemon'
+        showToast(isDaemon ? `Service restart dispatched for ${app.name}!` : `Rolling restart dispatched for ${app.name}!`, 'success')
       }
       await fetchDeployments()
       return true
@@ -420,6 +425,10 @@ export function useDeployments() {
   }
 
   async function handleDelete(app: DeploymentApp) {
+    if (app.type === 'daemon' || app.type === 'host-daemon') {
+      showToast('Deletion not supported: Managed via Linux systemd on host', 'info')
+      return false
+    }
     actionLoading.value = app.name
     try {
       if (app.type === 'docker') {

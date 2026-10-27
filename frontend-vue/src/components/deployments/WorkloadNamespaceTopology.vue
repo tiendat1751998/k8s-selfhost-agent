@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { DeploymentApp } from '../../api/compute'
-import {
-  computeReplicaCells,
-  groupDeploymentsByNamespace,
-  type NamespaceGroup
-} from '../../composables/useDeployments'
+import { computeReplicaCells, groupDeploymentsByNamespace, type NamespaceGroup } from '../../composables/useDeployments'
 import BaseIcon from '../ui/BaseIcon.vue'
 import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 import { formatContainerName, formatImageName } from '../../utils/dockerFormat'
@@ -59,7 +55,22 @@ function toggleNamespace(ns: string) {
   collapsedNamespaces.value[ns] = !collapsedNamespaces.value[ns]
 }
 
+function isDaemon(app: DeploymentApp): boolean {
+  return app.type === 'daemon' || app.type === 'host-daemon'
+}
+
 function getCardActions(app: DeploymentApp): ActionItem[] {
+  if (isDaemon(app)) {
+    return [
+      { id: 'inspect', label: 'Inspect Details', icon: 'search' },
+      {
+        id: 'restart',
+        label: props.actionLoading === app.name ? 'Restarting...' : 'Restart Service',
+        icon: 'refresh',
+        disabled: props.actionLoading === app.name
+      },
+    ]
+  }
   return [
     { id: 'inspect', label: 'Inspect Details', icon: 'search' },
     { id: 'strategy', label: 'Rollout Strategy', icon: 'git-branch' },
@@ -253,6 +264,7 @@ function getAppStatusLabel(app: DeploymentApp): string {
                   <span>Logs</span>
                 </button>
                 <button
+                  v-if="!isDaemon(app)"
                   type="button"
                   class="btn btn-secondary btn-xs"
                   title="Scale Replicas"
@@ -261,6 +273,13 @@ function getAppStatusLabel(app: DeploymentApp): string {
                   <BaseIcon name="zap" size="xs" />
                   <span>Scale</span>
                 </button>
+                <span
+                  v-else
+                  class="badge-systemd-indicator font-mono text-muted text-xs"
+                  title="Managed via Linux systemd on host"
+                >
+                  systemd
+                </span>
                 <ActionDropdown
                   :items="getCardActions(app)"
                   size="xs"

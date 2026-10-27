@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { DeploymentApp } from '../../api/compute'
 import ModalDrawer from '../ui/ModalDrawer.vue'
 import BaseIcon from '../ui/BaseIcon.vue'
@@ -26,6 +26,10 @@ const emit = defineEmits<{
 }>()
 
 const activeTab = ref<'overview' | 'strategy' | 'network' | 'logs' | 'env' | 'yaml'>('overview')
+
+const isDaemon = computed(() => {
+  return props.app?.type === 'daemon' || props.app?.type === 'host-daemon'
+})
 
 watch(
   () => props.show,
@@ -167,15 +171,18 @@ function copyToClipboard(text: string) {
           <button type="button" class="btn btn-secondary btn-sm btn-logs" @click="switchTab('logs')">
             <span><BaseIcon name="file-text" size="xs" /> Inspect Logs</span>
           </button>
-          <button type="button" class="btn btn-secondary btn-sm" @click="emit('openScale', app)">
+          <button v-if="!isDaemon" type="button" class="btn btn-secondary btn-sm" @click="emit('openScale', app)">
             <span><BaseIcon name="zap" size="xs" /> Scale Replicas</span>
           </button>
           <button type="button" class="btn btn-secondary btn-sm" @click="emit('restart', app)">
-            <span><BaseIcon name="refresh" size="xs" /> Rolling Restart</span>
+            <span><BaseIcon name="refresh" size="xs" /> {{ isDaemon ? 'Restart Service' : 'Rolling Restart' }}</span>
           </button>
-          <button type="button" class="btn btn-secondary btn-sm btn-remove" @click="emit('delete', app)">
+          <button v-if="!isDaemon" type="button" class="btn btn-secondary btn-sm btn-remove" @click="emit('delete', app)">
             <span><BaseIcon name="trash" size="xs" /> Delete Workload</span>
           </button>
+          <span v-else class="text-xs text-muted font-mono flex items-center gap-1" title="Managed via Linux systemd on host">
+            <BaseIcon name="info" size="xs" /> Managed via Linux systemd on host
+          </span>
         </div>
       </div>
 

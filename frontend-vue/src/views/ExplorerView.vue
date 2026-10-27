@@ -240,7 +240,7 @@ onMounted(async () => {
     <ExplorerRestartModal :show="showRestartModal" :target="restartTarget" :restarting="restartingResource" @close="showRestartModal = false" @confirm="handleRestartConfirm" />
     <ExplorerDeleteModal :show="showDeleteModal" :resource="resourceToDelete" :deleting="deletingResource" @close="showDeleteModal = false" @confirm="handleDeleteConfirm" />
     <ExplorerDrainModal :show="showDrainModal" :target-node="drainTargetNode" :draining="drainingNode" @close="showDrainModal = false" @confirm="handleDrainConfirm" />
-    <ApplyYamlModal :show="showYamlModal" :cluster="selectedCluster" :namespace="selectedNamespace" :initial-yaml="yamlEditorInitialContent" :title="yamlEditorTitle" :mode="yamlEditorMode" @close="showYamlModal = false" @applied="handleYamlApplied" />
+    <ApplyYamlModal :show="showYamlModal" :cluster="selectedCluster" :namespace="(!selectedNamespace || selectedNamespace === 'all' || selectedNamespace === 'All Namespaces') ? 'default' : selectedNamespace" :initial-yaml="yamlEditorInitialContent" :title="yamlEditorTitle" :mode="yamlEditorMode" @close="showYamlModal = false" @applied="handleYamlApplied" />
     <ExplorerCreateModal :show="showCreateModal" :cluster="selectedCluster" :namespaces="namespaces" :default-namespace="selectedNamespace === 'all' ? 'default' : selectedNamespace" :default-kind="selectedKind" @close="showCreateModal = false" @applied="handleCreateApplied" />
     <ExplorerImportModal :show="showImportModal" :importing="importingCluster" @close="showImportModal = false" @import="handleImportCluster" />
     <ExplorerCreateNsModal :show="showNewNsModal" :cluster="selectedCluster" :creating="creatingNs" :error="newNsError" @close="showNewNsModal = false" @create="handleCreateNs" />

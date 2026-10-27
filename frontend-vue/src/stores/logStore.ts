@@ -10,6 +10,8 @@ import {
 } from '../api/logging'
 import { parseWebSocketFrame, mapRawToLogEntry } from '../utils/logBatchParser'
 import { inferEffectiveLevel } from '../components/logs/virtualLogUtils'
+import { api } from '../api/client'
+import { useAuthStore } from './authStore'
 
 export interface LogEntry {
   time: string
@@ -173,9 +175,7 @@ export const useLogStore = defineStore('log', () => {
     params.delete('access_token')
     params.delete('auth_token')
 
-    const token = typeof window !== 'undefined'
-      ? (localStorage.getItem('k8s_token') || localStorage.getItem('token'))
-      : null
+    const token = api.getToken() || (typeof window !== 'undefined' ? useAuthStore().token : null)
 
     const queryStr = params.toString()
     let wsUrl = `${proto}//${host}/api/v1/logs/stream${queryStr ? '?' + queryStr : ''}`

@@ -446,13 +446,18 @@
   .helm-catalog-layout .mobile-only { display: block; }
   .helm-catalog-layout { padding: 12px; gap: 12px; }
   /* Mobile 40px Command Bar */
-  .helm-mobile-command-bar { display: flex; justify-content: space-between; align-items: center; height: 40px; padding: 0 12px; background: var(--color-surface-card, rgba(18, 24, 38, 0.85)); border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08)); border-radius: 8px; }
+  .helm-mobile-command-bar { display: flex; justify-content: space-between; align-items: center; min-height: 40px; height: auto; padding: 6px 12px; flex-wrap: wrap; gap: 8px; background: var(--color-surface-card, rgba(18, 24, 38, 0.85)); border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08)); border-radius: 8px; }
 
-  .helm-mobile-command-bar .command-bar-title { font-size: 13px; color: var(--text-primary); }
+  .helm-mobile-command-bar .command-bar-title { font-size: 13px; color: var(--text-primary); white-space: nowrap; }
   .helm-mobile-command-bar .command-bar-actions { display: flex; align-items: center; gap: 6px; }
   .helm-mobile-command-bar .btn-icon-cmd { background: transparent; border: none; font-size: 14px; cursor: pointer; min-height: 32px; min-width: 32px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); }
 
   .helm-mobile-command-bar .btn-icon-cmd:disabled { opacity: 0.4; }
+  /* Repositories Tab Header */
+  .repos-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px; margin-bottom: 12px; }
+  .repos-title-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .repos-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+
   /* Mobile Micro-Telemetry Strip */
   .helm-micro-telemetry { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11px; padding: 4px 8px; background: var(--color-surface-inset, rgba(0, 0, 0, 0.35)); border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.06)); border-radius: 6px; color: var(--text-muted); }
 
@@ -467,6 +472,12 @@
 
   .helm-mobile-cluster-bar .pill-prefix { font-size: 12px; }
   .helm-mobile-cluster-bar .pill-select { background: transparent; border: none; color: var(--text-primary); font-size: 11px; width: 100%; outline: none; }
+}
+
+@media (max-width: 640px) {
+  .repos-header { flex-direction: column; align-items: stretch; gap: 10px; }
+  .repos-actions { width: 100%; flex-direction: column; align-items: stretch; gap: 8px; }
+  .repos-actions .btn { width: 100%; justify-content: center; }
 }
 
 @media (max-width: 480px) {

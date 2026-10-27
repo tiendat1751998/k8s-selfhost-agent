@@ -2,6 +2,8 @@ import { ref, onMounted, onUnmounted, watch, nextTick, type Ref } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
+import { api } from '../api/client'
+import { useAuthStore } from '../stores/authStore'
 
 export interface PodTerminalProps {
   cluster: string
@@ -73,7 +75,7 @@ export function usePodTerminal(
     }
 
     const url = buildWebSocketUrl()
-    const token = typeof window !== 'undefined' ? localStorage.getItem('k8s_token') : null
+    const token = api.getToken() || (typeof window !== 'undefined' ? useAuthStore().token : null)
     const protocols = token ? ['bearer', token] : undefined
 
     try {

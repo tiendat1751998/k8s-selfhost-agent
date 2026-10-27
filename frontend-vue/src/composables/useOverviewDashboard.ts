@@ -137,13 +137,14 @@ export function useOverviewDashboard() {
   const effectiveHttpRps = computed(() => {
     const tpsRps = tpsData.value?.http?.requests_per_sec
     if (tpsRps !== undefined && tpsRps !== null && tpsRps > 0) {
-      return tpsRps
+      return Number(tpsRps.toFixed(1))
     }
     if (tpsData.value?.services && tpsData.value.services.length > 0) {
       const sum = tpsData.value.services.reduce((acc, s) => acc + (s.requests_per_sec || 0), 0)
-      if (sum > 0) return sum
+      if (sum > 0) return Number(sum.toFixed(1))
     }
-    return overview.value?.requests_per_sec || 0
+    const ovRps = overview.value?.requests_per_sec || 0
+    return Number(ovRps.toFixed(1))
   })
 
   const httpActiveConns = computed(() => tpsData.value?.http?.active_connections ?? 0)
@@ -180,20 +181,26 @@ export function useOverviewDashboard() {
     return hasUnhealthyNodes || hasCriticalAlerts || isHighError
   })
 
+  function isControlPlaneNode(n: NodeMetrics): boolean {
+    const r = (n.role || '').toLowerCase()
+    if (r.includes('control-plane') || r.includes('control') || r.includes('master') || r.includes('manager')) {
+      return true
+    }
+    const name = (n.node_id || n.node_name || '').toLowerCase()
+    if (r === 'agent' && (name.includes('master') || name.includes('control'))) {
+      return true
+    }
+    return false
+  }
+
   const filteredTopologyNodes = computed<NodeMetrics[]>(() => {
     const all = nodes.value
     if (selectedTopologyFilter.value === 'all') return all
     if (selectedTopologyFilter.value === 'control_plane') {
-      return all.filter(n => {
-        const r = (n.role || '').toLowerCase()
-        return r.includes('master') || r.includes('control') || r.includes('manager')
-      })
+      return all.filter(isControlPlaneNode)
     }
     if (selectedTopologyFilter.value === 'worker') {
-      return all.filter(n => {
-        const r = (n.role || '').toLowerCase()
-        return !r.includes('master') && !r.includes('control') && !r.includes('manager')
-      })
+      return all.filter(n => !isControlPlaneNode(n))
     }
     if (selectedTopologyFilter.value === 'hot') {
       return all.filter(n => n.node_id === busiestNodeId.value || (n.cpu_percent >= 50 || n.memory_percent >= 50))
@@ -211,8 +218,7 @@ export function useOverviewDashboard() {
     let hot = 0
     let overloaded = 0
     for (const n of all) {
-      const r = (n.role || '').toLowerCase()
-      if (r.includes('master') || r.includes('control') || r.includes('manager')) control++
+      if (isControlPlaneNode(n)) control++
       else worker++
       if (n.node_id === busiestNodeId.value || (n.cpu_percent >= 50 || n.memory_percent >= 50)) hot++
       if (n.cpu_percent >= 80 || n.memory_percent >= 80 || n.status === 'down' || n.status === 'offline') overloaded++
@@ -340,7 +346,7 @@ export function useOverviewDashboard() {
         cpu: data.total_cpu_percent || 0,
         mem: data.total_mem_percent || 0,
         disk: data.total_disk_percent || 0,
-        reqs: Math.round(effectiveHttpRps.value || 0),
+        reqs: Number((effectiveHttpRps.value || 0).toFixed(1)),
       }
 
       trendHistory.value.push(newPoint)

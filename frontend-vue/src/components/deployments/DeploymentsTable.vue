@@ -39,7 +39,17 @@ function asDeployment(row: unknown): DeploymentApp {
   return row as DeploymentApp
 }
 
+function isDaemon(app: DeploymentApp): boolean {
+  return app.type === 'daemon' || app.type === 'host-daemon'
+}
+
 function getRowActions(app: DeploymentApp): ActionItem[] {
+  if (isDaemon(app)) {
+    return [
+      { id: 'inspect', label: 'Inspect Details', icon: 'search' },
+      { id: 'restart', label: props.actionLoading === app.name ? 'Restarting...' : 'Restart Service', icon: 'refresh', disabled: props.actionLoading === app.name },
+    ]
+  }
   return [
     { id: 'inspect', label: 'Inspect Details', icon: 'search' },
     { id: 'strategy', label: 'Rollout Strategy', icon: 'git-branch' },
@@ -188,6 +198,7 @@ function handleActionSelect(actionId: string, app: DeploymentApp) {
           </button>
 
           <button
+            v-if="!isDaemon(asDeployment(row))"
             type="button"
             class="btn btn-secondary btn-xs"
             title="Scale Replicas"
@@ -196,6 +207,13 @@ function handleActionSelect(actionId: string, app: DeploymentApp) {
             <BaseIcon name="zap" size="xs" />
             <span>Scale</span>
           </button>
+          <span
+            v-else
+            class="badge-systemd-indicator font-mono text-muted text-xs"
+            title="Managed via Linux systemd on host"
+          >
+            systemd
+          </span>
 
           <ActionDropdown
             :items="getRowActions(asDeployment(row))"

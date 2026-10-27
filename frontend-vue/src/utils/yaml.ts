@@ -112,11 +112,22 @@ export function jsonToYaml(obj: unknown, indent = 0): string {
   return String(obj)
 }
 
+export function sanitizeNamespace(namespace?: string | null): string {
+  if (!namespace) return 'default'
+  const trimmed = namespace.trim()
+  const lower = trimmed.toLowerCase()
+  if (lower === '' || lower === 'all' || lower === 'all namespaces') {
+    return 'default'
+  }
+  return trimmed
+}
+
 export function getDefaultYamlTemplate(
   kind: string,
   name: string = 'sample-resource',
   namespace: string = 'default'
 ): string {
+  const safeNs = sanitizeNamespace(namespace)
   switch (kind.toLowerCase()) {
     case 'configmap':
     case 'configmaps':
@@ -124,7 +135,7 @@ export function getDefaultYamlTemplate(
 kind: ConfigMap
 metadata:
   name: ${name}
-  namespace: ${namespace}
+  namespace: ${safeNs}
   labels:
     app.kubernetes.io/managed-by: k8sselfhost
 data:
@@ -139,7 +150,7 @@ data:
 kind: Secret
 metadata:
   name: ${name}
-  namespace: ${namespace}
+  namespace: ${safeNs}
   labels:
     app.kubernetes.io/managed-by: k8sselfhost
 type: Opaque
@@ -154,7 +165,7 @@ stringData:
 kind: Deployment
 metadata:
   name: ${name}
-  namespace: ${namespace}
+  namespace: ${safeNs}
   labels:
     app: ${name}
 spec:
@@ -187,7 +198,7 @@ spec:
 kind: Service
 metadata:
   name: ${name}
-  namespace: ${namespace}
+  namespace: ${safeNs}
 spec:
   type: ClusterIP
   selector:
@@ -205,7 +216,7 @@ spec:
 kind: Ingress
 metadata:
   name: ${name}
-  namespace: ${namespace}
+  namespace: ${safeNs}
   annotations:
     kubernetes.io/ingress.class: nginx
 spec:
@@ -228,7 +239,7 @@ spec:
 kind: StatefulSet
 metadata:
   name: ${name}
-  namespace: ${namespace}
+  namespace: ${safeNs}
 spec:
   serviceName: ${name}
   replicas: 1
@@ -253,7 +264,7 @@ spec:
 kind: DaemonSet
 metadata:
   name: ${name}
-  namespace: ${namespace}
+  namespace: ${safeNs}
 spec:
   selector:
     matchLabels:
@@ -274,7 +285,7 @@ spec:
 kind: Job
 metadata:
   name: ${name}
-  namespace: ${namespace}
+  namespace: ${safeNs}
 spec:
   template:
     spec:
@@ -292,7 +303,7 @@ spec:
 kind: CronJob
 metadata:
   name: ${name}
-  namespace: ${namespace}
+  namespace: ${safeNs}
 spec:
   schedule: "*/5 * * * *"
   jobTemplate:
@@ -312,7 +323,7 @@ spec:
 kind: PersistentVolumeClaim
 metadata:
   name: ${name}
-  namespace: ${namespace}
+  namespace: ${safeNs}
 spec:
   accessModes:
   - ReadWriteOnce
@@ -336,7 +347,7 @@ volumeBindingMode: WaitForFirstConsumer
 kind: ${kind}
 metadata:
   name: ${name}
-  namespace: ${namespace}
+  namespace: ${safeNs}
 spec: {}
 `
   }

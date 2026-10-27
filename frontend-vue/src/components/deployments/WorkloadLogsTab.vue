@@ -4,6 +4,9 @@ import { useRouter } from 'vue-router'
 import type { DeploymentApp } from '../../api/compute'
 import { dockerApi } from '../../api/compute'
 import { k8sApi } from '../../api/k8s'
+import { searchLogs } from '../../api/logging'
+import { mapRawToLogEntry } from '../../utils/logBatchParser'
+import type { LogEntry } from '../../stores/logStore'
 import BaseIcon from '../ui/BaseIcon.vue'
 import WorkloadLogToolbar from './WorkloadLogToolbar.vue'
 
@@ -35,6 +38,10 @@ const selectedContainer = ref<string>('')
 
 const isK8s = computed(() => {
   return props.app?.type === 'kubernetes' || props.app?.type === 'k8s'
+})
+
+const isDaemon = computed(() => {
+  return props.app?.type === 'daemon' || props.app?.type === 'host-daemon'
 })
 
 watch(
@@ -99,6 +106,25 @@ async function fetchLogs(targetApp?: DeploymentApp | null) {
       const targetType = target.type === 'swarm' ? 'service' : 'container'
       const res = await dockerApi.getLogs(targetId, targetType)
       logsRawContent.value = res?.logs?.trim() || ''
+    } else if (isDaemon.value) {
+      const hostNode = target.namespace || target.target || target.node || ''
+      const res = await searchLogs({
+        node: hostNode,
+        service: target.name,
+        limit: 200,
+      })
+      const entries = res?.entries || []
+      const mapped = entries
+        .map(e => mapRawToLogEntry(e, hostNode || 'default', target.name))
+        .filter((e): e is LogEntry => e !== null)
+
+      if (mapped.length > 0) {
+        logsRawContent.value = mapped
+          .map(e => `[${e.time}] [${e.level}] ${e.msg}`)
+          .join('\n')
+      } else {
+        logsRawContent.value = ''
+      }
     } else {
       logsRawContent.value = ''
     }
@@ -166,6 +192,17 @@ function copyLogsToClipboard() {
 function openFullLogs(targetApp?: DeploymentApp | null) {
   const target = targetApp || props.app
   if (!target) return
+  if (isDaemon.value) {
+    router.push({
+      path: '/logs',
+      query: {
+        node: target.namespace || target.target || target.node || undefined,
+        service: target.name,
+        search: target.name,
+      }
+    })
+    return
+  }
   router.push({
     path: '/logs',
     query: {
@@ -207,7 +244,7 @@ defineExpose({
         </div>
         <div class="terminal-title-text font-mono">
           <span class="pulse-dot pulse-dot-cyan"></span>
-          <span>{{ isK8s ? 'k8s' : 'docker' }}://{{ selectedPod || app.name }} [{{ app.type }}]</span>
+          <span>{{ isK8s ? 'k8s' : isDaemon ? 'systemd' : 'docker' }}://{{ isDaemon ? (app.namespace || app.target || 'host') + '/' + app.name : (selectedPod || app.name) }} [{{ app.type }}]</span>
           <span class="logs-count">({{ filteredLogLines.length }} lines)</span>
         </div>
         <div class="terminal-status font-mono">
@@ -241,6 +278,7 @@ defineExpose({
         <div v-else class="logs-empty-state">
           <BaseIcon name="file-text" size="md" />
           <p v-if="logsSearchQuery">No log entries match the search filter "{{ logsSearchQuery }}".</p>
+          <p v-else-if="isDaemon">No recent journal lines matched for {{ app.name }} on {{ app.namespace || app.target || 'host' }}.</p>
           <p v-else>No log entries available for {{ app.name }} (0 active pods or empty output).</p>
         </div>
       </div>

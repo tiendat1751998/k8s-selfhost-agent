@@ -4,6 +4,7 @@ import ModalDrawer from '../ui/ModalDrawer.vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import { k8sApi, type ResourceKind, type K8sNamespace } from '../../api/k8s'
 import { manifestTemplates, type TemplateKey } from './templates'
+import { sanitizeNamespace } from '../../utils/yaml'
 
 const props = withDefaults(
   defineProps<{
@@ -34,7 +35,7 @@ function selectTemplate(key: TemplateKey) {
   selectedTemplate.value = key
   const tpl = manifestTemplates.find((t) => t.key === key)
   if (tpl) {
-    yamlContent.value = tpl.yaml(props.defaultNamespace || 'default')
+    yamlContent.value = tpl.yaml(sanitizeNamespace(props.defaultNamespace))
   }
 }
 
