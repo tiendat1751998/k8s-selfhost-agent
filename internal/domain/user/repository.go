@@ -15,8 +15,9 @@ type User struct {
 	TenantRole       string     `json:"tenant_role"`
 	MFASecret        string     `json:"-"`              // encrypted TOTP secret
 	MFAEnabled       bool       `json:"mfa_enabled"`
-	MFARecoveryCodes string     `json:"-"`              // encrypted JSON array
-	MFAVerifiedAt    *time.Time `json:"mfa_verified_at,omitempty"`
+	MFARecoveryCodes       string     `json:"-"`              // encrypted JSON array
+	MFAVerifiedAt          *time.Time `json:"mfa_verified_at,omitempty"`
+	RequiresPasswordChange bool       `json:"requires_password_change"`
 }
 
 // Repository defines data access ports for user entity.
@@ -26,4 +27,5 @@ type Repository interface {
 	UpdateMFA(ctx context.Context, userID, encryptedSecret string, enabled bool) error
 	SetRecoveryCodes(ctx context.Context, userID, encryptedCodes string) error
 	GetMFASecret(ctx context.Context, userID string) (string, error)
+	UpdatePassword(ctx context.Context, userID, newPasswordHash string) error
 }

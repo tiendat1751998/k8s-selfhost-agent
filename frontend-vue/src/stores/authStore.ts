@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '../api/client'
 import { authApi, type UserInfo as AuthUserInfo } from '../api/auth'
+import { parseAndValidateToken } from '../router/tokenValidator'
 
 export type UserInfo = AuthUserInfo
 
@@ -11,8 +12,19 @@ export interface LoginResult {
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(typeof window !== 'undefined' ? localStorage.getItem('k8s_token') : null)
-  
+  // SEC-MED-02: Keep active access token strictly in-memory (never in localStorage)
+  const token = ref<string | null>(null)
+
+  // Clean up legacy localStorage tokens on store creation
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem('k8s_token')
+      localStorage.removeItem('k8s_auth_token')
+    } catch {
+      // Ignore storage errors in restricted environments
+    }
+  }
+
   const savedUser = typeof window !== 'undefined' ? localStorage.getItem('k8s_user') : null
   let initialUser: UserInfo | null = null
   if (savedUser) {
@@ -21,7 +33,11 @@ export const useAuthStore = defineStore('auth', () => {
     } catch {
       initialUser = null
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('k8s_user')
+        try {
+          localStorage.removeItem('k8s_user')
+        } catch {
+          // Ignore
+        }
       }
     }
   }
@@ -29,7 +45,9 @@ export const useAuthStore = defineStore('auth', () => {
   const mfaRequired = ref(false)
   const partialToken = ref('')
   const refreshTimer = ref<number | null>(null)
-  
+  let restorePromise: Promise<boolean> | null = null
+  let restoreAttempted = false
+
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -38,13 +56,19 @@ export const useAuthStore = defineStore('auth', () => {
   function setAuth(newToken: string, userInfo: UserInfo) {
     token.value = newToken
     user.value = userInfo
+    restoreAttempted = true
     api.setToken(newToken)
     if (userInfo.tenant_id) {
       api.setTenantId(userInfo.tenant_id)
     }
     if (typeof window !== 'undefined') {
-      localStorage.setItem('k8s_token', newToken)
-      localStorage.setItem('k8s_user', JSON.stringify(userInfo))
+      try {
+        localStorage.setItem('k8s_user', JSON.stringify(userInfo))
+        localStorage.removeItem('k8s_token')
+        localStorage.removeItem('k8s_auth_token')
+      } catch {
+        // Ignore
+      }
     }
     startRefreshTimer()
   }
@@ -63,7 +87,6 @@ export const useAuthStore = defineStore('auth', () => {
         if (res.token) {
           token.value = res.token
           api.setToken(res.token)
-          localStorage.setItem('k8s_token', res.token)
         }
       } catch {
         logout()
@@ -71,12 +94,84 @@ export const useAuthStore = defineStore('auth', () => {
     }, 13 * 60 * 1000)
   }
 
-  if (token.value) {
-    api.setToken(token.value)
-    if (user.value?.tenant_id) {
-      api.setTenantId(user.value.tenant_id)
+  async function restoreSession(force = false): Promise<boolean> {
+    if (token.value) {
+      return true
     }
-    startRefreshTimer()
+    if (restoreAttempted && !force) {
+      return false
+    }
+    if (restorePromise) {
+      return restorePromise
+    }
+
+    restorePromise = (async () => {
+      restoreAttempted = true
+      try {
+        const res = await authApi.refresh()
+        if (res && res.token) {
+          token.value = res.token
+          api.setToken(res.token)
+
+          try {
+            const me = await api.get<UserInfo>('/auth/me')
+            if (me) {
+              const fullUser: UserInfo = {
+                id: me.id,
+                email: me.email,
+                role: me.role,
+                tenant_id: me.tenant_id,
+                mfa_enabled: me.mfa_enabled,
+              }
+              user.value = fullUser
+              if (me.tenant_id) {
+                api.setTenantId(me.tenant_id)
+              }
+              if (typeof window !== 'undefined') {
+                try {
+                  localStorage.setItem('k8s_user', JSON.stringify(fullUser))
+                } catch {
+                  // Ignore
+                }
+              }
+            }
+          } catch {
+            const claims = parseAndValidateToken(res.token)
+            if (claims) {
+              const fallbackUser: UserInfo = {
+                id: claims.sub || 'user',
+                role: claims.role || 'viewer',
+                tenant_id: claims.tenant || 'default',
+              }
+              user.value = fallbackUser
+              if (claims.tenant) {
+                api.setTenantId(claims.tenant)
+              }
+              if (typeof window !== 'undefined') {
+                try {
+                  localStorage.setItem('k8s_user', JSON.stringify(fallbackUser))
+                } catch {
+                  // Ignore
+                }
+              }
+            }
+          }
+
+          startRefreshTimer()
+          return true
+        }
+        return false
+      } catch {
+        token.value = null
+        user.value = null
+        api.clearToken()
+        return false
+      } finally {
+        restorePromise = null
+      }
+    })()
+
+    return restorePromise
   }
 
   async function login(email: string, password: string): Promise<LoginResult> {
@@ -182,10 +277,16 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     mfaRequired.value = false
     partialToken.value = ''
+    restoreAttempted = true
     api.clearToken()
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('k8s_user')
-      localStorage.removeItem('k8s_token')
+      try {
+        localStorage.removeItem('k8s_user')
+        localStorage.removeItem('k8s_token')
+        localStorage.removeItem('k8s_auth_token')
+      } catch {
+        // Ignore
+      }
     }
   }
 
@@ -202,6 +303,7 @@ export const useAuthStore = defineStore('auth', () => {
     verifyRecovery,
     cancelMFA,
     setAuth,
+    restoreSession,
     startRefreshTimer,
     logout,
   }

@@ -91,11 +91,12 @@ func NewUsecase(repo user.Repository, opts ...Option) *Usecase {
 
 // AuthResult holds details for a successfully authenticated user.
 type AuthResult struct {
-	UserID      string `json:"user_id"`
-	Email       string `json:"email"`
-	Role        string `json:"role"`
-	TenantID    string `json:"tenant_id"`
-	MFARequired bool   `json:"mfa_required"`
+	UserID                 string `json:"user_id"`
+	Email                  string `json:"email"`
+	Role                   string `json:"role"`
+	TenantID               string `json:"tenant_id"`
+	MFARequired            bool   `json:"mfa_required"`
+	RequiresPasswordChange bool   `json:"requires_password_change"`
 }
 
 // Authenticate verifies user credentials and returns user details.
@@ -117,11 +118,12 @@ func (u *Usecase) Authenticate(ctx context.Context, email, password string) (*Au
 	}
 
 	return &AuthResult{
-		UserID:      usr.ID,
-		Email:       usr.Email,
-		Role:        role,
-		TenantID:    usr.TenantID,
-		MFARequired: usr.MFAEnabled,
+		UserID:                 usr.ID,
+		Email:                  usr.Email,
+		Role:                   role,
+		TenantID:               usr.TenantID,
+		MFARequired:            usr.MFAEnabled,
+		RequiresPasswordChange: usr.RequiresPasswordChange,
 	}, nil
 }
 
@@ -141,6 +143,39 @@ func (u *Usecase) VerifyPassword(ctx context.Context, userID, password string) e
 	err = bcrypt.CompareHashAndPassword([]byte(usr.PasswordHash), []byte(password))
 	if err != nil {
 		return errors.New("invalid credentials")
+	}
+
+	return nil
+}
+
+// ChangePassword verifies current password, validates new password complexity (>= 10 chars),
+// updates password_hash, sets requires_password_change to false, and revokes active refresh tokens.
+func (u *Usecase) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	if len(newPassword) < 10 {
+		return errors.New("new password must be at least 10 characters")
+	}
+
+	usr, err := u.repo.GetByID(ctx, userID)
+	if err != nil || usr == nil {
+		_ = bcrypt.CompareHashAndPassword([]byte(dummyBcryptHash), []byte(currentPassword))
+		return errors.New("user not found")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(usr.PasswordHash), []byte(currentPassword)); err != nil {
+		return errors.New("invalid current password")
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	if err := u.repo.UpdatePassword(ctx, userID, string(newHash)); err != nil {
+		return err
+	}
+
+	if u.tokenRepo != nil {
+		_ = u.tokenRepo.RevokeAllForUser(ctx, userID)
 	}
 
 	return nil

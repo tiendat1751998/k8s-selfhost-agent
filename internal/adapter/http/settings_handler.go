@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/settings"
 	"github.com/datdt/k8sselfhost/internal/pkg/httputil"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
@@ -256,6 +257,18 @@ type ApiKeyItem struct {
 	Token     string `json:"token,omitempty"`
 }
 
+// ApiKeyStored represents the persisted JSON structure inside platform_settings (token is NEVER stored in plaintext!).
+type ApiKeyStored struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Prefix    string `json:"prefix"`
+	Role      string `json:"role"`
+	TenantID  string `json:"tenant_id"`
+	TokenHash string `json:"token_hash"`
+	CreatedAt string `json:"created_at"`
+	LastUsed  string `json:"last_used"`
+}
+
 type createApiKeyRequest struct {
 	Name string `json:"name"`
 	Role string `json:"role"`
@@ -296,9 +309,16 @@ func (h *SettingsHandler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 		if it.Value == "" || it.Value == "deleted" {
 			continue
 		}
-		var key ApiKeyItem
-		if err := json.Unmarshal([]byte(it.Value), &key); err == nil && key.ID != "" {
-			res = append(res, key)
+		var stored ApiKeyStored
+		if err := json.Unmarshal([]byte(it.Value), &stored); err == nil && stored.ID != "" {
+			res = append(res, ApiKeyItem{
+				ID:        stored.ID,
+				Name:      stored.Name,
+				Prefix:    stored.Prefix,
+				Role:      stored.Role,
+				CreatedAt: stored.CreatedAt,
+				LastUsed:  stored.LastUsed,
+			})
 		}
 	}
 	writeJSON(w, http.StatusOK, res)
@@ -327,20 +347,21 @@ func (h *SettingsHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := fmt.Sprintf("k8s_live_%s", hex.EncodeToString(rawBytes))
-	prefix := fmt.Sprintf("%s...", token[:16])
+	prefix := fmt.Sprintf("%s...%s", token[:12], token[len(token)-4:])
+	tokenHash := middleware.HashToken(token)
 
 	id := uuid.NewString()
-	keyItem := ApiKeyItem{
+	storedItem := ApiKeyStored{
 		ID:        id,
 		Name:      req.Name,
 		Prefix:    prefix,
 		Role:      req.Role,
+		TenantID:  tenantID,
+		TokenHash: tokenHash,
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 		LastUsed:  "never",
 	}
 
-	storedItem := keyItem
-	storedItem.Token = ""
 	valBytes, err := json.Marshal(storedItem)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to encode api key", err)
@@ -358,7 +379,15 @@ func (h *SettingsHandler) CreateAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	keyItem.Token = token
+	keyItem := ApiKeyItem{
+		ID:        id,
+		Name:      req.Name,
+		Prefix:    prefix,
+		Role:      req.Role,
+		CreatedAt: storedItem.CreatedAt,
+		LastUsed:  storedItem.LastUsed,
+		Token:     token,
+	}
 	writeJSON(w, http.StatusCreated, keyItem)
 }
 
@@ -383,11 +412,16 @@ func (h *SettingsHandler) DeleteAPIKey(w http.ResponseWriter, r *http.Request) {
 		TenantID:  tenantID,
 		Category:  "api_keys",
 		Key:       id,
-		Value:     "",
+		Value:     "deleted",
 		UpdatedBy: userID,
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete api key", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// Repo returns the underlying settings repository.
+func (h *SettingsHandler) Repo() settings.Repository {
+	return h.repo
 }

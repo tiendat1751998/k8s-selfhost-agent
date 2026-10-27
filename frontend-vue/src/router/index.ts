@@ -183,19 +183,34 @@ import {
   isPrivilegedAdminRole,
   type TokenClaims
 } from './tokenValidator'
+import { getActivePinia } from 'pinia'
+import { useAuthStore } from '../stores/authStore'
+import { api } from '../api/client'
 
 export { parseAndValidateToken, isPrivilegedAdminRole, type TokenClaims }
 
-router.beforeEach((to, _from, next) => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('k8s_token') : null
+router.beforeEach(async (to, _from, next) => {
+  let token: string | null = null
+  let activeRole = ''
+
+  if (typeof window !== 'undefined') {
+    const pinia = getActivePinia()
+    if (pinia) {
+      const authStore = useAuthStore()
+      if (!authStore.token) {
+        await authStore.restoreSession().catch(() => {})
+      }
+      token = authStore.token
+      if (authStore.user?.role) {
+        activeRole = authStore.user.role
+      }
+    } else {
+      token = api.getToken()
+    }
+  }
+
   const claims = parseAndValidateToken(token)
   const isAuthenticated = !!claims
-
-  // If token string is invalid or expired, clear untrusted credentials
-  if (token && !isAuthenticated && typeof window !== 'undefined') {
-    localStorage.removeItem('k8s_token')
-    localStorage.removeItem('k8s_user')
-  }
 
   if (to.meta.requiresAuth && !isAuthenticated) {
     next({ path: '/login', query: { redirect: to.fullPath } })
@@ -205,14 +220,18 @@ router.beforeEach((to, _from, next) => {
   // Sensitive Admin Route Protection: verify active session state and role
   const isSensitiveAdminRoute = Boolean(to.meta.requiresAdmin) || ['/audit', '/tenancy', '/settings'].some(p => to.path.startsWith(p))
   if (isSensitiveAdminRoute && isAuthenticated) {
-    const savedUserStr = typeof window !== 'undefined' ? localStorage.getItem('k8s_user') : null
-    let activeRole = claims.role || ''
-    if (!activeRole && savedUserStr) {
-      try {
-        const parsed = JSON.parse(savedUserStr)
-        if (parsed.role) activeRole = parsed.role
-      } catch {
-        activeRole = ''
+    if (!activeRole && claims) {
+      activeRole = claims.role || ''
+    }
+    if (!activeRole && typeof window !== 'undefined') {
+      const savedUserStr = localStorage.getItem('k8s_user')
+      if (savedUserStr) {
+        try {
+          const parsed = JSON.parse(savedUserStr)
+          if (parsed.role) activeRole = parsed.role
+        } catch {
+          activeRole = ''
+        }
       }
     }
 
