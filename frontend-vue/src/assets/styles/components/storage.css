@@ -12,7 +12,7 @@
 }
 .meta-row { display: flex; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .meta-label { color: var(--color-muted, #707a8a); }
-.text-cyan { color: #00f0ff; }
+.text-cyan { color: var(--color-primary, #38bdf8); }
 .text-violet { color: #b794f4; }
 .text-white { color: var(--text-primary); }
 
@@ -31,7 +31,7 @@
 .growth-tag { font-size: 10px; font-weight: 700; color: #fcd535; background: rgba(252, 213, 53, 0.15); padding: 2px 6px; border-radius: 4px; }
 
 .slider-metric { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-muted, #707a8a); }
-.size-slider { width: 100%; accent-color: #00f0ff; cursor: pointer; }
+.size-slider { width: 100%; accent-color: var(--color-primary, #326ce5); cursor: pointer; }
 .slider-bounds { display: flex; justify-content: space-between; font-size: 9px; color: var(--color-muted, #707a8a); }
 
 .btn-action {

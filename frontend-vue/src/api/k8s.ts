@@ -276,7 +276,7 @@ export const k8sApi = {
     if (params?.type && params.type !== 'all') q.set('type', params.type)
     if (params?.limit) q.set('limit', String(params.limit))
     const query = q.toString() ? '?' + q.toString() : ''
-    const path = '/k8s/' + encodeURIComponent(cluster) + '/resources/events' + query
+    const path = '/k8s/' + encodeURIComponent(cluster) + '/events' + query
     const res = await api.get<ApiResponse<K8sEvent[]> | K8sEvent[]>(path)
     return (unwrapResourceList(res as unknown as K8sResource[]) as unknown) as K8sEvent[]
   },
@@ -355,8 +355,9 @@ export const k8sApi = {
 
   // Raw YAML
   async applyYAML(cluster: string, yaml: string, ns?: string): Promise<{ message: string }> {
+    const q = ns && ns !== 'all' ? `?ns=${encodeURIComponent(ns)}` : ''
     const res = await api.post<{ message?: string } | ApiResponse<{ message: string }>>(
-      `/k8s/${encodeURIComponent(cluster)}/apply`,
+      `/k8s/${encodeURIComponent(cluster)}/apply${q}`,
       { yaml, namespace: ns }
     )
     return {

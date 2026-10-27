@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import BaseIcon from '../ui/BaseIcon.vue'
+
 interface LevelCounts {
   total: number
   error: number
@@ -55,11 +57,11 @@ const emit = defineEmits<{
           @change="emit('update:selectedContainer', ($event.target as HTMLSelectElement).value)"
         >
           <option v-for="c in containers" :key="c" :value="c">
-            📦 {{ c }}
+            {{ c }}
           </option>
         </select>
         <span v-else class="text-cyan font-bold font-mono">
-          📦 {{ selectedContainer || 'default' }}
+          <BaseIcon name="box" size="xs" /> {{ selectedContainer || 'default' }}
         </span>
       </div>
 
@@ -108,7 +110,7 @@ const emit = defineEmits<{
           :class="{ active: selectedLevel === 'error' }"
           @click="emit('update:selectedLevel', 'error')"
         >
-          🔴 Errors ({{ levelCounts.error }})
+          <BaseIcon name="alert-triangle" size="xs" /> Errors ({{ levelCounts.error }})
         </button>
         <button
           type="button"
@@ -116,7 +118,7 @@ const emit = defineEmits<{
           :class="{ active: selectedLevel === 'warn' }"
           @click="emit('update:selectedLevel', 'warn')"
         >
-          🟡 Warnings ({{ levelCounts.warn }})
+          <BaseIcon name="alert-circle" size="xs" /> Warnings ({{ levelCounts.warn }})
         </button>
         <button
           type="button"
@@ -124,13 +126,13 @@ const emit = defineEmits<{
           :class="{ active: selectedLevel === 'info' }"
           @click="emit('update:selectedLevel', 'info')"
         >
-          🟢 Info ({{ levelCounts.info }})
+          <BaseIcon name="check-circle" size="xs" /> Info ({{ levelCounts.info }})
         </button>
       </div>
 
       <!-- Search Input -->
       <div class="search-box">
-        <span class="search-icon">🔍</span>
+        <span class="search-icon"><BaseIcon name="search" size="xs" /></span>
         <input
           :value="searchQuery"
           type="text"
@@ -138,7 +140,7 @@ const emit = defineEmits<{
           class="search-input font-mono"
           @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
         />
-        <button v-if="searchQuery" class="clear-search-btn" @click="emit('update:searchQuery', '')">✕</button>
+        <button v-if="searchQuery" class="clear-search-btn" @click="emit('update:searchQuery', '')"><BaseIcon name="x" size="xs" /></button>
       </div>
     </div>
 
@@ -154,7 +156,7 @@ const emit = defineEmits<{
           :title="isFollowing ? 'Pause SSE live stream' : 'Resume SSE live stream'"
         >
           <span v-if="isFollowing && isConnected" class="live-dot"></span>
-          <span v-else>⏸️</span>
+          <span v-else><BaseIcon name="pause" size="xs" /></span>
           <span class="font-mono">{{ isFollowing && isConnected ? 'LIVE STREAMING' : isFollowing ? 'CONNECTING...' : 'PAUSED' }}</span>
         </button>
 
@@ -165,7 +167,7 @@ const emit = defineEmits<{
           @click="emit('update:autoScroll', !autoScroll)"
           title="Auto-scroll to latest lines"
         >
-          <span>⬇️</span>
+          <span><BaseIcon name="arrow-down" size="xs" /></span>
           <span>Auto-Scroll: {{ autoScroll ? 'ON' : 'OFF' }}</span>
         </button>
 
@@ -176,7 +178,7 @@ const emit = defineEmits<{
           @click="emit('update:wrapLines', !wrapLines)"
           title="Toggle word wrap for long log lines"
         >
-          <span>↩️</span>
+          <span><BaseIcon name="corner-down-left" size="xs" /></span>
           <span>Wrap Lines: {{ wrapLines ? 'ON' : 'OFF' }}</span>
         </button>
 
@@ -187,7 +189,7 @@ const emit = defineEmits<{
           @click="emit('reloadLogs')"
           title="Reload Pod Logs"
         >
-          <span :class="{ 'spin-icon': isLoading }">🔄</span>
+          <span><BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': isLoading }" /></span>
           <span>{{ isLoading ? 'Loading...' : 'Refresh' }}</span>
         </button>
 
@@ -197,7 +199,7 @@ const emit = defineEmits<{
           @click="emit('copyLogs')"
           title="Copy log text to clipboard"
         >
-          <span>📋</span>
+          <span><BaseIcon name="copy" size="xs" /></span>
           <span>{{ logsCopied ? 'Copied!' : 'Copy' }}</span>
         </button>
 
@@ -207,7 +209,7 @@ const emit = defineEmits<{
           @click="emit('downloadLogs')"
           title="Download log file"
         >
-          <span>💾</span>
+          <span><BaseIcon name="download" size="xs" /></span>
           <span>Export .log</span>
         </button>
 
@@ -217,7 +219,7 @@ const emit = defineEmits<{
           @click="emit('clearLogs')"
           title="Clear current log view"
         >
-          <span>🧹</span>
+          <span><BaseIcon name="trash" size="xs" /></span>
           <span>Clear</span>
         </button>
       </div>

@@ -1,11 +1,27 @@
 <script setup lang="ts">
-defineProps<{
+import { onMounted, onUnmounted } from 'vue'
+
+const props = defineProps<{
   show: boolean
   title?: string
 }>()
-defineEmits<{
+const emit = defineEmits<{
   (e: 'close'): void
 }>()
+
+function handleKeyDown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && props.show) {
+    emit('close')
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown)
+})
 </script>
 
 <template>

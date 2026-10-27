@@ -18,8 +18,8 @@
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: var(--bg-card, #141516);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   box-sizing: border-box;
 }
@@ -76,9 +76,9 @@
   padding: 2px 24px 2px 26px !important;
   font-size: 11.5px !important;
   border-radius: 6px !important;
-  background: var(--bg-surface, #0f1012) !important;
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1)) !important;
-  color: #f1f5f9 !important;
+  background: var(--color-surface-inset) !important;
+  border: 1px solid var(--color-border-subtle) !important;
+  color: var(--color-body) !important;
   outline: none;
   box-sizing: border-box;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -117,8 +117,8 @@
 .status-pills-wrap {
   display: inline-flex;
   align-items: center;
-  background: var(--bg-surface, #111827);
-  border: 1px solid var(--color-border-subtle, #243147);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
   padding: 2px 4px;
   gap: 4px;
@@ -146,22 +146,22 @@
 
 .status-pill:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--color-surface-hover);
 }
 
 .status-pill.active {
-  background: var(--bg-card, #161f30);
+  background: var(--bg-card);
   color: var(--text-primary);
-  border: 1px solid var(--color-border-strong, #384b6e);
+  border: 1px solid var(--color-border-strong);
   font-weight: 600;
 }
 
 .status-pill.status-pill-connected.active,
 .status-pill.status-pill-disconnected.active,
 .status-pill.status-pill-error.active {
-  background: var(--bg-card, #161f30);
+  background: var(--bg-card);
   color: var(--text-primary);
-  border: 1px solid var(--color-border-strong, #384b6e);
+  border: 1px solid var(--color-border-strong);
 }
 
 .pill-dot {
@@ -219,8 +219,8 @@
   padding: 2px 8px !important;
   font-size: 11px;
   border-radius: 6px;
-  background-color: var(--bg-surface, #111827) !important;
-  border: 1px solid var(--color-border-subtle, #243147) !important;
+  background-color: var(--color-surface-inset) !important;
+  border: 1px solid var(--color-border-subtle) !important;
   color: var(--text-primary) !important;
   outline: none;
   cursor: pointer;
@@ -278,9 +278,9 @@
 }
 
 .mode-btn-active {
-  background: var(--bg-elevated, #1a1b1e) !important;
-  color: var(--text-primary, #f3f4f6) !important;
-  border-color: rgba(255, 255, 255, 0.16) !important;
+  background: var(--color-surface-elevated) !important;
+  color: var(--color-body) !important;
+  border-color: var(--color-border-strong) !important;
 }
 
 /* Toolbar Buttons */
@@ -341,17 +341,17 @@
 }
 
 .toolbar-btn-telemetry {
-  background: var(--bg-elevated, #1a1b1e) !important;
-  border-color: var(--border-subtle, rgba(255, 255, 255, 0.08)) !important;
-  color: var(--text-secondary, #9ca3af) !important;
+  background: var(--color-surface-elevated) !important;
+  border-color: var(--color-border-subtle) !important;
+  color: var(--color-muted) !important;
   font-size: 10.5px;
 }
 
 .toolbar-btn-telemetry:hover,
 .toolbar-btn-telemetry.btn-active {
-  background: var(--bg-elevated, #1a1b1e) !important;
-  border-color: rgba(255, 255, 255, 0.24) !important;
-  color: var(--text-primary, #f3f4f6) !important;
+  background: var(--color-surface-elevated) !important;
+  border-color: var(--color-border-strong) !important;
+  color: var(--color-body) !important;
 }
 
 /* Responsive Collapse Rules (Tablet & Mobile without horizontal scroll) */

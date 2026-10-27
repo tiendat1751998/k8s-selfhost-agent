@@ -23,7 +23,7 @@
 .hero-name {
   font-size: 18px;
   font-weight: 800;
-  color: #fff;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -41,7 +41,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--color-surface-inset);
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 12px;
@@ -196,7 +196,7 @@
 .empty-title {
   font-size: 18px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -256,7 +256,7 @@
   color: #34d399;
 }
 .text-primary {
-  color: #fff;
+  color: var(--text-primary);
 }
 .text-muted {
   color: var(--text-muted, #94a3b8);

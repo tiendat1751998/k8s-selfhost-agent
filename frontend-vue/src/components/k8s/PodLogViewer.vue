@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { usePodLogs, type PodLogProps } from '../../composables/usePodLogs'
 import PodLogToolbar from './PodLogToolbar.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const props = withDefaults(defineProps<PodLogProps>(), {
   namespace: 'default',
@@ -83,7 +84,7 @@ const {
             <span class="live-dot"></span> SSE LIVE
           </span>
           <span v-else class="stream-badge-paused">
-            ⏸️ PAUSED
+            <BaseIcon name="pause" size="xs" /> PAUSED
           </span>
         </div>
       </div>
@@ -103,15 +104,15 @@ const {
 
         <!-- Error State -->
         <div v-else-if="streamError && rawLines.length === 0" class="terminal-error">
-          <span class="text-rose font-bold font-mono">⚠️ {{ streamError }}</span>
+          <span class="text-rose font-bold font-mono"><BaseIcon name="alert-triangle" size="xs" /> {{ streamError }}</span>
           <button type="button" class="btn-log-action font-mono mt-2" @click="reloadLogs">
-            🔄 Retry Connection
+            <BaseIcon name="refresh" size="xs" /> Retry Connection
           </button>
         </div>
 
         <!-- Empty State -->
         <div v-else-if="filteredLogs.length === 0" class="terminal-empty">
-          <span class="font-mono text-muted">🛡️ No log lines match the current filters or no logs emitted yet.</span>
+          <span class="font-mono text-muted"><BaseIcon name="shield" size="xs" /> No log lines match the current filters or no logs emitted yet.</span>
         </div>
 
         <!-- Log Lines List -->
@@ -146,7 +147,7 @@ const {
           class="jump-bottom-btn font-mono"
           @click="scrollToBottom"
         >
-          ⬇️ New logs available - Jump to bottom
+          <BaseIcon name="arrow-down" size="xs" /> New logs available - Jump to bottom
         </button>
       </div>
 

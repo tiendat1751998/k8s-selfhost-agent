@@ -71,6 +71,17 @@ const emit = defineEmits<{
         />
       </div>
 
+      <!-- Agent Rollout Helper Command (LES-006) -->
+      <div v-if="hostForm.host_type === 'agent'" class="form-group rollout-helper-group">
+        <label class="form-label">Canonical Agent Rollout (LES-006)</label>
+        <div class="rollout-command-box font-mono" style="padding: 8px 12px; background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle); border-radius: 6px; display: flex; align-items: center; justify-content: space-between;">
+          <code>./deploy-agent.sh {{ hostForm.endpoint ? hostForm.endpoint.replace(/^https?:\/\//, '').split(':')[0] : '&lt;user&gt;@&lt;ip&gt;' }}</code>
+        </div>
+        <p class="form-hint" style="margin-top: 4px; font-size: 11px; color: var(--color-muted);">
+          Builds static linux/amd64 agent, transfers via SSH, preserves remote agent.env, and restarts systemd service.
+        </p>
+      </div>
+
       <!-- Optional Description -->
       <div class="form-group">
         <label class="form-label">Description / Notes</label>

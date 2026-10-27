@@ -282,7 +282,7 @@ onBeforeUnmount(() => {
 .canvas-timeseries { display: block; width: 100%; }
 .crosshair-tooltip-pill {
   position: absolute; pointer-events: none; transform: translateX(-50%);
-  background: var(--color-surface-card, rgba(15, 23, 42, 0.94)); border: 1px solid var(--color-border-subtle, rgba(56, 189, 248, 0.4));
+  background: var(--color-surface-card); border: 1px solid var(--color-border-subtle);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5); backdrop-filter: blur(8px);
   padding: 4px 8px; border-radius: 4px; font-size: 11px; line-height: 1.25; white-space: nowrap; z-index: 10;
 }

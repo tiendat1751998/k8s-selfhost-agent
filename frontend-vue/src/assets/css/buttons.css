@@ -67,7 +67,7 @@ a.btn-cyber {
 }
 
 .btn-secondary:hover {
-  background: var(--bg-card, #161f30);
+  background: var(--bg-card-hover, var(--color-surface-hover, #f1f5f9));
 }
 
 .btn-outline-cyan {

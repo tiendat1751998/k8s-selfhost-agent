@@ -176,4 +176,11 @@ export const fleetApi = {
     const res = await api.post<ClusterDiscoveryData>(`/fleet/${id}/discover`)
     return res || null
   },
+
+  /**
+   * Validate kubeconfig connectivity via dry-run endpoint.
+   */
+  async validateKubeconfig(formData: FormData): Promise<{ valid: boolean; message?: string; server?: string }> {
+    return api.post<{ valid: boolean; message?: string; server?: string }>('/fleet/validate-kubeconfig', formData)
+  },
 }

@@ -178,7 +178,10 @@
   }
 
   .desktop-overview-sections {
-    display: none !important;
+    display: flex !important;
+    flex-direction: column;
+    gap: 12px;
+    width: 100% !important;
   }
 
   .mobile-command-bar {
@@ -293,10 +296,16 @@
     gap: 12px;
   }
 
-  .overview-toolbar-sleek,
+  .overview-toolbar-sleek {
+    display: none !important;
+  }
+
   .desktop-overview-sections,
   .topology-section {
-    display: none !important;
+    display: flex !important;
+    flex-direction: column;
+    gap: 12px;
+    width: 100% !important;
   }
 
   .mobile-command-bar {

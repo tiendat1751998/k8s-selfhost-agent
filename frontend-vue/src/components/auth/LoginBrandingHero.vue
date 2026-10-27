@@ -43,14 +43,14 @@
           <span class="mesh-node-label">Control Plane</span>
           <span class="mesh-node-val">
             <span class="pulse-dot pulse-dot-emerald"></span>
-            SYNCHRONIZED
+            Multi-Tenant RBAC & Audit
           </span>
         </div>
         <div class="mesh-node">
           <span class="mesh-node-label">Cluster Mesh</span>
           <span class="mesh-node-val">
             <span class="pulse-dot pulse-dot-cyan"></span>
-            ONLINE
+            Edge Agent Telemetry (:9100)
           </span>
         </div>
       </div>

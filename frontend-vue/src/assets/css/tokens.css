@@ -21,8 +21,21 @@
   --color-hairline: #243147;
   --border-subtle: 1px solid var(--color-border-subtle);
 
+  /* Canonical Overlay & Layering Scale */
+  --z-sticky: 10;
+  --z-nav: 20;
+  --z-banner: 25;
+  --z-dropdown: 30;
+  --z-drawer: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+
   /* Semantic Surface Aliases */
+  --bg-card: var(--color-surface-card);
+  --bg-card-hover: var(--color-surface-elevated, #1e293b);
   --color-surface-hover: var(--color-surface-elevated);
+  --color-surface-active: #2a3952;
+  --color-focus-ring: rgba(50, 108, 229, 0.4);
   --bg-canvas: var(--color-canvas-dark);
   --color-ring: rgba(50, 108, 229, 0.25);
 
@@ -134,7 +147,11 @@
   --color-surface-inset: #f1f5f9;
   --color-surface-card: #ffffff;
   --color-surface-elevated: #f8fafc;
-  --color-surface-hover: #e2e8f0;
+  --bg-card: var(--color-surface-card);
+  --bg-card-hover: #f1f5f9;
+  --color-surface-hover: #f1f5f9;
+  --color-surface-active: #e2e8f0;
+  --color-focus-ring: rgba(29, 78, 216, 0.25);
   --bg-canvas: var(--color-canvas-dark);
   --color-ring: rgba(29, 78, 216, 0.2);
 

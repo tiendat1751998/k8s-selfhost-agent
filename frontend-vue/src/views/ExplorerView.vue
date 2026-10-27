@@ -71,6 +71,20 @@ const filteredResources = computed(() => {
   })
 })
 
+const healthyCount = computed(() => {
+  return filteredResources.value.filter((r) => {
+    const s = getResourceStatus(r).toLowerCase()
+    return s === 'running' || s === 'active' || s === 'ready' || s === 'healthy' || s === 'bound'
+  }).length
+})
+
+const degradedCount = computed(() => {
+  return filteredResources.value.filter((r) => {
+    const s = getResourceStatus(r).toLowerCase()
+    return s === 'warning' || s === 'degraded' || s === 'pending' || s === 'crashloopbackoff' || s === 'error'
+  }).length
+})
+
 watch(selectedCluster, async () => {
   await loadNamespaces()
   await fetchResources()
@@ -182,6 +196,18 @@ onMounted(async () => {
         </div>
 
         <template v-else>
+          <div class="sre-summary-strip font-mono">
+            <span class="sre-strip-item"><BaseIcon name="layers" size="xs" /> {{ filteredResources.length }} {{ currentKindLabel }}</span>
+            <span class="telemetry-sep">·</span>
+            <span class="sre-strip-item text-emerald"><BaseIcon name="check-circle" size="xs" /> {{ healthyCount }} Healthy</span>
+            <span v-if="degradedCount > 0" class="telemetry-sep">·</span>
+            <span v-if="degradedCount > 0" class="sre-strip-item text-amber"><BaseIcon name="alert-triangle" size="xs" /> {{ degradedCount }} Degraded</span>
+            <span class="telemetry-sep">·</span>
+            <span class="sre-strip-item text-muted"><BaseIcon name="globe" size="xs" /> {{ selectedCluster }}</span>
+            <span class="telemetry-sep">·</span>
+            <span class="sre-strip-item text-muted"><BaseIcon name="folder" size="xs" /> {{ selectedNamespace || 'all' }}</span>
+          </div>
+
           <div class="explorer-desktop-table explorer-table-wrap">
             <ExplorerResourceTable
               :columns="columns"

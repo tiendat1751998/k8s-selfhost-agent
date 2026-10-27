@@ -182,7 +182,7 @@ onMounted(fetchStatus)
 .engine-badge-text { letter-spacing: -0.01em; white-space: nowrap; }
 .pulse-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 .pulse-dot-emerald { background: #10b981; box-shadow: 0 0 6px #10b981; }
-.pulse-dot-cyan { background: #06b6d4; box-shadow: 0 0 6px #06b6d4; }
+.pulse-dot-cyan { background: var(--color-primary-hover, #38bdf8); box-shadow: 0 0 6px rgba(56, 189, 248, 0.6); }
 .pulse-dot-rose { background: #f43f5e; box-shadow: 0 0 6px #f43f5e; }
 .engine-popover {
   position: absolute;
@@ -192,12 +192,12 @@ onMounted(fetchStatus)
   max-width: calc(100vw - 24px);
   padding: 10px 12px;
   border-radius: 8px;
-  background: var(--color-surface-card, rgba(15, 23, 42, 0.85));
-  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.12));
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  z-index: 100;
+  z-index: var(--z-dropdown, 30);
   display: flex;
   flex-direction: column;
   gap: 6px;

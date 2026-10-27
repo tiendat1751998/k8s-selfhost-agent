@@ -33,7 +33,22 @@
   color: var(--color-body);
   font-weight: 600;
 }
-.text-area-input { resize: vertical; min-height: 120px; font-size: 12px; line-height: 1.4; }
+.text-input-wrap,
+.file-input-wrap {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 6px;
+  box-sizing: border-box;
+}
+.text-area-input {
+  resize: vertical;
+  min-height: 140px;
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
 
 /* Discovery Drawer */
 .drawer-content { display: flex; flex-direction: column; gap: 18px; }

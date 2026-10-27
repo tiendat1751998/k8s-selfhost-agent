@@ -216,8 +216,8 @@ const filteredRepos = computed(() => {
                 </td>
                 <td class="text-right actions-cell">
                   <div class="action-btn-group">
-                    <button type="button" class="btn-row-action btn-action-upgrade" title="Update index" @click="handleUpdateAllRepos">
-                      <BaseIcon name="refresh" size="xs" /> <span>Update</span>
+                    <button type="button" class="btn-row-action btn-action-upgrade" title="Sync repository index" :disabled="updatingAllRepos" @click="handleUpdateAllRepos">
+                      <BaseIcon name="refresh" size="xs" :class="{ 'spin-icon': updatingAllRepos }" /> <span>Sync</span>
                     </button>
                     <button type="button" class="btn-row-action btn-action-delete" title="Remove repository" @click="promptRemoveRepo(repo)">
                       <BaseIcon name="trash" size="xs" /> <span>Remove</span>
