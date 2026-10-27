@@ -41,6 +41,12 @@ func (m *mockComplianceRepo) CreateViolation(ctx context.Context, v *compliance.
 	return nil
 }
 func (m *mockComplianceRepo) ResolveViolation(ctx context.Context, id string) error {
+	for i, v := range m.violations {
+		if v.ID == id {
+			m.violations[i].Resolved = true
+			return nil
+		}
+	}
 	return nil
 }
 

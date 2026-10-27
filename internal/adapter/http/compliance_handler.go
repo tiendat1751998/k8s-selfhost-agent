@@ -7,8 +7,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/compliance"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
+	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 	usecaseCompliance "github.com/datdt/k8sselfhost/internal/usecase/compliance"
 )
 
@@ -80,6 +82,7 @@ func (h *ComplianceHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/frameworks", h.ListFrameworks)
 	r.Get("/violations", h.ListViolations)
 	r.Post("/violations/{id}/remediate", h.RemediateViolation)
+	r.Post("/violations/{id}/resolve", h.ResolveViolation)
 	r.Post("/scan", h.ScanNow)
 }
 
@@ -135,4 +138,59 @@ func (h *ComplianceHandler) ListViolations(w http.ResponseWriter, r *http.Reques
 		items = make([]compliance.Violation, 0)
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
+}
+
+// ResolveViolation handles POST /api/v1/compliance/violations/{id}/resolve
+func (h *ComplianceHandler) ResolveViolation(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "violation id is required", err)
+		return
+	}
+	v, err := h.repo.GetViolation(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, errors.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "violation not found", err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get violation", err)
+		return
+	}
+	if v == nil {
+		writeError(w, http.StatusNotFound, "violation not found", nil)
+		return
+	}
+	if err := h.repo.ResolveViolation(r.Context(), v.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to resolve violation", err)
+		return
+	}
+
+	userID := middleware.UserIDFromContext(r.Context())
+	if userID == "" {
+		userID = "platform_admin"
+	}
+	if h.scanner != nil && h.scanner.Store() != nil {
+		_ = h.scanner.Store().InsertAuditLog(r.Context(), &usecaseCompliance.AuditLogRecord{
+			Actor:      userID,
+			Action:     "resolve",
+			TargetType: "compliance_violation",
+			TargetName: v.Policy,
+			Result:     "resolved",
+			Details: map[string]any{
+				"violation_id": v.ID,
+				"policy":       v.Policy,
+				"resource":     v.Resource,
+				"manual":       true,
+			},
+			IPAddress: r.RemoteAddr,
+			UserAgent: r.Header.Get("User-Agent"),
+			TenantID:  "default-tenant",
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":       "resolved",
+		"violation_id": v.ID,
+		"resolved":     true,
+	})
 }

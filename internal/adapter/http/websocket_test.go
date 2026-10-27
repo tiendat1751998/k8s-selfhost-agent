@@ -35,16 +35,16 @@ func TestWebSocket_CheckOrigin(t *testing.T) {
 			expectAllow: true,
 		},
 		{
-			name:        "Unconfigured 127.0.0.1 rejected when not same-host",
-			origin:      "http://127.0.0.1:5173",
+			name:        "Loopback equivalence 127.0.0.1:3000 to localhost:8080",
+			origin:      "http://127.0.0.1:3000",
 			requestHost: "localhost:8080",
-			expectAllow: false,
+			expectAllow: true,
 		},
 		{
-			name:        "Unconfigured localhost rejected when not same-host",
-			origin:      "http://localhost:5173",
+			name:        "Loopback equivalence localhost:3000 to 127.0.0.1:8080",
+			origin:      "http://localhost:3000",
 			requestHost: "127.0.0.1:8080",
-			expectAllow: false,
+			expectAllow: true,
 		},
 		{
 			name:        "Configured allowed origin via env",

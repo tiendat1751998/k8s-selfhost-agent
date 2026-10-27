@@ -161,6 +161,9 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	if lbURL == "" {
 		lbURL = usecaseMetrics.DeriveTraefikURL(cfg.Docker.Host)
 	}
+	if usecaseMetrics.IsSelfServerURL(lbURL, cfg.Server.Port) {
+		lbURL = ""
+	}
 	var lbProvider domainLB.Provider
 	if (cfg.LoadBalancer.Provider == "traefik" || cfg.LoadBalancer.Provider == "") && lbURL != "" {
 		lbProvider = infraLB.NewTraefikProvider(lbURL)

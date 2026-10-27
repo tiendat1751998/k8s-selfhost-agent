@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -183,7 +184,7 @@ func (h *HelmHandler) ListReleases(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]interface{}{"data": []interface{}{}, "k8s_degraded": true})
 			return
 		}
-		h.handleReleaseError(w, "failed to list releases", err)
+		h.handleReleaseError(w, clusterID, "failed to list releases", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, releases)
@@ -206,7 +207,7 @@ func (h *HelmHandler) GetRelease(w http.ResponseWriter, r *http.Request) {
 
 	rel, err := h.releaseManager.GetRelease(r.Context(), clusterID, name, namespace)
 	if err != nil {
-		h.handleReleaseError(w, "failed to get release", err)
+		h.handleReleaseError(w, clusterID, "failed to get release", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, rel)
@@ -250,7 +251,7 @@ func (h *HelmHandler) InstallRelease(w http.ResponseWriter, r *http.Request) {
 	}, err)
 
 	if err != nil {
-		h.handleReleaseError(w, "failed to install release", err)
+		h.handleReleaseError(w, clusterID, "failed to install release", err)
 		return
 	}
 
@@ -296,7 +297,7 @@ func (h *HelmHandler) UpgradeRelease(w http.ResponseWriter, r *http.Request) {
 	}, err)
 
 	if err != nil {
-		h.handleReleaseError(w, "failed to upgrade release", err)
+		h.handleReleaseError(w, clusterID, "failed to upgrade release", err)
 		return
 	}
 
@@ -339,7 +340,7 @@ func (h *HelmHandler) UninstallRelease(w http.ResponseWriter, r *http.Request) {
 	}, err)
 
 	if err != nil {
-		h.handleReleaseError(w, "failed to uninstall release", err)
+		h.handleReleaseError(w, clusterID, "failed to uninstall release", err)
 		return
 	}
 
@@ -391,7 +392,7 @@ func (h *HelmHandler) RollbackRelease(w http.ResponseWriter, r *http.Request) {
 	}, err)
 
 	if err != nil {
-		h.handleReleaseError(w, "failed to rollback release", err)
+		h.handleReleaseError(w, clusterID, "failed to rollback release", err)
 		return
 	}
 
@@ -419,7 +420,7 @@ func (h *HelmHandler) GetReleaseHistory(w http.ResponseWriter, r *http.Request) 
 
 	history, err := h.releaseManager.GetReleaseHistory(r.Context(), clusterID, name, namespace)
 	if err != nil {
-		h.handleReleaseError(w, "failed to get release history", err)
+		h.handleReleaseError(w, clusterID, "failed to get release history", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, history)
@@ -446,9 +447,30 @@ func (h *HelmHandler) recordAudit(r *http.Request, action, releaseName, clusterI
 	}
 }
 
-func (h *HelmHandler) handleReleaseError(w http.ResponseWriter, defaultMsg string, err error) {
-	if isK8sUnavailable(err) || isK8sDialError(err) || (err != nil && strings.Contains(strings.ToLower(err.Error()), "6443")) {
-		writeK8sUnavailable(w)
+func isK8sUnavailableErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if isK8sUnavailable(err) || isK8sDialError(err) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "6443") ||
+		strings.Contains(msg, "connectex") ||
+		strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "dial tcp") ||
+		strings.Contains(msg, "cluster not connected") ||
+		strings.Contains(msg, "unreachable") ||
+		strings.Contains(msg, "kubeconfig")
+}
+
+func (h *HelmHandler) handleReleaseError(w http.ResponseWriter, clusterID, defaultMsg string, err error) {
+	if isK8sUnavailableErr(err) {
+		if clusterID == "" {
+			clusterID = "default"
+		}
+		msg := fmt.Sprintf("Kubernetes API (:6443) is unreachable on cluster %s — cannot deploy Helm release while control plane is offline", clusterID)
+		writeError(w, http.StatusServiceUnavailable, msg, err)
 		return
 	}
 	if errors.Is(err, syncutil.ErrOperationInProgress) {

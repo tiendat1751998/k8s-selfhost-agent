@@ -50,4 +50,4 @@ log:
 
 load_balancer:
   provider: "traefik"
-  url: "http://localhost:8080"
+  url: ""

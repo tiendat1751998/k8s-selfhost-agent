@@ -182,3 +182,65 @@ func TestComplianceHandler_RemediateViolation_AutomatedZombies(t *testing.T) {
 	assert.True(t, reapDispatched)
 	_ = resolved
 }
+
+func TestComplianceHandler_ResolveViolation_DirectEndpoint(t *testing.T) {
+	violID := "55555555-5555-5555-5555-555555555555"
+	repo := &mockComplianceRepo{
+		violations: []compliance.Violation{
+			{
+				ID:       violID,
+				Policy:   "CIS 4.2.1 Kubelet API LAN Exposure",
+				Resource: "kubelet",
+				Message:  "Kubelet HTTPS API :10250 exposed on LAN",
+				Resolved: false,
+			},
+		},
+	}
+	_, r := setupComplianceRemediateRouter(repo)
+
+	req := httptest.NewRequest(http.MethodPost, "/violations/"+violID+"/resolve", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var resp map[string]interface{}
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+
+	assert.Equal(t, violID, resp["violation_id"])
+	assert.Equal(t, "resolved", resp["status"])
+	assert.True(t, resp["resolved"].(bool))
+
+	v, _ := repo.GetViolation(context.Background(), violID)
+	assert.True(t, v.Resolved)
+}
+
+func TestComplianceHandler_RemediateViolation_WithConfirmParam(t *testing.T) {
+	violID := "66666666-6666-6666-6666-666666666666"
+	repo := &mockComplianceRepo{
+		violations: []compliance.Violation{
+			{
+				ID:       violID,
+				Policy:   "Redis unprotected LAN port",
+				Resource: "redis",
+				Message:  "Redis listening on 6379",
+				Resolved: false,
+			},
+		},
+	}
+	_, r := setupComplianceRemediateRouter(repo)
+
+	req := httptest.NewRequest(http.MethodPost, "/violations/"+violID+"/remediate?confirm=true", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var resp map[string]interface{}
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+
+	assert.Equal(t, "remediated", resp["status"])
+	v, _ := repo.GetViolation(context.Background(), violID)
+	assert.True(t, v.Resolved)
+}
+

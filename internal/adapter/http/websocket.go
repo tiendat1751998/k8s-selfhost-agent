@@ -21,6 +21,11 @@ import (
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
+func isLoopbackHost(host string) bool {
+	h := strings.Trim(strings.ToLower(host), "[]")
+	return h == "localhost" || h == "127.0.0.1" || h == "::1" || h == "0.0.0.0"
+}
+
 func isSameHost(uHost, rHost string) bool {
 	if uHost == rHost {
 		return true
@@ -33,7 +38,10 @@ func isSameHost(uHost, rHost string) bool {
 	if h, _, err := net.SplitHostPort(rHost); err == nil {
 		rName = h
 	}
-	return strings.EqualFold(uName, rName)
+	if strings.EqualFold(uName, rName) {
+		return true
+	}
+	return isLoopbackHost(uName) && isLoopbackHost(rName)
 }
 
 var upgrader = websocket.Upgrader{
