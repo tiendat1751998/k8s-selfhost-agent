@@ -50,13 +50,46 @@ func (h *ExplorerHandler) SearchResources(w http.ResponseWriter, r *http.Request
 
 	items, total, err := h.repo.Search(r.Context(), kind, cluster, namespace, query, limit, offset)
 	if err != nil {
+		if isK8sDegradedError(err) {
+			writeJSON(w, http.StatusOK, map[string]interface{}{
+				"k8s_degraded":    true,
+				"degraded_reason": "Kubernetes API server (:6443) is unreachable on registered control-plane nodes. Inspect live host daemons in Deployments or node telemetry in Infrastructure Hosts.",
+				"data":            make([]explorer.Resource, 0),
+				"resources":       make([]explorer.Resource, 0),
+				"total":           0,
+			})
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "failed to search resources", err)
 		return
 	}
 	if items == nil {
 		items = make([]explorer.Resource, 0)
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"data": items, "total": total})
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"k8s_degraded": false,
+		"data":         items,
+		"resources":    items,
+		"total":        total,
+	})
+}
+
+func isK8sDegradedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, ":6443") ||
+		strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "connectex") ||
+		strings.Contains(msg, "not initialized") ||
+		strings.Contains(msg, "unreachable") ||
+		strings.Contains(msg, "i/o timeout") ||
+		strings.Contains(msg, "dial tcp") ||
+		strings.Contains(msg, "no route to host") ||
+		strings.Contains(msg, "context deadline exceeded") ||
+		strings.Contains(msg, "k8s_degraded") ||
+		strings.Contains(msg, "degraded")
 }
 
 type syncResourceRequest struct {

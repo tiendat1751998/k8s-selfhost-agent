@@ -104,9 +104,24 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 // GetIncidentReport handles GET /api/v1/incidents/{id}/report
 func (h *Handler) GetIncidentReport(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if h.incidentRepo != nil {
+		if _, err := h.incidentRepo.GetByID(r.Context(), id); err != nil {
+			if errors.Is(err, errors.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "incident not found", err)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "failed to get incident", err)
+			return
+		}
+	}
+
 	rpt, err := h.reportRepo.GetByIncidentID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, errors.ErrNotFound) {
+			if h.incidentRepo != nil {
+				writeJSON(w, http.StatusOK, map[string]interface{}{"available": false, "incident_id": id, "status": "pending"})
+				return
+			}
 			writeError(w, http.StatusNotFound, "RCA report not found", err)
 			return
 		}
@@ -120,9 +135,24 @@ func (h *Handler) GetIncidentReport(w http.ResponseWriter, r *http.Request) {
 // GetIncidentPR handles GET /api/v1/incidents/{id}/pr
 func (h *Handler) GetIncidentPR(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if h.incidentRepo != nil {
+		if _, err := h.incidentRepo.GetByID(r.Context(), id); err != nil {
+			if errors.Is(err, errors.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "incident not found", err)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "failed to get incident", err)
+			return
+		}
+	}
+
 	pr, err := h.prRepo.GetByIncidentID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, errors.ErrNotFound) {
+			if h.incidentRepo != nil {
+				writeJSON(w, http.StatusOK, map[string]interface{}{"available": false, "incident_id": id, "status": "pending"})
+				return
+			}
 			writeError(w, http.StatusNotFound, "PR not found", err)
 			return
 		}
@@ -365,16 +395,10 @@ func decodeJSON[T any](w http.ResponseWriter, r *http.Request) (*T, bool) {
 
 func writeValidationError(w http.ResponseWriter, err error) {
 	if ve, ok := err.(*ValidationError); ok {
-		writeJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"error":   "validation failed",
-			"details": ve.Fields,
-		})
+		writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "validation failed", "details": ve.Fields})
 		return
 	}
-	writeJSON(w, http.StatusBadRequest, map[string]interface{}{
-		"error":  "validation failed",
-		"detail": err.Error(),
-	})
+	writeJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "validation failed", "detail": err.Error()})
 }
 
 func parseIntParam(r *http.Request, key string, defaultVal int) int {
@@ -382,21 +406,17 @@ func parseIntParam(r *http.Request, key string, defaultVal int) int {
 	if val == "" {
 		return defaultVal
 	}
-	parsed, err := strconv.Atoi(val)
-	if err != nil {
-		return defaultVal
+	if parsed, err := strconv.Atoi(val); err == nil {
+		return parsed
 	}
-	return parsed
+	return defaultVal
 }
 
 // parseUUIDParam extracts and validates an ID URL parameter.
 func parseUUIDParam(r *http.Request, param string) (string, error) {
 	id := chi.URLParam(r, param)
-	if id == "" {
-		return "", fmt.Errorf("missing parameter: %s", param)
-	}
-	if len(id) > 128 {
-		return "", fmt.Errorf("parameter too long: %s", param)
+	if id == "" || len(id) > 128 {
+		return "", fmt.Errorf("invalid parameter %s", param)
 	}
 	return id, nil
 }

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	"github.com/datdt/k8sselfhost/internal/usecase/metrics"
 )
 
 // IsSensitiveHostLabelKey checks if a label key corresponds to sensitive credential material.
@@ -49,6 +50,18 @@ func SanitizeComputeHost(h *docker.ComputeHost) *docker.ComputeHost {
 	clone := *h
 	clone.TLSKey = ""
 	clone.Labels = SanitizeHostLabels(h.Labels)
+	cleanIP := metrics.ExtractCleanHostIP(clone.IP, clone.IPAddress, clone.Address, clone.Endpoint)
+	if cleanIP != "" {
+		if clone.IP == "" {
+			clone.IP = cleanIP
+		}
+		if clone.IPAddress == "" {
+			clone.IPAddress = cleanIP
+		}
+		if clone.Address == "" || strings.HasPrefix(clone.Address, "http://") || strings.HasPrefix(clone.Address, "https://") || strings.Contains(clone.Address, ":") {
+			clone.Address = cleanIP
+		}
+	}
 	return &clone
 }
 

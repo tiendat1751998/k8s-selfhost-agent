@@ -53,6 +53,14 @@ type AgentMetrics struct {
 	LoadAvg           [3]float64         `json:"load_avg"`
 	Processes         int                `json:"processes"`
 	TopProcesses      []ProcessMetric    `json:"top_processes"`
+	IP                string             `json:"ip,omitempty"`
+	IPAddress         string             `json:"ip_address,omitempty"`
+	Endpoint          string             `json:"endpoint,omitempty"`
+	ContainerCount    int                `json:"container_count,omitempty"`
+	RunningContainers int                `json:"running_containers,omitempty"`
+	ActiveDaemons     int                `json:"active_daemons,omitempty"`
+	PodCount          int                `json:"pod_count,omitempty"`
+	DetectedServices  []string           `json:"detected_services,omitempty"`
 	Status            string             `json:"status"` // "online", "offline", "error"
 	LastSeen          time.Time          `json:"last_seen"`
 }
@@ -63,6 +71,9 @@ type NodeMetrics struct {
 	NodeName             string             `json:"node_name"`
 	Role                 string             `json:"role"`   // manager, worker, standalone, agent
 	Status               string             `json:"status"` // ready, down, disconnected
+	IP                   string             `json:"ip,omitempty"`
+	IPAddress            string             `json:"ip_address,omitempty"`
+	Endpoint             string             `json:"endpoint,omitempty"`
 	OS                   string             `json:"os"`
 	Arch                 string             `json:"arch"`
 	OSDistro             string             `json:"os_distro"`
@@ -451,7 +462,6 @@ func (c *Collector) RemoveAgentMetric(hostID string) {
 	delete(c.agentMetrics, hostID)
 }
 
-
 func (c *Collector) runCollection(ctx context.Context) {
 	timeout := c.interval - 500*time.Millisecond
 	if timeout <= 0 {
@@ -475,5 +485,4 @@ func (c *Collector) runCollection(ctx context.Context) {
 		}
 	}
 }
-
 

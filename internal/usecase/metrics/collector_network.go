@@ -134,6 +134,13 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 		} `json:"network"`
 		Processes    int             `json:"processes"`
 		TopProcesses []ProcessMetric `json:"top_processes"`
+		RunningContainers int        `json:"running_containers"`
+		ActiveDaemons     int        `json:"active_daemons"`
+		ContainerCount    int        `json:"container_count"`
+		DetectedServices  []string   `json:"detected_services"`
+		K8s               struct {
+			PodCount int `json:"pod_count"`
+		} `json:"k8s"`
 		CollectedAt  time.Time       `json:"collected_at"`
 	}
 
@@ -207,7 +214,43 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 	}
 	payload.DiskIO.Devices = diskIODevices
 
+	cleanIP := ExtractCleanHostIP(host.IP, host.IPAddress, host.Address, host.Endpoint)
+	activeDaemons := payload.ActiveDaemons
+	runningContainers := payload.RunningContainers
+	containerCount := payload.ContainerCount
+	podCount := payload.K8s.PodCount
+
+	if activeDaemons == 0 {
+		if len(payload.DetectedServices) > 0 {
+			activeDaemons = len(payload.DetectedServices)
+		} else if len(topProcs) > 0 {
+			daemonSet := make(map[string]bool)
+			for _, p := range topProcs {
+				pn := strings.ToLower(p.Name)
+				for _, daemon := range []string{"dockerd", "containerd", "k3s", "kubelet", "postgres", "redis", "traefik", "nginx", "agent", "clickhouse"} {
+					if strings.Contains(pn, daemon) {
+						daemonSet[daemon] = true
+						break
+					}
+				}
+			}
+			activeDaemons = len(daemonSet)
+		}
+	}
+	if runningContainers == 0 && containerCount > 0 {
+		runningContainers = containerCount
+	}
+	if runningContainers == 0 && activeDaemons > 0 {
+		runningContainers = activeDaemons
+	}
+	if containerCount == 0 && runningContainers > 0 {
+		containerCount = runningContainers
+	}
+
 	am := &AgentMetrics{
+		IP:                cleanIP,
+		IPAddress:         cleanIP,
+		Endpoint:          host.Endpoint,
 		Hostname:          hostname,
 		OS:                osName,
 		Arch:              arch,
@@ -229,6 +272,11 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 		LoadAvg:           payload.LoadAverage,
 		Processes:         payload.Processes,
 		TopProcesses:      topProcs,
+		ActiveDaemons:     activeDaemons,
+		ContainerCount:    containerCount,
+		RunningContainers: runningContainers,
+		PodCount:          podCount,
+		DetectedServices:  payload.DetectedServices,
 		Status:            "online",
 		LastSeen:          collectedAt,
 	}
@@ -273,11 +321,15 @@ func (c *Collector) recordAgentSuccess(ctx context.Context, host docker.ComputeH
 func (c *Collector) recordAgentFailure(ctx context.Context, host docker.ComputeHost, err error) {
 	c.logger.Debug("Agent scrape failed", zap.String("host_id", host.ID), zap.String("host_name", host.Name), zap.Error(err))
 
+	cleanIP := ExtractCleanHostIP(host.IP, host.IPAddress, host.Address, host.Endpoint)
 	now := time.Now().UTC()
 	c.agentMu.Lock()
 	am, exists := c.agentMetrics[host.ID]
 	if !exists {
 		am = &AgentMetrics{
+			IP:                cleanIP,
+			IPAddress:         cleanIP,
+			Endpoint:          host.Endpoint,
 			Hostname:          host.Name,
 			OS:                "linux",
 			Arch:              "amd64",
@@ -291,6 +343,13 @@ func (c *Collector) recordAgentFailure(ctx context.Context, host docker.ComputeH
 		}
 		c.agentMetrics[host.ID] = am
 	} else {
+		if cleanIP != "" {
+			am.IP = cleanIP
+			am.IPAddress = cleanIP
+		}
+		if host.Endpoint != "" {
+			am.Endpoint = host.Endpoint
+		}
 		am.Status = "offline"
 		am.LastSeen = now
 		if am.OSDistro == "" {

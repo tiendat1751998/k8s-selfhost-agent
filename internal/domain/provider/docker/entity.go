@@ -79,6 +79,9 @@ type ComputeHost struct {
 	Name            string            `json:"name"`
 	HostType        string            `json:"host_type"` // agent, docker, k8s, prometheus, git, database, custom
 	Endpoint        string            `json:"endpoint"`  // http://ip:9100, tcp://ip:port, or unix:///var/run/docker.sock
+	Address         string            `json:"address,omitempty"`
+	IP              string            `json:"ip,omitempty"`
+	IPAddress       string            `json:"ip_address,omitempty"`
 	TLSEnabled      bool              `json:"tls_enabled"`
 	TLSCA           string            `json:"tls_ca,omitempty"`
 	TLSCert         string            `json:"tls_cert,omitempty"`
