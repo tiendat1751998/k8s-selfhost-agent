@@ -21,6 +21,7 @@ type mockDBTX struct {
 	upsertedFw       map[string]*usecaseCompliance.FrameworkRecord
 	deletedViolations bool
 	insertedViolations []usecaseCompliance.ViolationRecord
+	insertedFindings   []usecaseCompliance.AuditFindingRecord
 	insertedAuditLogs  []usecaseCompliance.AuditLogRecord
 }
 
@@ -47,6 +48,11 @@ func (m *mockDBTX) UpsertFramework(ctx context.Context, fw *usecaseCompliance.Fr
 func (m *mockDBTX) ReplaceViolations(ctx context.Context, violations []usecaseCompliance.ViolationRecord) error {
 	m.deletedViolations = true
 	m.insertedViolations = violations
+	return nil
+}
+
+func (m *mockDBTX) ReplaceAuditFindings(ctx context.Context, findings []usecaseCompliance.AuditFindingRecord) error {
+	m.insertedFindings = findings
 	return nil
 }
 

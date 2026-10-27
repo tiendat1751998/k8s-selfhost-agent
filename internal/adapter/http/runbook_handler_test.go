@@ -280,7 +280,9 @@ func TestRunbookHandler_Execute(t *testing.T) {
 		var resp map[string]interface{}
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.Equal(t, "executed", resp["status"])
+		assert.NotEmpty(t, resp["status"])
+		assert.Equal(t, float64(1), resp["total_steps"])
+		assert.Equal(t, float64(1), resp["completed_steps"])
 
 		// Check repo was updated with lastUsedAt
 		updated := repo.items[validID]
@@ -311,5 +313,56 @@ func TestRunbookHandler_Execute(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		auditRepo.recordActionErr = nil
+	})
+}
+
+func TestRunbookHandler_ExecuteStep(t *testing.T) {
+	repo := newMockRunbookRepo()
+	auditRepo := &mockAuditRepo{}
+	_, r := setupRunbookRouter(repo, auditRepo)
+
+	validID := "11111111-1111-1111-1111-111111111111"
+	repo.items[validID] = runbook.Runbook{
+		ID:         validID,
+		Title:      "Restart Deployment",
+		Category:   "k8s",
+		Content:    "1. Step One\n`kubectl get pods`\n2. Step Two\n`kubectl describe pod`",
+		StepsCount: 2,
+	}
+
+	t.Run("invalid step index", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/"+validID+"/steps/abc/execute", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("out of bounds step index", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/"+validID+"/steps/99/execute", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/"+validID+"/steps/0/execute", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, validID, resp["runbook_id"])
+		assert.Equal(t, float64(0), resp["step_index"])
+		assert.NotEmpty(t, resp["status"])
+		assert.NotEmpty(t, resp["output"])
+		assert.True(t, resp["success"].(bool))
+
+		// Check audit action recorded
+		require.NotEmpty(t, auditRepo.recordedActions)
+		lastAction := auditRepo.recordedActions[len(auditRepo.recordedActions)-1]
+		assert.Equal(t, "execute_step", lastAction["action"])
+		assert.Equal(t, "runbook", lastAction["targetType"])
 	})
 }

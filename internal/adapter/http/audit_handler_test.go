@@ -207,6 +207,9 @@ func (m *mockAuditScannerStore) UpsertFramework(ctx context.Context, fw *usecase
 func (m *mockAuditScannerStore) ReplaceViolations(ctx context.Context, violations []usecaseCompliance.ViolationRecord) error {
 	return nil
 }
+func (m *mockAuditScannerStore) ReplaceAuditFindings(ctx context.Context, findings []usecaseCompliance.AuditFindingRecord) error {
+	return nil
+}
 func (m *mockAuditScannerStore) InsertAuditLog(ctx context.Context, log *usecaseCompliance.AuditLogRecord) error {
 	return nil
 }

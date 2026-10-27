@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,19 +12,42 @@ import (
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/audit"
 	"github.com/datdt/k8sselfhost/internal/domain/runbook"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
 )
+
+// RunbookHandlerOption configures RunbookHandler.
+type RunbookHandlerOption func(*RunbookHandler)
+
+// WithCustomRunbookExecutor sets custom RunbookExecutor.
+func WithCustomRunbookExecutor(exec RunbookExecutor) RunbookHandlerOption {
+	return func(h *RunbookHandler) {
+		h.executor = exec
+	}
+}
 
 // RunbookHandler provides HTTP handlers for the runbook API.
 type RunbookHandler struct {
 	repo      runbook.Repository
 	auditRepo audit.Repository
+	executor  RunbookExecutor
 }
 
 // NewRunbookHandler creates a new runbook HTTP handler.
-func NewRunbookHandler(repo runbook.Repository, auditRepo audit.Repository) *RunbookHandler {
-	return &RunbookHandler{repo: repo, auditRepo: auditRepo}
+func NewRunbookHandler(repo runbook.Repository, auditRepo audit.Repository, opts ...RunbookHandlerOption) *RunbookHandler {
+	h := &RunbookHandler{repo: repo, auditRepo: auditRepo}
+	for _, opt := range opts {
+		opt(h)
+	}
+	if h.executor == nil {
+		var db postgres.DBTX
+		if dbp, ok := repo.(interface{ DB() postgres.DBTX }); ok && dbp.DB() != nil {
+			db = dbp.DB()
+		}
+		h.executor = NewDefaultRunbookExecutor(WithRunbookExecutorDB(db))
+	}
+	return h
 }
 
 // RegisterRoutes registers runbook routes.
@@ -34,6 +58,7 @@ func (h *RunbookHandler) RegisterRoutes(r chi.Router) {
 	r.Put("/{id}", h.Update)
 	r.Delete("/{id}", h.Delete)
 	r.Post("/{id}/execute", h.Execute)
+	r.Post("/{id}/steps/{stepIndex}/execute", h.ExecuteStep)
 }
 
 // List handles GET /api/v1/runbooks
@@ -225,13 +250,77 @@ func (h *RunbookHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	}
 	rb, err := h.repo.GetByID(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "runbook not found", err)
+		if errors.Is(err, errors.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "runbook not found", err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get runbook", err)
 		return
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	rb.LastUsedAt = &now
 	if err := h.repo.Update(r.Context(), rb); err != nil {
 		logger.Get().Warn("failed to update runbook execution timestamp", zap.Error(err), zap.String("runbook_id", rb.ID))
+	}
+
+	summary, err := h.executor.ExecuteAll(r.Context(), rb)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to execute runbook steps", err)
+		return
+	}
+
+	userID := middleware.UserIDFromContext(r.Context())
+	if userID == "" {
+		userID = "platform_admin"
+	}
+	details := map[string]interface{}{
+		"title":           rb.Title,
+		"category":        rb.Category,
+		"steps_count":     summary.TotalSteps,
+		"completed_steps": summary.CompletedSteps,
+		"status":          summary.Status,
+		"duration_ms":     summary.DurationMs,
+	}
+	if h.auditRepo != nil {
+		if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "execute", "runbook", rb.ID, rb.Title, summary.Status, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+			logger.Get().Error("failed to record audit action for runbook execution", zap.Error(auditErr), zap.String("runbook_id", rb.ID))
+		}
+	}
+
+	writeJSON(w, http.StatusOK, summary)
+}
+
+// ExecuteStep handles POST /api/v1/runbooks/{id}/steps/{stepIndex}/execute
+func (h *RunbookHandler) ExecuteStep(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "runbook id is required", err)
+		return
+	}
+	stepIndexParam := chi.URLParam(r, "stepIndex")
+	if stepIndexParam == "" {
+		stepIndexParam = chi.URLParam(r, "step_index")
+	}
+	stepIndex, err := strconv.Atoi(stepIndexParam)
+	if err != nil || stepIndex < 0 {
+		writeError(w, http.StatusBadRequest, "valid non-negative step index is required", err)
+		return
+	}
+
+	rb, err := h.repo.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, errors.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "runbook not found", err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to get runbook", err)
+		return
+	}
+
+	res, err := h.executor.ExecuteStep(r.Context(), rb, stepIndex)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "failed to execute runbook step", err)
+		return
 	}
 
 	userID := middleware.UserIDFromContext(r.Context())
@@ -240,22 +329,18 @@ func (h *RunbookHandler) Execute(w http.ResponseWriter, r *http.Request) {
 	}
 	details := map[string]interface{}{
 		"title":       rb.Title,
-		"category":    rb.Category,
-		"steps_count": rb.StepsCount,
-		"status":      "completed",
+		"step_index":  res.StepIndex,
+		"step_title":  res.StepTitle,
+		"command":     res.Command,
+		"status":      res.Status,
+		"duration_ms": res.DurationMs,
 	}
 	if h.auditRepo != nil {
-		if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "execute", "runbook", rb.ID, rb.Title, "success", details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
-			logger.Get().Error("failed to record audit action for runbook execution", zap.Error(auditErr), zap.String("runbook_id", rb.ID))
+		if auditErr := h.auditRepo.RecordAction(r.Context(), userID, "execute_step", "runbook", rb.ID, rb.Title, res.Status, details, r.RemoteAddr, r.Header.Get("User-Agent")); auditErr != nil {
+			logger.Get().Error("failed to record audit action for step execution", zap.Error(auditErr), zap.String("runbook_id", rb.ID))
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":      "executed",
-		"runbook_id":  rb.ID,
-		"title":       rb.Title,
-		"executed_at": now,
-		"message":     "Runbook execution steps dispatched successfully",
-	})
+	writeJSON(w, http.StatusOK, res)
 }
 

@@ -29,11 +29,19 @@ func WithBootScan(enabled bool) ComplianceOption {
 	}
 }
 
+// WithComplianceRemediatorStaticHosts sets static hosts for testing remediation.
+func WithComplianceRemediatorStaticHosts(hosts []HostTarget) ComplianceOption {
+	return func(h *ComplianceHandler) {
+		h.staticHosts = hosts
+	}
+}
+
 // ComplianceHandler provides HTTP handlers for the compliance API.
 type ComplianceHandler struct {
-	repo     compliance.Repository
-	scanner  *usecaseCompliance.FleetComplianceScanner
-	bootScan bool
+	repo        compliance.Repository
+	scanner     *usecaseCompliance.FleetComplianceScanner
+	bootScan    bool
+	staticHosts []HostTarget
 }
 
 // NewComplianceHandler creates a new compliance HTTP handler.
@@ -70,6 +78,7 @@ func NewComplianceHandler(repo compliance.Repository, opts ...ComplianceOption) 
 func (h *ComplianceHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/frameworks", h.ListFrameworks)
 	r.Get("/violations", h.ListViolations)
+	r.Post("/violations/{id}/remediate", h.RemediateViolation)
 	r.Post("/scan", h.ScanNow)
 }
 

@@ -83,6 +83,11 @@ func NewScanner(opts ...ScannerOption) *FleetComplianceScanner {
 	return sc
 }
 
+// Store returns the underlying scanner Store.
+func (sc *FleetComplianceScanner) Store() Store {
+	return sc.store
+}
+
 type agentMetricsData struct {
 	Hostname string `json:"hostname"`
 	Memory   struct {
@@ -358,6 +363,8 @@ func (sc *FleetComplianceScanner) Scan(ctx context.Context) (*ScanResult, error)
 			_ = sc.store.UpsertFramework(ctx, &frameworks[i])
 		}
 		_ = sc.store.ReplaceViolations(ctx, violations)
+		runtimeFindings := DetectRuntimeFindings(ctx, sc, hosts)
+		_ = sc.store.ReplaceAuditFindings(ctx, runtimeFindings)
 		_ = sc.store.InsertAuditLog(ctx, &AuditLogRecord{
 			Actor:      "compliance-scanner",
 			Action:     "scan",

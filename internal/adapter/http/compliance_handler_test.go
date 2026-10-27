@@ -29,6 +29,14 @@ func (m *mockComplianceRepo) UpsertFramework(ctx context.Context, f *compliance.
 func (m *mockComplianceRepo) ListViolations(ctx context.Context, severity *compliance.ViolationSeverity, limit, offset int) ([]compliance.Violation, int, error) {
 	return m.violations, len(m.violations), nil
 }
+func (m *mockComplianceRepo) GetViolation(ctx context.Context, id string) (*compliance.Violation, error) {
+	for _, v := range m.violations {
+		if v.ID == id {
+			return &v, nil
+		}
+	}
+	return nil, nil
+}
 func (m *mockComplianceRepo) CreateViolation(ctx context.Context, v *compliance.Violation) error {
 	return nil
 }
@@ -54,6 +62,9 @@ func (m *mockComplianceScannerStore) UpsertFramework(ctx context.Context, fw *us
 	return nil
 }
 func (m *mockComplianceScannerStore) ReplaceViolations(ctx context.Context, violations []usecaseCompliance.ViolationRecord) error {
+	return nil
+}
+func (m *mockComplianceScannerStore) ReplaceAuditFindings(ctx context.Context, findings []usecaseCompliance.AuditFindingRecord) error {
 	return nil
 }
 func (m *mockComplianceScannerStore) InsertAuditLog(ctx context.Context, log *usecaseCompliance.AuditLogRecord) error {
