@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { HelmChart } from '../../api/helm'
 import type { K8sNamespace } from '../../api/k8s'
 
-defineProps<{
+const props = defineProps<{
   show: boolean
   chart: HelmChart | null
   namespaces: K8sNamespace[]
@@ -18,7 +20,7 @@ defineProps<{
     loadingDefaultValues: boolean
   }
   installing: boolean
-  installError?: string | null
+  installError?: string | Record<string, unknown> | null
 }>()
 
 const emit = defineEmits<{
@@ -28,6 +30,22 @@ const emit = defineEmits<{
   (e: 'stepChange', step: 1 | 2 | 3): void
   (e: 'resetValues'): void
 }>()
+
+const formattedError = computed(() => {
+  if (!props.installError) return ''
+  if (typeof props.installError === 'string') return props.installError
+  if (typeof props.installError === 'object' && props.installError !== null) {
+    const obj = props.installError as Record<string, unknown>
+    if (typeof obj.error === 'string') return obj.error
+    if (typeof obj.message === 'string') return obj.message
+    try {
+      return JSON.stringify(props.installError)
+    } catch {
+      return String(props.installError)
+    }
+  }
+  return String(props.installError)
+})
 </script>
 
 <template>
@@ -186,7 +204,7 @@ const emit = defineEmits<{
           <BaseIcon name="alert-triangle" size="xs" class="install-error-icon" />
           <div class="install-error-content">
             <span class="install-error-title font-bold">Deployment Failed:</span>
-            <span class="install-error-msg">{{ installError }}</span>
+            <span class="install-error-msg">{{ formattedError }}</span>
           </div>
         </div>
 

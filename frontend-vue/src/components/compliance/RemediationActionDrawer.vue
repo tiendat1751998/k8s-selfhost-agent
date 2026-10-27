@@ -14,7 +14,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:show', val: boolean): void
-  (e: 'remediated'): void
+  (e: 'remediated', violation?: ComplianceViolation | null): void
 }>()
 
 const copiedIdx = ref<number | null>(null)

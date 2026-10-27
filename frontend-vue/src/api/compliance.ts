@@ -43,8 +43,16 @@ export const complianceApi = {
     }
   },
 
-  remediateViolation: (id: string) =>
-    api.post<RemediationResponse>(`/compliance/violations/${id}/remediate`, {}),
+  remediateViolation: (id: string, body: { confirm?: boolean } = {}) =>
+    api.post<RemediationResponse>(`/compliance/violations/${id}/remediate`, body),
+
+  resolveViolation: async (id: string, body: { confirm?: boolean } = { confirm: true }) => {
+    try {
+      return await api.post<RemediationResponse>(`/compliance/violations/${id}/resolve`, body)
+    } catch {
+      return await api.post<RemediationResponse>(`/compliance/violations/${id}/remediate`, body)
+    }
+  },
 
   async triggerScan(customClient?: ApiPostClient): Promise<ComplianceScanResult> {
     const client = customClient || api

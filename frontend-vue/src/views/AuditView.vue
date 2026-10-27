@@ -157,7 +157,6 @@
     </section>
 
     <!-- Violation Inspection / Remediation Drawer -->
-    <!-- Violation Inspection / Remediation Drawer -->
     <ComplianceViolationDrawer
       :violation="selectedViolation"
       :mode="modalMode"
@@ -178,7 +177,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import '../assets/styles/views/audit.css'
 import '../assets/styles/views/compliance.css'
 import { useAuditLogs } from '../composables/useAuditLogs'
@@ -197,16 +196,12 @@ import RemediationActionDrawer from '../components/compliance/RemediationActionD
 import { auditApi, complianceApi, type AuditFinding, type ComplianceViolation } from '../api/governance'
 
 const activeTab = ref<'compliance' | 'findings' | 'logs'>('compliance')
-const findings = ref<AuditFinding[]>([])
-const findingsLoading = ref(false)
-const findingsError = ref<string | null>(null)
+const findings = ref<AuditFinding[]>([]), findingsLoading = ref(false), findingsError = ref<string | null>(null)
 const resolvingFindingId = ref<string | null>(null)
 
 // Remediation Drawer State
-const showRemediationDrawer = ref(false)
-const remediationTargetViolation = ref<ComplianceViolation | null>(null)
-const remediationSummary = ref('')
-const remediationCommands = ref<string[]>([])
+const showRemediationDrawer = ref(false), remediationTargetViolation = ref<ComplianceViolation | null>(null)
+const remediationSummary = ref(''), remediationCommands = ref<string[]>([]), manuallyResolvedIds = ref<Set<string>>(new Set())
 
 // Compliance Composable
 const {
@@ -217,12 +212,31 @@ const {
   formatFrameworkTag, formatDate,
 } = useCompliance()
 
-function onManualRemediated() {
-  if (remediationTargetViolation.value) {
-    const targetId = remediationTargetViolation.value.id
-    violations.value = violations.value.map(v => v.id === targetId ? { ...v, resolved: true } : v)
+watch(violations, (newViolations) => {
+  if (manuallyResolvedIds.value.size === 0) return
+  let changed = false
+  const updated = newViolations.map(v => {
+    if (manuallyResolvedIds.value.has(v.id) && !v.resolved) {
+      changed = true
+      return { ...v, resolved: true }
+    }
+    return v
+  })
+  if (changed) violations.value = updated
+})
+
+async function onManualRemediated() {
+  if (!remediationTargetViolation.value) return
+  const targetId = remediationTargetViolation.value.id
+  manuallyResolvedIds.value.add(targetId)
+  violations.value = violations.value.map(v => v.id === targetId ? { ...v, resolved: true } : v)
+  try {
+    await complianceApi.remediateViolation(targetId, { confirm: true })
+  } catch (err: unknown) {
+    console.warn('Remediation confirm warning:', err)
   }
-  fetchComplianceData()
+  await fetchComplianceData()
+  violations.value = violations.value.map(v => manuallyResolvedIds.value.has(v.id) ? { ...v, resolved: true } : v)
   statusMessage.value = { type: 'success', text: 'Violation marked as remediated.' }
 }
 
@@ -304,16 +318,11 @@ async function handleRemediateViolation(violation: ComplianceViolation) {
 async function handleTriggerScan() {
   try {
     await triggerComplianceScan()
-    await Promise.all([
-      fetchComplianceData(),
-      loadFindings(),
-      fetchLogs(),
-    ])
+    await Promise.all([fetchComplianceData(), loadFindings(), fetchLogs()])
     const avgScore = frameworks.value.length > 0
       ? (frameworks.value.reduce((acc, f) => acc + f.score, 0) / frameworks.value.length).toFixed(1)
       : '100'
-    const openFindings = openFindingsCount.value
-    const openViolations = violations.value.filter(v => !v.resolved).length
+    const openFindings = openFindingsCount.value, openViolations = violations.value.filter(v => !v.resolved).length
     statusMessage.value = {
       type: 'success',
       text: `Live compliance scan evaluated: Frameworks at ${avgScore}%, ${openViolations} active violation(s), ${openFindings} open container CVE(s).`,
