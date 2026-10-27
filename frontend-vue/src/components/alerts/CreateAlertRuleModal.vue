@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import type { AlertRule, AlertChannel, AlertRuleInput } from '../../api/management'
 import ModalDrawer from '../ui/ModalDrawer.vue'
 
@@ -14,6 +14,14 @@ const emit = defineEmits<{
   (e: 'update:show', val: boolean): void
   (e: 'submit', payload: AlertRuleInput): void
 }>()
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && props.show) {
+    emit('update:show', false)
+  }
+}
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 const form = ref({
   name: '',
@@ -74,10 +82,11 @@ function handleSubmit() {
     subtitle="Define threshold metrics, evaluation durations, and notification routing."
     @update:show="emit('update:show', $event)"
   >
-    <form @submit.prevent="handleSubmit" class="form-layout">
+    <form id="create-alert-rule-form" class="form-layout" @submit.prevent="handleSubmit">
       <div class="form-group">
-        <label>Alert Rule Name</label>
+        <label for="alert-rule-name">Alert Rule Name</label>
         <input 
+          id="alert-rule-name"
           v-model="form.name" 
           type="text" 
           placeholder="e.g. Node Memory Working Set > 90%" 
@@ -87,8 +96,9 @@ function handleSubmit() {
       </div>
 
       <div class="form-group">
-        <label>Rule Description</label>
+        <label for="alert-rule-desc">Rule Description</label>
         <input 
+          id="alert-rule-desc"
           v-model="form.description" 
           type="text" 
           placeholder="e.g. Alert triggers when container memory limit threshold reached." 
@@ -98,8 +108,9 @@ function handleSubmit() {
 
       <div class="form-row">
         <div class="form-group">
-          <label>Prometheus Metric Expression / PromQL</label>
+          <label for="alert-metric-name">Prometheus Metric Expression / PromQL</label>
           <input 
+            id="alert-metric-name"
             v-model="form.metric_name" 
             type="text" 
             placeholder="e.g. node_cpu_utilization_percent" 
@@ -108,8 +119,8 @@ function handleSubmit() {
           />
         </div>
         <div class="form-group">
-          <label>Operator</label>
-          <select v-model="form.condition" class="input-glass">
+          <label for="alert-operator">Operator</label>
+          <select id="alert-operator" v-model="form.condition" class="input-glass">
             <option value=">">&gt; (Greater Than)</option>
             <option value="<">&lt; (Less Than)</option>
             <option value=">=">&gt;= (Greater or Equal)</option>
@@ -120,8 +131,9 @@ function handleSubmit() {
 
       <div class="form-row">
         <div class="form-group">
-          <label>Threshold Value</label>
+          <label for="alert-threshold">Threshold Value</label>
           <input 
+            id="alert-threshold"
             v-model.number="form.threshold" 
             type="number" 
             min="0"
@@ -131,8 +143,9 @@ function handleSubmit() {
           />
         </div>
         <div class="form-group">
-          <label>Duration Window (Seconds)</label>
+          <label for="alert-duration">Duration Window (Seconds)</label>
           <input 
+            id="alert-duration"
             v-model.number="form.duration_seconds" 
             type="number" 
             min="1"
@@ -145,8 +158,8 @@ function handleSubmit() {
       </div>
 
       <div class="form-group">
-        <label>Severity Level</label>
-        <select v-model="form.severity" class="input-glass">
+        <label for="alert-severity">Severity Level</label>
+        <select id="alert-severity" v-model="form.severity" class="input-glass">
           <option value="critical">Critical (Page SRE On-Call)</option>
           <option value="high">High (Dispatch Slack War Room)</option>
           <option value="medium">Medium (Notification Digest)</option>
@@ -176,7 +189,7 @@ function handleSubmit() {
 
     <template #footer="{ close }">
       <button class="btn btn-secondary" type="button" @click="close">Cancel</button>
-      <button class="btn btn-primary" :disabled="isSubmitting" @click="handleSubmit">
+      <button form="create-alert-rule-form" type="submit" class="btn btn-primary" :disabled="isSubmitting">
         {{ isSubmitting ? 'Saving...' : (ruleToEdit ? 'Save Changes' : 'Arm Alert Rule') }}
       </button>
     </template>

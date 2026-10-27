@@ -1,15 +1,20 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
 import type { SimulationScenario, CreateIncidentPayload } from '../../composables/useIncidents'
 
-defineProps<{
+const props = withDefaults(defineProps<{
   show: boolean
   actionLoading?: string | null
-  scenarios: SimulationScenario[]
-}>()
+  scenarios?: SimulationScenario[]
+  initialTab?: 'simulate' | 'report'
+}>(), {
+  actionLoading: null,
+  scenarios: () => [],
+  initialTab: 'report'
+})
 
 const emit = defineEmits<{
   (e: 'update:show', value: boolean): void
@@ -17,7 +22,27 @@ const emit = defineEmits<{
   (e: 'create', payload: CreateIncidentPayload): void
 }>()
 
-const activeTab = ref<'simulate' | 'report'>('simulate')
+const activeTab = ref<'simulate' | 'report'>(props.initialTab || (props.scenarios && props.scenarios.length > 0 ? 'simulate' : 'report'))
+
+watch(() => props.show, (val) => {
+  if (val) {
+    activeTab.value = props.initialTab || (props.scenarios && props.scenarios.length > 0 ? 'simulate' : 'report')
+  }
+})
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && props.show) {
+    emit('update:show', false)
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
 
 const form = ref<CreateIncidentPayload>({
   pod_name: '',
@@ -45,14 +70,14 @@ function handleFormSubmit() {
   <ModalDrawer
     :show="show"
     mode="modal"
-    title="Incident Center: Simulation & Manual Incident Reporting"
-    subtitle="Inject synthetic Kubernetes cluster anomalies or log an ad-hoc operational incident"
-    max-width="680px"
+    title="Declare Operational Incident"
+    subtitle="Log an active Kubernetes workload anomaly for autonomous AI RCA and remediation"
+    max-width="640px"
     @update:show="emit('update:show', $event)"
   >
-    <div class="create-incident-modal-body">
-      <!-- Tabs header -->
-      <div class="modal-tab-bar">
+    <div class="create-incident-modal-body" @keydown.esc="emit('update:show', false)">
+      <!-- Tabs header if scenarios provided -->
+      <div v-if="scenarios && scenarios.length > 0" class="modal-tab-bar">
         <button
           type="button"
           class="modal-tab-btn"
@@ -71,9 +96,8 @@ function handleFormSubmit() {
         </button>
       </div>
 
-
       <!-- Tab 1: Simulation Scenarios -->
-      <div v-if="activeTab === 'simulate'" class="tab-content-pane animate-fade-in">
+      <div v-if="scenarios && scenarios.length > 0 && activeTab === 'simulate'" class="tab-content-pane animate-fade-in">
         <div class="debug-demo-banner">
           <span class="badge badge-amber font-mono"><BaseIcon name="alert-triangle" size="xs" /> DEBUG / DEMO MODE</span>
           <span class="debug-banner-text">Synthetic cluster failure scenarios for demonstration and autonomous diagnostics</span>
@@ -101,9 +125,7 @@ function handleFormSubmit() {
               <StatusBadge :status="scenario.severity" size="sm" />
             </div>
 
-
             <p class="sim-card-desc">{{ scenario.description }}</p>
-
 
             <div class="sim-card-footer">
               <div class="sim-tags font-mono">
@@ -111,7 +133,6 @@ function handleFormSubmit() {
                 <span class="sim-tag">ns/{{ scenario.namespace }}</span>
                 <span class="sim-tag badge-tag">{{ scenario.badgeText }}</span>
               </div>
-
 
               <button
                 type="button"
@@ -126,14 +147,14 @@ function handleFormSubmit() {
         </div>
       </div>
 
-
       <!-- Tab 2: Manual Incident Form -->
       <div v-else class="tab-content-pane animate-fade-in">
-        <form class="modal-form" @submit.prevent="handleFormSubmit">
+        <form id="create-incident-form" class="modal-form" @submit.prevent="handleFormSubmit">
           <div class="form-row">
             <div class="form-group flex-1">
-              <label class="form-label">Pod / Workload Name</label>
+              <label class="form-label" for="inc-pod-name">Pod / Workload Name</label>
               <input
+                id="inc-pod-name"
                 v-model="form.pod_name"
                 type="text"
                 class="input-glass font-mono"
@@ -142,8 +163,9 @@ function handleFormSubmit() {
               />
             </div>
             <div class="form-group flex-1">
-              <label class="form-label">Namespace</label>
+              <label class="form-label" for="inc-namespace">Namespace</label>
               <input
+                id="inc-namespace"
                 v-model="form.namespace"
                 type="text"
                 class="input-glass font-mono"
@@ -153,11 +175,11 @@ function handleFormSubmit() {
             </div>
           </div>
 
-
           <div class="form-row">
             <div class="form-group flex-1">
-              <label class="form-label">Cluster</label>
+              <label class="form-label" for="inc-cluster">Cluster</label>
               <input
+                id="inc-cluster"
                 v-model="form.cluster_name"
                 type="text"
                 class="input-glass font-mono"
@@ -166,8 +188,9 @@ function handleFormSubmit() {
               />
             </div>
             <div class="form-group flex-1">
-              <label class="form-label">Anomaly Type</label>
+              <label class="form-label" for="inc-type">Anomaly Type</label>
               <input
+                id="inc-type"
                 v-model="form.type"
                 type="text"
                 class="input-glass font-mono"
@@ -177,10 +200,9 @@ function handleFormSubmit() {
             </div>
           </div>
 
-
           <div class="form-group">
-            <label class="form-label">Severity Level</label>
-            <select v-model="form.severity" class="input-glass">
+            <label class="form-label" for="inc-severity">Severity Level</label>
+            <select id="inc-severity" v-model="form.severity" class="input-glass">
               <option value="critical">Critical (P1 Outage)</option>
               <option value="high">High (P2 Degradation)</option>
               <option value="medium">Medium (P3 Warning)</option>
@@ -188,10 +210,10 @@ function handleFormSubmit() {
             </select>
           </div>
 
-
           <div class="form-group">
-            <label class="form-label">Incident Description / Failure Log</label>
+            <label class="form-label" for="inc-message">Incident Symptoms / Failure Log</label>
             <textarea
+              id="inc-message"
               v-model="form.message"
               rows="3"
               class="input-glass font-mono"
@@ -202,17 +224,16 @@ function handleFormSubmit() {
       </div>
     </div>
 
-
     <template #footer="{ close }">
       <button type="button" class="btn btn-secondary" @click="close">Cancel</button>
       <button
-        v-if="activeTab === 'report'"
-        type="button"
+        v-if="!scenarios || scenarios.length === 0 || activeTab === 'report'"
+        type="submit"
+        form="create-incident-form"
         class="btn btn-primary"
         :disabled="actionLoading === 'create-incident' || !form.pod_name.trim()"
-        @click="handleFormSubmit"
       >
-        <BaseIcon :name="actionLoading === 'create-incident' ? 'clock' : 'file-text'" size="xs" /> <span>{{ actionLoading === 'create-incident' ? 'Submitting...' : 'File Incident Report' }}</span>
+        <BaseIcon :name="actionLoading === 'create-incident' ? 'clock' : 'alert-triangle'" size="xs" /> <span>{{ actionLoading === 'create-incident' ? 'Declaring...' : 'Declare Incident' }}</span>
       </button>
     </template>
   </ModalDrawer>

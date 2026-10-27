@@ -78,13 +78,13 @@
               </span>
             </td>
             <td class="col-actions">
-              <div class="table-actions-cell">
+              <div class="table-actions-cell" style="display: inline-flex; align-items: center; gap: 6px;">
                 <button 
                   class="table-action-btn btn-run-action" 
                   :disabled="executingId === rb.id"
                   title="Execute Runbook"
                   aria-label="Execute Runbook"
-                  @click="$emit('execute', rb)"
+                  @click="emit('execute', rb)"
                 >
                   <BaseIcon :name="executingId === rb.id ? 'clock' : 'zap'" size="xs" />
                 </button>
@@ -92,26 +92,17 @@
                   class="table-action-btn btn-steps-action"
                   title="Inspect Procedure Steps"
                   aria-label="Inspect Procedure Steps"
-                  @click="$emit('inspect', rb)"
+                  @click="emit('inspect', rb)"
                 >
                   <BaseIcon name="eye" size="xs" />
                 </button>
-                <button 
-                  class="table-action-btn btn-edit-action"
-                  title="Edit Runbook"
-                  aria-label="Edit Runbook"
-                  @click="$emit('edit', rb)"
-                >
-                  <BaseIcon name="sliders" size="xs" />
-                </button>
-                <button 
-                  class="table-action-btn btn-delete-action btn-delete-crimson"
-                  title="Delete Runbook"
-                  aria-label="Delete Runbook"
-                  @click="$emit('delete', rb.id)"
-                >
-                  <BaseIcon name="trash" size="xs" />
-                </button>
+                <ActionDropdown
+                  :items="getRunbookActions(rb)"
+                  align="right"
+                  size="xs"
+                  aria-label="More runbook actions"
+                  @select="handleDropdownAction($event, rb)"
+                />
               </div>
             </td>
           </tr>
@@ -129,6 +120,7 @@
 <script setup lang="ts">
 import type { Runbook } from '../../api/governance'
 import BaseIcon from '../ui/BaseIcon.vue'
+import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 
 defineProps<{
   runbooks: Runbook[]
@@ -137,10 +129,25 @@ defineProps<{
   formatDate: (d?: string) => string
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'execute', rb: Runbook): void
   (e: 'inspect', rb: Runbook): void
   (e: 'edit', rb: Runbook): void
   (e: 'delete', id: string): void
 }>()
+
+function getRunbookActions(_rb: Runbook): ActionItem[] {
+  return [
+    { id: 'edit', label: 'Edit Runbook', icon: 'sliders' },
+    { id: 'delete', label: 'Delete Runbook', icon: 'trash', variant: 'danger' },
+  ]
+}
+
+function handleDropdownAction(actionId: string, rb: Runbook) {
+  if (actionId === 'edit') {
+    emit('edit', rb)
+  } else if (actionId === 'delete') {
+    emit('delete', rb.id)
+  }
+}
 </script>

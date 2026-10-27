@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="recovery-codes-card-printable">
     <!-- Warning Alert -->
     <div class="alert-box-warning" role="alert">
@@ -8,7 +8,7 @@
       </div>
     </div>
 
-    <!-- Emergency Scratch Tokens Grid (8 tokens) -->
+    <!-- Emergency Scratch Tokens Grid -->
     <div class="recovery-codes-grid" aria-label="Emergency recovery scratch tokens">
       <div
         v-for="(code, idx) in displayCodes"

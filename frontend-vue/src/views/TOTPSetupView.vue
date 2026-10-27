@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="setup-container animate-fade-in">
     <!-- Desktop Header -->
     <header class="view-header desktop-only">
@@ -50,7 +50,7 @@
       <span class="tel-sep">·</span>
       <span class="tel-item tel-totp"><BaseIcon name="shield" size="xs" /> TOTP</span>
       <span class="tel-sep">·</span>
-      <span class="tel-item tel-codes"><BaseIcon name="file-text" size="xs" /> 10 Codes</span>
+      <span class="tel-item tel-codes"><BaseIcon name="file-text" size="xs" /> {{ setup.recoveryCodes.value.length > 0 ? `${setup.recoveryCodes.value.length} Codes` : 'Backup Codes' }}</span>
       <span class="tel-sep">·</span>
       <span class="tel-item tel-time"><BaseIcon name="clock" size="xs" /> Time-Based</span>
     </div>

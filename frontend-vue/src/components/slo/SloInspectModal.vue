@@ -1,5 +1,5 @@
-﻿<script setup lang="ts">
-import { computed } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted } from 'vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 import type { SLODefinition, SLOSnapshot } from '../../api/compute'
 
@@ -13,6 +13,14 @@ const emit = defineEmits<{
   (e: 'update:show', value: boolean): void
   (e: 'triggerAlert', id: string, service: string): void
 }>()
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && props.show) {
+    emit('update:show', false)
+  }
+}
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 function formatPercent(val?: number): string {
   if (val === undefined || val === null || isNaN(val)) return '0.00%'

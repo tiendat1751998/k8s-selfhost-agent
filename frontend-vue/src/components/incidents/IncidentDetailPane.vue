@@ -15,6 +15,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'analyze', incident: Incident): void
+  (e: 'acknowledge', incident: Incident): void
+  (e: 'exportPostmortem', incident: Incident): void
+  (e: 'inspectTimeline', incident: Incident): void
   (e: 'mitigate', incident: Incident): void
   (e: 'resolve', incident: Incident): void
   (e: 'open-pr-modal'): void
@@ -75,10 +78,35 @@ const hasDiffContent = computed(() => {
         </div>
 
         <div class="inspector-actions">
+          <button
+            v-if="selectedIncident.status !== 'resolved' && (selectedIncident as any).status !== 'acknowledged'"
+            class="btn-slate"
+            :disabled="actionLoading === 'acknowledge'"
+            title="Acknowledge active operational anomaly"
+            @click="emit('acknowledge', selectedIncident)"
+          >
+            <BaseIcon name="check" size="xs" /> <span>Ack</span>
+          </button>
+          <button
+            class="btn-slate"
+            title="Inspect Chronological RCA Timeline"
+            @click="emit('inspectTimeline', selectedIncident)"
+          >
+            <BaseIcon name="activity" size="xs" /> <span>Timeline</span>
+          </button>
+          <button
+            class="btn-slate"
+            :disabled="actionLoading === 'postmortem'"
+            title="Export SRE Postmortem Incident Markdown"
+            @click="emit('exportPostmortem', selectedIncident)"
+          >
+            <BaseIcon name="file-text" size="xs" /> <span>Postmortem</span>
+          </button>
           <button 
             v-if="selectedReport"
             class="btn-slate"
-            :disabled="actionLoading === 'analyze' || selectedIncident.status === 'analyzing'"
+            :disabled="actionLoading === 'analyze' || selectedIncident.status === 'analyzing' || selectedIncident.status === 'resolved'"
+            :title="selectedIncident.status === 'resolved' ? 'Resolved incident — view existing RCA or export postmortem' : 'Re-run AI Root Cause Analysis'"
             @click="emit('analyze', selectedIncident)"
           >
             <BaseIcon v-if="actionLoading !== 'analyze'" name="bot" size="xs" /> <span>{{ actionLoading === 'analyze' ? 'Reasoning...' : 'Re-run AI RCA' }}</span>
@@ -109,7 +137,7 @@ const hasDiffContent = computed(() => {
             <BaseIcon name="sparkles" size="sm" class="ai-sparkle" />
             <div>
               <h3 class="rca-title">AI Root Cause Analysis (RCA)</h3>
-              <span class="ai-model-tag font-mono">{{ selectedReport?.llm_model || 'Claude 3.5 Sonnet / Multi-Agent' }}</span>
+              <span class="ai-model-tag font-mono">{{ selectedReport?.llm_model || (selectedIncident as any)?.analyzer || 'Deterministic SRE RCA Engine' }}</span>
             </div>
           </div>
 
@@ -149,7 +177,8 @@ const hasDiffContent = computed(() => {
           <p class="rca-empty-desc">{{ reportError }}</p>
           <button 
             class="btn-slate-primary"
-            :disabled="actionLoading === 'analyze' || selectedIncident.status === 'analyzing'"
+            :disabled="actionLoading === 'analyze' || selectedIncident.status === 'analyzing' || selectedIncident.status === 'resolved'"
+            :title="selectedIncident.status === 'resolved' ? 'Resolved incident — view existing RCA or export postmortem' : 'Retry Autonomous AI RCA'"
             @click="emit('analyze', selectedIncident)"
           >
             <BaseIcon v-if="actionLoading !== 'analyze'" name="refresh" size="xs" /> <span>{{ actionLoading === 'analyze' ? 'Reasoning...' : 'Retry Autonomous AI RCA' }}</span>
@@ -160,13 +189,14 @@ const hasDiffContent = computed(() => {
         <div v-else class="rca-empty-state">
           <BaseIcon name="sparkles" size="lg" class="rca-empty-icon" />
           <h4 class="rca-empty-title">No RCA report available</h4>
-          <span class="rca-empty-subtitle font-mono">Claude 3.5 Sonnet / Multi-Agent correlation ready for this incident.</span>
+          <span class="rca-empty-subtitle font-mono">{{ (selectedIncident as any)?.analyzer || 'Deterministic SRE RCA Engine' }} correlation ready for this incident.</span>
           <p class="rca-empty-desc">
             This anomaly has not been analyzed yet. Run automated diagnostics to inspect container logs, k8s events, and metric anomalies.
           </p>
           <button 
             class="btn-slate-primary"
-            :disabled="actionLoading === 'analyze' || selectedIncident.status === 'analyzing'"
+            :disabled="actionLoading === 'analyze' || selectedIncident.status === 'analyzing' || selectedIncident.status === 'resolved'"
+            :title="selectedIncident.status === 'resolved' ? 'Resolved incident — view existing RCA or export postmortem' : 'Run Autonomous AI RCA'"
             @click="emit('analyze', selectedIncident)"
           >
             <BaseIcon v-if="actionLoading !== 'analyze'" name="zap" size="xs" /> <span>{{ actionLoading === 'analyze' ? 'Reasoning...' : 'Run Autonomous AI RCA' }}</span>

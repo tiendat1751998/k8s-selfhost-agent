@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import ModalDrawer from '../ui/ModalDrawer.vue'
 import type { Organization } from '../../api/management'
 import type { TenantStatSummary } from '../../composables/useTenancyRbac'
@@ -14,6 +14,14 @@ const emit = defineEmits<{
   (e: 'update:show', val: boolean): void
   (e: 'save', payload: { orgId: string; quota: Record<string, unknown>; org: Organization }): void
 }>()
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && props.show) {
+    emit('update:show', false)
+  }
+}
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 const maxPods = ref(50)
 const maxProjects = ref(10)
@@ -101,29 +109,30 @@ function handleSave(close: () => void) {
         </div>
       </div>
 
-      <div class="quota-limits-form" style="margin-top: 16px; border-top: 1px solid var(--color-border-subtle); padding-top: 14px;">
+      <form id="tenant-quota-form" class="quota-limits-form" style="margin-top: 16px; border-top: 1px solid var(--color-border-subtle); padding-top: 14px;" @submit.prevent="handleSave(() => emit('update:show', false))">
         <label class="font-bold text-xs" style="color: var(--text-primary); display: block; margin-bottom: 8px;">Quota Policy Limits</label>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
           <div class="form-group">
-            <label class="text-xs text-muted">Max Pods</label>
-            <input v-model.number="maxPods" type="number" min="1" max="1000" class="input-glass" />
+            <label for="quota-max-pods" class="text-xs text-muted">Max Pods</label>
+            <input id="quota-max-pods" v-model.number="maxPods" type="number" min="1" max="1000" class="input-glass" />
           </div>
           <div class="form-group">
-            <label class="text-xs text-muted">Max Namespaces</label>
-            <input v-model.number="maxProjects" type="number" min="1" max="100" class="input-glass" />
+            <label for="quota-max-ns" class="text-xs text-muted">Max Namespaces</label>
+            <input id="quota-max-ns" v-model.number="maxProjects" type="number" min="1" max="100" class="input-glass" />
           </div>
           <div class="form-group">
-            <label class="text-xs text-muted">Max SSO Seats</label>
-            <input v-model.number="maxMembers" type="number" min="1" max="500" class="input-glass" />
+            <label for="quota-max-sso" class="text-xs text-muted">Max SSO Seats</label>
+            <input id="quota-max-sso" v-model.number="maxMembers" type="number" min="1" max="500" class="input-glass" />
           </div>
         </div>
-      </div>
+      </form>
     </div>
     <template #footer="{ close }">
       <button class="btn btn-secondary" type="button" @click="close">Close</button>
       <button
+        form="tenant-quota-form"
+        type="submit"
         class="btn btn-primary"
-        type="button"
         @click="handleSave(close)"
       >
         Save Quota
@@ -131,3 +140,25 @@ function handleSave(close: () => void) {
     </template>
   </ModalDrawer>
 </template>
+
+<style scoped>
+.quota-track {
+  height: 6px;
+  background: var(--color-surface-inset);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+}
+.quota-fill-cyan {
+  background: var(--color-cyan, #06b6d4);
+  box-shadow: 0 0 6px rgba(6, 182, 212, 0.4);
+}
+.quota-fill-emerald {
+  background: var(--color-success, #10b981);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+}
+.quota-fill-amber {
+  background: var(--color-warning, #f59e0b);
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+}
+</style>

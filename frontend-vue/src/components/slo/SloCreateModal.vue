@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { reactive, watch } from 'vue'
-import type { CreateSLOPayload } from '../../api/compute'
+import { reactive, watch, onMounted, onUnmounted } from 'vue'
+import type { CreateSLOPayload, UpdateSLOPayload } from '../../api/compute'
+import type { SLODefinition } from '../../types/slo'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 interface ServiceOption {
   id: string
@@ -12,11 +14,13 @@ const props = defineProps<{
   show: boolean
   realServices: ServiceOption[]
   actionInProgress?: boolean
+  editingDefinition?: SLODefinition | null
 }>()
 
 const emit = defineEmits<{
   (e: 'update:show', value: boolean): void
   (e: 'create', payload: CreateSLOPayload): void
+  (e: 'save', payload: { id: string; payload: UpdateSLOPayload }): void
 }>()
 
 const newSLO = reactive({
@@ -43,9 +47,45 @@ function getPromQLTemplate(service: string, indicator: string): string {
 }
 
 watch([() => newSLO.selectedService, () => newSLO.indicator_type], ([newSvc, newInd]) => {
-  const svc = newSvc === 'custom' ? (newSLO.customServiceName || 'my_service') : newSvc
-  newSLO.query = getPromQLTemplate(svc, newInd)
+  if (!props.editingDefinition) {
+    const svc = newSvc === 'custom' ? (newSLO.customServiceName || 'my_service') : newSvc
+    newSLO.query = getPromQLTemplate(svc, newInd)
+  }
 })
+
+watch(
+  [() => props.editingDefinition, () => props.show],
+  ([def, isShown]) => {
+    if (!isShown) return
+    if (def) {
+      const match = props.realServices.find(s => s.id === def.service)
+      newSLO.selectedService = match && match.id !== 'custom' ? match.id : 'custom'
+      newSLO.customServiceName = match && match.id !== 'custom' ? '' : def.service
+      newSLO.indicator_type = def.indicator_type || 'availability'
+      newSLO.target = def.target > 1 ? def.target : Number((def.target * 100).toFixed(2))
+      newSLO.window = def.window || '30d'
+      newSLO.query = def.query || getPromQLTemplate(def.service, def.indicator_type)
+      newSLO.alert_threshold = def.alert_threshold || 1.5
+    } else {
+      newSLO.selectedService = props.realServices[0]?.id || 'custom'
+      newSLO.customServiceName = ''
+      newSLO.indicator_type = 'availability'
+      newSLO.target = 99.90
+      newSLO.window = '30d'
+      newSLO.query = getPromQLTemplate('my_service', 'availability')
+      newSLO.alert_threshold = 1.5
+    }
+  },
+  { immediate: true }
+)
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && props.show) {
+    emit('update:show', false)
+  }
+}
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 function setPresetTarget(val: number) {
   newSLO.target = Number(val.toFixed(2))
@@ -59,14 +99,28 @@ function handleSubmit() {
   const sanitizedTarget = Number(Number(newSLO.target).toFixed(3))
   const sanitizedAlertThreshold = Number(Number(newSLO.alert_threshold).toFixed(2))
 
-  emit('create', {
-    service: targetService,
-    indicator_type: newSLO.indicator_type,
-    target: sanitizedTarget,
-    window: newSLO.window,
-    query: newSLO.query.trim(),
-    alert_threshold: sanitizedAlertThreshold,
-  })
+  if (props.editingDefinition?.id) {
+    emit('save', {
+      id: props.editingDefinition.id,
+      payload: {
+        service: targetService,
+        indicator_type: newSLO.indicator_type,
+        target: sanitizedTarget,
+        window: newSLO.window,
+        query: newSLO.query.trim(),
+        alert_threshold: sanitizedAlertThreshold,
+      }
+    })
+  } else {
+    emit('create', {
+      service: targetService,
+      indicator_type: newSLO.indicator_type,
+      target: sanitizedTarget,
+      window: newSLO.window,
+      query: newSLO.query.trim(),
+      alert_threshold: sanitizedAlertThreshold,
+    })
+  }
 }
 </script>
 
@@ -76,9 +130,9 @@ function handleSubmit() {
       <div class="modal-header">
         <div class="modal-title-group">
           <BaseIcon name="target" size="sm" class="modal-icon" />
-          <h2 class="modal-title">+ Create SLO Target Definition</h2>
+          <h2 class="modal-title">{{ editingDefinition ? 'Edit SLO Target Definition' : '+ Create SLO Target Definition' }}</h2>
         </div>
-        <button class="modal-close-btn" @click="emit('update:show', false)"><BaseIcon name="x" size="xs" /></button>
+        <button class="modal-close-btn" aria-label="Close modal" @click="emit('update:show', false)"><BaseIcon name="x" size="xs" /></button>
       </div>
 
       <form class="modal-body" @submit.prevent="handleSubmit">
@@ -175,7 +229,8 @@ function handleSubmit() {
             Cancel
           </button>
           <button type="submit" class="btn btn-primary" :disabled="actionInProgress">
-            <BaseIcon :name="actionInProgress ? 'clock' : 'zap'" size="xs" /> <span>{{ actionInProgress ? 'Creating...' : 'Save & Arm SLO Target' }}</span>
+            <BaseIcon :name="actionInProgress ? 'clock' : 'zap'" size="xs" />
+            <span>{{ actionInProgress ? (editingDefinition ? 'Saving...' : 'Creating...') : (editingDefinition ? 'Save Changes' : 'Save & Arm SLO Target') }}</span>
           </button>
         </div>
       </form>

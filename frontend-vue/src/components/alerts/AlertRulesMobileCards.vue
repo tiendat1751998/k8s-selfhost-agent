@@ -64,5 +64,5 @@ const emit = defineEmits<{
 .btn-card-action:hover { background: var(--bg-card-hover); color: var(--text-primary); }
 .btn-card-delete { color: var(--color-status-offline, #fb7185); border-color: var(--color-status-offline-border, rgba(244, 63, 94, 0.25)); background: var(--color-status-offline-bg, rgba(244, 63, 94, 0.08)); }
 .btn-card-delete:hover { background: var(--color-status-offline-bg, rgba(244, 63, 94, 0.2)); color: var(--color-status-offline, #fb7185); }
-@media (min-width: 640px) { .mobile-only { display: none !important; } }
+@media (min-width: 768px) { .mobile-only { display: none !important; } }
 </style>

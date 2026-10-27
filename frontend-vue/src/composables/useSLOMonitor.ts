@@ -472,10 +472,15 @@ export function useSLOMonitor() {
     fetchRealServices()
   })
 
+  const editingDefinition = computed<SLODefinition | null>(() => {
+    if (!isEditing.value || !newSLO.id) return null
+    return definitions.value.find(d => d.id === newSLO.id) || null
+  })
+
   return {
     loading, actionInProgress, error, bannerMessage,
     definitions, snapshots, selectedWindowFilter, viewMode,
-    showCreateModal, showInspectModal, isEditing, selectedInspectSLO,
+    showCreateModal, showInspectModal, isEditing, editingDefinition, selectedInspectSLO,
     realServices, loadingServices, newSLO,
     totalSLOs, healthySLOs, warningSLOs, criticalSLOs,
     healthySloCount, fastBurnCount, exhaustedBudgetCount, avgErrorBudgetPct,

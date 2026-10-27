@@ -128,6 +128,10 @@ export function useIncidents() {
   }
 
   async function triggerAIAnalysis(inc: Incident) {
+    if (inc.status === 'resolved') {
+      showToast('Incident is already resolved — view existing RCA or export postmortem.', 'error')
+      return
+    }
     actionLoading.value = 'analyze'
     try {
       await incidentsApi.analyze(inc.id)
@@ -143,7 +147,12 @@ export function useIncidents() {
       }
       await fetchIncidents()
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'AI Analysis failed — check LLM provider connectivity', 'error')
+      const msg = err instanceof Error ? err.message : 'AI Analysis failed — check LLM provider connectivity'
+      if (msg.includes('409') || msg.toLowerCase().includes('conflict') || msg.toLowerCase().includes('invalid incident status')) {
+        showToast('Cannot re-run RCA on resolved incident. Please reopen or view postmortem.', 'error')
+      } else {
+        showToast(msg, 'error')
+      }
     } finally {
       actionLoading.value = null
     }
@@ -247,6 +256,54 @@ export function useIncidents() {
       await fetchIncidents()
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Failed to resolve incident', 'error')
+    } finally {
+      actionLoading.value = null
+    }
+  }
+
+  async function handleAcknowledgeIncident(inc: Incident) {
+    if (!inc || !inc.id) return
+    actionLoading.value = 'acknowledge'
+    try {
+      const updated = await incidentsApi.acknowledge(inc.id)
+      if (updated && updated.status) {
+        inc.status = updated.status
+      } else {
+        (inc as any).status = 'acknowledged'
+      }
+      if (selectedIncident.value?.id === inc.id) {
+        selectedIncident.value = { ...inc }
+      }
+      showToast('Incident ' + inc.pod_name + ' acknowledged. Escalation paused.', 'success')
+      await fetchIncidents()
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to acknowledge incident', 'error')
+    } finally {
+      actionLoading.value = null
+    }
+  }
+
+  async function handleExportPostmortem(inc: Incident) {
+    if (!inc || !inc.id) return
+    actionLoading.value = 'postmortem'
+    try {
+      const res = await incidentsApi.getPostmortem(inc.id)
+      const md = res?.markdown || `# SRE Incident Postmortem: ${inc.pod_name}\n\n- **Target:** ${inc.cluster_name}/${inc.namespace}/${inc.pod_name}\n- **Type:** ${inc.type}\n- **Severity:** ${inc.severity}\n- **Status:** ${inc.status}\n- **Detected:** ${inc.created_at}\n- **Root Cause:** ${selectedReport.value?.root_cause || inc.message}\n`
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(md)
+        showToast('Postmortem markdown copied to clipboard!', 'success')
+      } else {
+        const blob = new Blob([md], { type: 'text/markdown' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `postmortem-${inc.pod_name || inc.id}.md`
+        a.click()
+        URL.revokeObjectURL(url)
+        showToast('Postmortem downloaded as markdown file.', 'success')
+      }
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to export postmortem', 'error')
     } finally {
       actionLoading.value = null
     }
@@ -427,6 +484,8 @@ export function useIncidents() {
     handleCreateIncident,
     handleMitigateIncident,
     handleResolveIncident,
+    handleAcknowledgeIncident,
+    handleExportPostmortem,
     openCreatePRModal,
     handleCreatePR,
     handleMergePR,

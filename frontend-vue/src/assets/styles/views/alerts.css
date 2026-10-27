@@ -161,6 +161,47 @@
   background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25);
   padding: 3px 8px; border-radius: 6px; white-space: nowrap;
 }
+.alerts-toolbar-sleek .kpi-pipeline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+.alerts-toolbar-sleek .pipeline-badge {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.alerts-toolbar-sleek .pipeline-firing {
+  color: var(--color-text-muted);
+}
+.alerts-toolbar-sleek .pipeline-firing.is-active {
+  color: var(--color-danger);
+}
+.alerts-toolbar-sleek .pipeline-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+}
+.alerts-toolbar-sleek .pipeline-firing.is-active .pipeline-indicator {
+  background: var(--color-danger);
+  box-shadow: 0 0 6px var(--color-danger);
+}
+.alerts-toolbar-sleek .pipeline-armed {
+  color: var(--color-success);
+}
+.alerts-toolbar-sleek .pipeline-silenced {
+  color: var(--color-warning);
+}
+.alerts-toolbar-sleek .pipeline-sep {
+  color: var(--color-border-subtle);
+}
 
 .alerts-toolbar-sleek .toolbar-actions-group {
   display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0;

@@ -54,7 +54,8 @@ const emit = defineEmits<{
           <button
             type="button"
             class="btn btn-secondary btn-sm"
-            :disabled="actionLoading === 'analyze' || incident.status === 'analyzing'"
+            :disabled="actionLoading === 'analyze' || incident.status === 'analyzing' || incident.status === 'resolved'"
+            :title="incident.status === 'resolved' ? 'Resolved incident — view existing RCA or export postmortem' : 'AI Root Cause'"
             @click="emit('analyze', incident)"
           >
             <BaseIcon :name="actionLoading === 'analyze' ? 'clock' : 'cpu'" size="xs" /> <span>{{ actionLoading === 'analyze' ? 'Reasoning...' : 'AI Root Cause' }}</span>

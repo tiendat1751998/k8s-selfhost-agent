@@ -24,6 +24,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'inspect', row: SLODefinition): void
+  (e: 'editSlo', row: SLODefinition): void
   (e: 'triggerAlert', id: string, service: string): void
   (e: 'deleteSlo', id: string, service: string): void
 }>()
@@ -122,6 +123,7 @@ function getBurnBadgeClass(rate: number): string {
 function getRowActions(_row?: EnrichedSLORow): ActionItem[] {
   return [
     { id: 'inspect', label: 'Inspect SLI & Budget', icon: 'search' },
+    { id: 'edit', label: 'Edit SLO Target', icon: 'sliders' },
     { id: 'sep', label: '', separator: true },
     { id: 'delete', label: 'Delete SLO', icon: 'trash', variant: 'danger' },
   ]
@@ -130,6 +132,8 @@ function getRowActions(_row?: EnrichedSLORow): ActionItem[] {
 function handleRowAction(actionId: string, row: EnrichedSLORow) {
   if (actionId === 'inspect') {
     emit('inspect', row)
+  } else if (actionId === 'edit') {
+    emit('editSlo', row)
   } else if (actionId === 'delete') {
     emit('deleteSlo', String(row.id || ''), String(row.service || ''))
   }

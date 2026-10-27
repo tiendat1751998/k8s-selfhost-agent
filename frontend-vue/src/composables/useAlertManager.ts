@@ -127,8 +127,10 @@ export function useAlertManager() {
   }
 
   async function handleSilence(item: AlertHistory, durationMinutes = 60, reason = 'Operator snoozed') {
+    const startTime = performance.now()
     try {
-      await alertsApi.silenceAlert(item.ID, durationMinutes, reason)
+      const res = await alertsApi.silenceAlert(item.ID, durationMinutes, reason)
+      const latency = Math.round(performance.now() - startTime)
       silencedAlerts.value[item.ID] = {
         id: item.ID,
         ruleId: item.RuleID,
@@ -137,18 +139,20 @@ export function useAlertManager() {
         reason
       }
       item.Status = 'silenced'
-      showFeedback(`Alert ${item.ID} silenced for ${durationMinutes}m.`)
+      showFeedback(`Alert ${item.ID} silenced for ${durationMinutes}m (${latency}ms): ${res?.status || 'OK'}`)
     } catch (e: unknown) {
       showFeedback(`Failed to silence alert: ${e instanceof Error ? e.message : 'Unknown error'}`)
     }
   }
 
   async function handleResolve(item: AlertHistory) {
+    const startTime = performance.now()
     try {
-      await alertsApi.resolveAlert(item.ID)
+      const res = await alertsApi.resolveAlert(item.ID)
+      const latency = Math.round(performance.now() - startTime)
       item.Status = 'resolved'
       item.UpdatedAt = new Date().toISOString()
-      showFeedback(`Alert ${item.ID} marked as resolved.`)
+      showFeedback(`Alert ${item.ID} resolved (${latency}ms): ${res?.status || 'OK'}`)
     } catch (e: unknown) {
       showFeedback(`Failed to resolve alert: ${e instanceof Error ? e.message : 'Unknown error'}`)
     }
@@ -258,13 +262,16 @@ export function useAlertManager() {
   }
 
   async function triggerChannelTest(name: string, channelId?: string) {
+    const startTime = performance.now()
     try {
       const targetId = channelId || channels.value.find(c => c.Name === name)?.ID || name
       const res = await alertsApi.testChannel(targetId)
-      showFeedback(`Test notification dispatched to [${name}]. Status: ${res?.status || '200 OK'}`)
+      const latency = Math.round(performance.now() - startTime)
+      showFeedback(`Test notification dispatched to [${name}] (${latency}ms): ${res?.message || res?.status || '200 OK'}`)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Delivered'
-      showFeedback(`Test notification dispatched to [${name}]: ${msg}`)
+      const latency = Math.round(performance.now() - startTime)
+      showFeedback(`Test notification dispatched to [${name}] (${latency}ms): ${msg}`)
     }
   }
 
