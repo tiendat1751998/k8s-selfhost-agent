@@ -19,6 +19,11 @@ func NewComplianceRepo(pool DBTX) *ComplianceRepo {
 	return &ComplianceRepo{pool: pool}
 }
 
+// DB returns the underlying DBTX connection.
+func (r *ComplianceRepo) DB() DBTX {
+	return r.pool
+}
+
 func (r *ComplianceRepo) getDB(ctx context.Context) DBTX {
 	return ExtractTx(ctx, r.pool)
 }

@@ -23,6 +23,11 @@ func NewAuditRepo(db DBTX) audit.Repository {
 	return &auditRepo{db: db}
 }
 
+// DB returns the underlying DBTX connection.
+func (r *auditRepo) DB() DBTX {
+	return r.db
+}
+
 func (r *auditRepo) getDB(ctx context.Context) DBTX {
 	return ExtractTx(ctx, r.db)
 }

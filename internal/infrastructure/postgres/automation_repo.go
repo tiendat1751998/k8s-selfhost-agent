@@ -22,6 +22,11 @@ func NewAutomationRepo(db DBTX) automation.Repository {
 	return &automationRepo{db: db}
 }
 
+// DB returns the underlying DBTX connection.
+func (r *automationRepo) DB() DBTX {
+	return r.db
+}
+
 func (r *automationRepo) getDB(ctx context.Context) DBTX {
 	return ExtractTx(ctx, r.db)
 }

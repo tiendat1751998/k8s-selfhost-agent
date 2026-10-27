@@ -3,21 +3,45 @@ package http
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/datdt/k8sselfhost/internal/domain/automation"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
 )
+
+// AutomationOption configures AutomationHandler.
+type AutomationOption func(*AutomationHandler)
+
+// WithAutomationExecutor sets a custom automation executor on AutomationHandler.
+func WithAutomationExecutor(e *AutomationRuleExecutor) AutomationOption {
+	return func(h *AutomationHandler) {
+		h.executor = e
+	}
+}
 
 // AutomationHandler provides HTTP handlers for automation rules API.
 type AutomationHandler struct {
-	repo automation.Repository
+	repo     automation.Repository
+	executor *AutomationRuleExecutor
 }
 
 // NewAutomationHandler creates a new automation HTTP handler.
-func NewAutomationHandler(repo automation.Repository) *AutomationHandler {
-	return &AutomationHandler{repo: repo}
+func NewAutomationHandler(repo automation.Repository, opts ...AutomationOption) *AutomationHandler {
+	h := &AutomationHandler{repo: repo}
+	for _, opt := range opts {
+		opt(h)
+	}
+
+	if h.executor == nil && repo != nil {
+		if dbp, ok := repo.(interface{ DB() postgres.DBTX }); ok && dbp.DB() != nil {
+			h.executor = NewAutomationRuleExecutor(WithExecutorDB(dbp.DB()))
+		}
+	}
+
+	return h
 }
 
 // RegisterRoutes registers automation routes.
@@ -190,14 +214,25 @@ func (h *AutomationHandler) TriggerRule(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	exec := &automation.Execution{
-		ID:           uuid.NewString(),
-		RuleID:       rule.ID,
-		RuleName:     rule.Name,
-		TriggerEvent: "Manual SRE 1-Click trigger from console",
-		ActionTaken:  "Dispatched automated self-healing action: " + string(rule.ActionType),
-		Result:       "success",
+	var exec *automation.Execution
+	if h.executor != nil {
+		exec, err = h.executor.ExecuteRule(r.Context(), rule)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to execute automation rule", err)
+			return
+		}
+	} else {
+		exec = &automation.Execution{
+			ID:           uuid.NewString(),
+			RuleID:       rule.ID,
+			RuleName:     rule.Name,
+			TriggerEvent: "Manual SRE 1-Click trigger from console",
+			ActionTaken:  "Dispatched automated self-healing action: " + string(rule.ActionType),
+			Result:       "success",
+			CreatedAt:    time.Now().UTC(),
+		}
 	}
+
 	if err := h.repo.CreateExecution(r.Context(), exec); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to record rule execution", err)
 		return
@@ -208,7 +243,8 @@ func (h *AutomationHandler) TriggerRule(w http.ResponseWriter, r *http.Request) 
 		"rule_id":      rule.ID,
 		"rule_name":    rule.Name,
 		"action_taken": exec.ActionTaken,
-		"result":       "success",
+		"result":       exec.Result,
+		"error_detail": exec.ErrorDetail,
 		"execution_id": exec.ID,
 	})
 }
