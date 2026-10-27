@@ -3,6 +3,7 @@ package http
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -235,5 +236,91 @@ func TestFleetHandler_UpgradeCluster_Returns501AndDoesNotUpdateDB(t *testing.T) 
 	if repo.updateStatusCalled {
 		t.Fatalf("CRITICAL BUG: UpdateClusterStatus was called on unimplemented 501 upgrade endpoint, causing DB status corruption")
 	}
+}
+
+func TestFleetHandler_ValidateKubeconfig(t *testing.T) {
+	repo := &mockFleetHandlerRepo{clusters: make(map[string]*fleet.Cluster)}
+	router := setupFleetTestRouter(repo)
+
+	// Spin up a dummy HTTPS test server to act as a responsive K8s API server
+	dummyServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"major":"1","minor":"30"}`))
+	}))
+	defer dummyServer.Close()
+
+	t.Run("Reachable cluster kubeconfig returns reachable true", func(t *testing.T) {
+		kubeconfig := "apiVersion: v1\nclusters:\n- cluster:\n    server: " + dummyServer.URL + "\n  name: test-cluster\ncontexts:\n- context:\n    cluster: test-cluster\n    user: test-user\n  name: test\ncurrent-context: test\n"
+		payload := map[string]string{"kubeconfig": kubeconfig}
+		b, _ := json.Marshal(payload)
+
+		req := httptest.NewRequest(http.MethodPost, "/validate-kubeconfig", bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		var resp map[string]interface{}
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		if resp["reachable"] != true {
+			t.Errorf("expected reachable: true, got %v", resp)
+		}
+		if resp["valid"] != true {
+			t.Errorf("expected valid: true, got %v", resp)
+		}
+	})
+
+	t.Run("Unreachable cluster server returns reachable false", func(t *testing.T) {
+		kubeconfig := "apiVersion: v1\nclusters:\n- cluster:\n    server: https://192.0.2.1:6443\n  name: unreachable-cluster\n"
+		payload := map[string]string{"kubeconfig": kubeconfig}
+		b, _ := json.Marshal(payload)
+
+		req := httptest.NewRequest(http.MethodPost, "/validate-kubeconfig", bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		var resp map[string]interface{}
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		if resp["reachable"] == true {
+			t.Errorf("expected reachable: false for unreachable IP, got %v", resp)
+		}
+	})
+
+	t.Run("Malformed kubeconfig returns 400 Bad Request", func(t *testing.T) {
+		payload := map[string]string{"kubeconfig": "not: a: valid: kubeconfig: yaml: %%%"}
+		b, _ := json.Marshal(payload)
+
+		req := httptest.NewRequest(http.MethodPost, "/validate-kubeconfig", bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 Bad Request, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("SSRF to cloud metadata blocked with 400", func(t *testing.T) {
+		kubeconfig := "apiVersion: v1\nclusters:\n- cluster:\n    server: http://169.254.169.254/latest/meta-data\n  name: meta-cluster\n"
+		payload := map[string]string{"kubeconfig": kubeconfig}
+		b, _ := json.Marshal(payload)
+
+		req := httptest.NewRequest(http.MethodPost, "/validate-kubeconfig", bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 Bad Request for metadata IP, got %d", rec.Code)
+		}
+	})
 }
 

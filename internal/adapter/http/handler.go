@@ -82,7 +82,9 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Get("/{id}", h.GetIncident)
 		r.Get("/{id}/report", h.GetIncidentReport)
 		r.Get("/{id}/pr", h.GetIncidentPR)
+		r.Get("/{id}/postmortem", h.GetPostmortem)
 		r.Post("/{id}/analyze", h.AnalyzeIncident)
+		r.Post("/{id}/acknowledge", h.AcknowledgeIncident)
 		r.Post("/{id}/mitigate", h.MitigateIncident)
 		r.Post("/{id}/resolve", h.ResolveIncident)
 	})
@@ -252,8 +254,8 @@ func (h *Handler) AnalyzeIncident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update status to analyzing
-	if inc.Status != incident.StatusAnalyzing {
+	// Update status to analyzing (allow post-incident forensics on resolved incidents without resetting status)
+	if inc.Status != incident.StatusAnalyzing && inc.Status != incident.StatusResolved {
 		if err := inc.MarkAnalyzing(); err != nil {
 			writeError(w, http.StatusConflict, "invalid incident status for analysis", err)
 			return
@@ -268,10 +270,12 @@ func (h *Handler) AnalyzeIncident(w http.ResponseWriter, r *http.Request) {
 	if h.publisher != nil {
 		task := map[string]string{"incident_id": inc.ID}
 		if err := h.publisher.Publish(r.Context(), "incidents.analyze", task); err != nil {
-			// Rollback status to detected
-			inc.Status = incident.StatusDetected
-			if rbErr := h.incidentRepo.Update(r.Context(), inc); rbErr != nil {
-				logger.Get().Error("failed to rollback incident status", zap.Error(rbErr))
+			// Rollback status to detected if not resolved
+			if inc.Status != incident.StatusResolved {
+				inc.Status = incident.StatusDetected
+				if rbErr := h.incidentRepo.Update(r.Context(), inc); rbErr != nil {
+					logger.Get().Error("failed to rollback incident status", zap.Error(rbErr))
+				}
 			}
 			writeError(w, http.StatusInternalServerError, "failed to publish analyze task", err)
 			return

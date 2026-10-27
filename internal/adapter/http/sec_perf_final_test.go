@@ -162,6 +162,10 @@ func (m *mockAuditRepoForRBAC) ListFindings(ctx context.Context, status string) 
 	return []audit.AuditFinding{}, nil
 }
 
+func (m *mockAuditRepoForRBAC) RecordRun(ctx context.Context, run *audit.AuditRun) error {
+	return nil
+}
+
 func TestRBAC_PlatformAdminOnlyEndpoints(t *testing.T) {
 	auditHandler := NewAuditHandler(&mockAuditRepoForRBAC{})
 	platform := &PlatformHandlers{
@@ -172,23 +176,33 @@ func TestRBAC_PlatformAdminOnlyEndpoints(t *testing.T) {
 		RegisterPlatformRoutes(sub, platform)
 	})
 
-	// Operator role on /api/v1/audit/findings should be forbidden
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/findings", nil)
+	// Operator role on GET /api/v1/audit/findings is allowed per Criterion 6
+	reqFindings := httptest.NewRequest(http.MethodGet, "/api/v1/audit/findings", nil)
+	reqFindings = reqFindings.WithContext(tenancy.WithUserRole(reqFindings.Context(), "operator"))
+	recFindings := httptest.NewRecorder()
+	r.ServeHTTP(recFindings, reqFindings)
+
+	if recFindings.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for operator on /api/v1/audit/findings, got %d", recFindings.Code)
+	}
+
+	// Operator role on mutating POST /api/v1/audit/run must be 403 Forbidden
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/audit/run", nil)
 	req = req.WithContext(tenancy.WithUserRole(req.Context(), "operator"))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 Forbidden for operator on /api/v1/audit/findings, got %d", rec.Code)
+		t.Fatalf("expected 403 Forbidden for operator on POST /api/v1/audit/run, got %d", rec.Code)
 	}
 
-	// Platform admin should not be forbidden on /api/v1/audit/findings
-	reqAdmin := httptest.NewRequest(http.MethodGet, "/api/v1/audit/findings", nil)
+	// Platform admin should not be forbidden on POST /api/v1/audit/run
+	reqAdmin := httptest.NewRequest(http.MethodPost, "/api/v1/audit/run", nil)
 	reqAdmin = reqAdmin.WithContext(tenancy.WithUserRole(reqAdmin.Context(), "platform_admin"))
 	recAdmin := httptest.NewRecorder()
 	r.ServeHTTP(recAdmin, reqAdmin)
 
 	if recAdmin.Code == http.StatusForbidden {
-		t.Fatalf("expected platform_admin not to be forbidden, got 403")
+		t.Fatalf("expected platform_admin not to be forbidden on POST /api/v1/audit/run, got 403")
 	}
 }

@@ -206,7 +206,7 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 		Compliance:      adapthttp.NewComplianceHandler(postgres.NewComplianceRepo(pgPool)),
 		Tagging:         adapthttp.NewTaggingHandler(postgres.NewTaggingRepo(pgPool)),
 		Runbook:         adapthttp.NewRunbookHandler(postgres.NewRunbookRepo(pgPool), p.auditRepo),
-		Observability:   adapthttp.NewObservabilityHandler(p.obsRepo),
+		Observability:   adapthttp.NewObservabilityHandler(p.obsRepo, adapthttp.WithComputeHostRepo(p.computeHostRepo)),
 		Capacity:        adapthttp.NewCapacityHandler(usecaseCapacity.NewForecaster(p.metricsCollector, usecaseCapacity.WithComputeHostRepo(p.computeHostRepo), usecaseCapacity.WithRepository(postgres.NewCapacityRepo(pgPool)))),
 		Changes:         adapthttp.NewChangeHandler(postgres.NewChangesRepo(pgPool)),
 		Promotion:       adapthttp.NewPromotionHandler(p.promotionUsecase),

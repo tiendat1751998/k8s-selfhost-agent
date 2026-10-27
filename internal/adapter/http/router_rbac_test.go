@@ -122,6 +122,7 @@ func TestRouter_RBACEnforcement(t *testing.T) {
 			{http.MethodPost, "/api/v1/capacity"},
 			{http.MethodPost, "/api/v1/health/ping"},
 			{http.MethodPost, "/api/v1/incidents"},
+			{http.MethodPost, "/api/v1/incidents/inc-1/acknowledge"},
 			{http.MethodPost, "/api/v1/incidents/inc-1/mitigate"},
 			{http.MethodPost, "/api/v1/incidents/inc-1/resolve"},
 			{http.MethodPost, "/api/v1/incidents/simulate"},

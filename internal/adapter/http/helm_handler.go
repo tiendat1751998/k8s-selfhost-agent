@@ -458,10 +458,14 @@ func isK8sUnavailableErr(err error) bool {
 	return strings.Contains(msg, "6443") ||
 		strings.Contains(msg, "connectex") ||
 		strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "refused") ||
 		strings.Contains(msg, "dial tcp") ||
 		strings.Contains(msg, "cluster not connected") ||
 		strings.Contains(msg, "unreachable") ||
-		strings.Contains(msg, "kubeconfig")
+		strings.Contains(msg, "kubeconfig") ||
+		strings.Contains(msg, "no route to host") ||
+		strings.Contains(msg, "timed out") ||
+		strings.Contains(msg, "deadline exceeded")
 }
 
 func (h *HelmHandler) handleReleaseError(w http.ResponseWriter, clusterID, defaultMsg string, err error) {

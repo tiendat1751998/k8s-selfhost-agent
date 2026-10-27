@@ -45,3 +45,20 @@ func (u *Usecase) ListHistory(ctx context.Context, tenantID string) ([]*alert.Al
 func (u *Usecase) AcknowledgeAlert(ctx context.Context, id, tenantID, userID string) error {
 	return u.repo.AcknowledgeAlert(ctx, id, tenantID, userID)
 }
+
+func (u *Usecase) ResolveAlert(ctx context.Context, id, tenantID, userID string) error {
+	return u.repo.ResolveAlert(ctx, id, tenantID, userID)
+}
+
+func (u *Usecase) CreateSilence(ctx context.Context, silence *alert.Silence) error {
+	return u.repo.CreateSilence(ctx, silence)
+}
+
+func (u *Usecase) ListSilences(ctx context.Context, tenantID string) ([]*alert.Silence, error) {
+	return u.repo.ListSilences(ctx, tenantID)
+}
+
+func (u *Usecase) IsAlertSilenced(ctx context.Context, tenantID, alertID string) (bool, error) {
+	return u.repo.IsAlertSilenced(ctx, tenantID, alertID)
+}
+

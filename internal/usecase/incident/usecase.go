@@ -26,6 +26,12 @@ type CreateCommand struct {
 	RawData     map[string]string `json:"raw_data,omitempty"`
 }
 
+// AcknowledgeCommand defines inputs to transition an incident to acknowledged/investigating.
+type AcknowledgeCommand struct {
+	Operator string `json:"operator"`
+	Notes    string `json:"notes"`
+}
+
 // MitigateCommand defines inputs to transition an incident to mitigating/mitigated.
 type MitigateCommand struct {
 	Operator string          `json:"operator"`
@@ -137,6 +143,28 @@ func (u *Usecase) CreateIncident(ctx context.Context, cmd CreateCommand) (*incid
 	}
 
 	if err := u.repo.Create(ctx, inc); err != nil {
+		return nil, err
+	}
+
+	return inc, nil
+}
+
+// AcknowledgeIncident transitions an incident to investigating state with operator notes.
+func (u *Usecase) AcknowledgeIncident(ctx context.Context, id string, cmd AcknowledgeCommand) (*incident.Incident, error) {
+	if strings.TrimSpace(id) == "" {
+		return nil, errors.NewValidation("id", "must not be empty")
+	}
+
+	inc, err := u.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := inc.Acknowledge(cmd.Operator, cmd.Notes); err != nil {
+		return nil, err
+	}
+
+	if err := u.repo.Update(ctx, inc); err != nil {
 		return nil, err
 	}
 

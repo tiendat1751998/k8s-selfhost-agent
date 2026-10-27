@@ -2,14 +2,16 @@ package http
 
 import (
 	"net/http"
-	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/alert"
 	alertUsecase "github.com/datdt/k8sselfhost/internal/usecase/alert"
 )
+
 
 type AlertHandler struct {
 	usecase *alertUsecase.Usecase
@@ -23,15 +25,16 @@ func (h *AlertHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/channels", h.CreateChannel)
 	r.Get("/channels", h.ListChannels)
 	r.Post("/channels/{id}/test", h.TestChannel)
-	
+
 	r.Post("/rules", h.CreateRule)
 	r.Get("/rules", h.ListRules)
 	r.Put("/rules/{id}", h.UpdateRule)
 	r.Delete("/rules/{id}", h.DeleteRule)
-	
+
 	r.Get("/history", h.ListHistory)
 	r.Post("/history/{id}/acknowledge", h.AcknowledgeAlert)
 	r.Post("/silences", h.CreateSilence)
+	r.Get("/silences", h.ListSilences)
 	r.Post("/alerts/{id}/resolve", h.ResolveAlert)
 }
 
@@ -39,29 +42,11 @@ func (h *AlertHandler) RegisterRoutes(r chi.Router) {
 func (h *AlertHandler) RegisterAlertmanagerRoutes(r chi.Router) {
 	r.Post("/channels/{id}/test", h.TestChannel)
 	r.Post("/silences", h.CreateSilence)
+	r.Get("/silences", h.ListSilences)
 	r.Post("/alerts/{id}/resolve", h.ResolveAlert)
 }
 
-type createAlertChannelRequest struct {
-	Name    string                 `json:"name"`
-	Type    string                 `json:"type"`
-	Config  map[string]interface{} `json:"config"`
-	Enabled bool                   `json:"enabled"`
-}
 
-func (r *createAlertChannelRequest) Validate() error {
-	ve := NewValidationError("validation failed")
-	if strings.TrimSpace(r.Name) == "" {
-		ve.Add("name", "name is required")
-	}
-	if strings.TrimSpace(r.Type) == "" {
-		ve.Add("type", "type is required")
-	}
-	if ve.HasErrors() {
-		return ve
-	}
-	return nil
-}
 
 func (h *AlertHandler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 	req, ok := decodeJSON[createAlertChannelRequest](w, r)
@@ -124,34 +109,6 @@ func (h *AlertHandler) ListChannels(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": masked})
 }
 
-type createAlertRuleRequest struct {
-	Name            string   `json:"name"`
-	Description     string   `json:"description"`
-	MetricName      string   `json:"metric_name"`
-	Condition       string   `json:"condition"`
-	Threshold       float64  `json:"threshold"`
-	DurationSeconds int      `json:"duration_seconds"`
-	Severity        string   `json:"severity"`
-	ChannelIDs      []string `json:"channel_ids"`
-	Enabled         bool     `json:"enabled"`
-}
-
-func (r *createAlertRuleRequest) Validate() error {
-	ve := NewValidationError("validation failed")
-	if strings.TrimSpace(r.Name) == "" {
-		ve.Add("name", "name is required")
-	}
-	if strings.TrimSpace(r.MetricName) == "" {
-		ve.Add("metric_name", "metric_name is required")
-	}
-	if strings.TrimSpace(r.Condition) == "" {
-		ve.Add("condition", "condition is required")
-	}
-	if ve.HasErrors() {
-		return ve
-	}
-	return nil
-}
 
 func (h *AlertHandler) CreateRule(w http.ResponseWriter, r *http.Request) {
 	req, ok := decodeJSON[createAlertRuleRequest](w, r)
@@ -198,34 +155,6 @@ func (h *AlertHandler) ListRules(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": rules})
 }
 
-type updateAlertRuleRequest struct {
-	Name            *string   `json:"name"`
-	Description     *string   `json:"description"`
-	MetricName      *string   `json:"metric_name"`
-	Condition       *string   `json:"condition"`
-	Threshold       *float64  `json:"threshold"`
-	DurationSeconds *int      `json:"duration_seconds"`
-	Severity        *string   `json:"severity"`
-	ChannelIDs      *[]string `json:"channel_ids"`
-	Enabled         *bool     `json:"enabled"`
-}
-
-func (r *updateAlertRuleRequest) Validate() error {
-	ve := NewValidationError("validation failed")
-	if r.Name != nil && strings.TrimSpace(*r.Name) == "" {
-		ve.Add("name", "name cannot be empty")
-	}
-	if r.MetricName != nil && strings.TrimSpace(*r.MetricName) == "" {
-		ve.Add("metric_name", "metric_name cannot be empty")
-	}
-	if r.Condition != nil && strings.TrimSpace(*r.Condition) == "" {
-		ve.Add("condition", "condition cannot be empty")
-	}
-	if ve.HasErrors() {
-		return ve
-	}
-	return nil
-}
 
 func (h *AlertHandler) UpdateRule(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUIDParam(r, "id")
@@ -351,25 +280,6 @@ func (h *AlertHandler) AcknowledgeAlert(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "acknowledged"})
 }
 
-type createSilenceRequest struct {
-	AlertID         string `json:"alert_id"`
-	DurationMinutes int    `json:"duration_minutes"`
-	Comment         string `json:"comment"`
-}
-
-func (r *createSilenceRequest) Validate() error {
-	ve := NewValidationError("validation failed")
-	if strings.TrimSpace(r.AlertID) == "" {
-		ve.Add("alert_id", "alert_id is required")
-	}
-	if r.DurationMinutes <= 0 {
-		ve.Add("duration_minutes", "duration_minutes must be greater than 0")
-	}
-	if ve.HasErrors() {
-		return ve
-	}
-	return nil
-}
 
 func (h *AlertHandler) TestChannel(w http.ResponseWriter, r *http.Request) {
 	channelID := chi.URLParam(r, "id")
@@ -386,21 +296,25 @@ func (h *AlertHandler) TestChannel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list channels", err)
 		return
 	}
-	var found bool
+	var targetCh *alert.NotificationChannel
 	for _, ch := range channels {
 		if ch != nil && ch.ID == channelID {
-			found = true
+			targetCh = ch
 			break
 		}
 	}
-	if !found {
+	if targetCh == nil {
 		writeError(w, http.StatusNotFound, "notification channel not found", nil)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":  "success",
-		"message": "test alert sent to channel",
-	})
+
+	result, err := testNotificationChannel(r.Context(), targetCh)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error(), err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *AlertHandler) CreateSilence(w http.ResponseWriter, r *http.Request) {
@@ -408,9 +322,57 @@ func (h *AlertHandler) CreateSilence(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	tenantID := middleware.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default"
+	}
+	userID := middleware.UserIDFromContext(r.Context())
+	if userID == "" {
+		userID = "operator"
+	}
+	now := time.Now().UTC()
+	dur := req.DurationMinutes
+	if dur <= 0 {
+		dur = 60
+	}
+	silence := &alert.Silence{
+		ID:              uuid.NewString(),
+		TenantID:        tenantID,
+		AlertID:         req.AlertID,
+		Comment:         req.Comment,
+		CreatedBy:       userID,
+		DurationMinutes: dur,
+		StartsAt:        now,
+		EndsAt:          now.Add(time.Duration(dur) * time.Minute),
+		CreatedAt:       now,
+	}
+	if err := h.usecase.CreateSilence(r.Context(), silence); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create silence", err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"status":   "silenced",
-		"alert_id": req.AlertID,
+		"id":       silence.ID,
+		"alert_id": silence.AlertID,
+		"ends_at":  silence.EndsAt,
+	})
+}
+
+func (h *AlertHandler) ListSilences(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default"
+	}
+	silences, err := h.usecase.ListSilences(r.Context(), tenantID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list silences", err)
+		return
+	}
+	if silences == nil {
+		silences = make([]*alert.Silence, 0)
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"data": silences,
 	})
 }
 
@@ -428,9 +390,10 @@ func (h *AlertHandler) ResolveAlert(w http.ResponseWriter, r *http.Request) {
 	if userID == "" {
 		userID = "system"
 	}
-	if err := h.usecase.AcknowledgeAlert(r.Context(), alertID, tenantID, userID); err != nil {
+	if err := h.usecase.ResolveAlert(r.Context(), alertID, tenantID, userID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to resolve alert", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "resolved"})
 }
+

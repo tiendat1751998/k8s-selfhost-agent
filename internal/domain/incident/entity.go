@@ -82,6 +82,27 @@ func (i *Incident) MarkRemediating() error {
 	return nil
 }
 
+// Acknowledge transitions the incident status to investigating and records operator details.
+func (i *Incident) Acknowledge(operator, notes string) error {
+	if i.Status == StatusResolved {
+		return errors.NewConflict("incident", "cannot acknowledge already resolved incident")
+	}
+	i.Status = StatusInvestigating
+	now := time.Now().UTC()
+	i.UpdatedAt = now
+	if i.RawData == nil {
+		i.RawData = make(map[string]string)
+	}
+	if notes != "" {
+		i.RawData["acknowledgement_notes"] = notes
+	}
+	if operator != "" {
+		i.RawData["acknowledged_by"] = operator
+	}
+	i.RawData["acknowledged_at"] = now.Format(time.RFC3339)
+	return nil
+}
+
 // Mitigate transitions the incident status to mitigating or mitigated and records operator notes.
 func (i *Incident) Mitigate(operator, notes string, targetStatus Status) error {
 	if i.Status == StatusResolved {

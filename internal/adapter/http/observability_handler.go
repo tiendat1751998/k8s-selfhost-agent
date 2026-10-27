@@ -3,9 +3,7 @@ package http
 import (
 	"fmt"
 	"math"
-	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,17 +11,22 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/datdt/k8sselfhost/internal/domain/observability"
-	"github.com/datdt/k8sselfhost/internal/pkg/netguard"
+	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 )
 
 // ObservabilityHandler provides HTTP handlers for the observability API.
 type ObservabilityHandler struct {
-	repo observability.Repository
+	repo            observability.Repository
+	computeHostRepo docker.ComputeHostRepository
 }
 
 // NewObservabilityHandler creates a new observability HTTP handler.
-func NewObservabilityHandler(repo observability.Repository) *ObservabilityHandler {
-	return &ObservabilityHandler{repo: repo}
+func NewObservabilityHandler(repo observability.Repository, opts ...ObservabilityOption) *ObservabilityHandler {
+	h := &ObservabilityHandler{repo: repo}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
 // RegisterRoutes registers observability routes.
@@ -99,84 +102,6 @@ func (r *createSLODefinitionRequest) Validate() error {
 	return nil
 }
 
-// validateCustomSLOQueryURL validates user-supplied custom query URLs to prevent SSRF.
-func validateCustomSLOQueryURL(query string) error {
-	q := strings.TrimSpace(query)
-	if q == "" {
-		return nil
-	}
-	isHTTP := strings.HasPrefix(strings.ToLower(q), "http://") || strings.HasPrefix(strings.ToLower(q), "https://")
-	isTCP := strings.HasPrefix(strings.ToLower(q), "tcp://")
-	if !isHTTP && !isTCP {
-		return nil
-	}
-
-	g := netguard.New(netguard.WithAllowPrivate(false))
-
-	if isHTTP {
-		u, err := g.ValidateURL(q, "http", "https")
-		if err != nil {
-			return fmt.Errorf("invalid query URL: %w", err)
-		}
-		host := u.Hostname()
-		if strings.EqualFold(host, "localhost") {
-			return fmt.Errorf("query URL host is not permitted: %s", host)
-		}
-		if ip := net.ParseIP(host); ip != nil {
-			if err := g.ValidateIP(ip); err != nil {
-				return fmt.Errorf("query URL host is not permitted: %w", err)
-			}
-		} else {
-			ips, err := net.LookupIP(host)
-			if err != nil {
-				return fmt.Errorf("resolving query host %s: %w", host, err)
-			}
-			if len(ips) == 0 {
-				return fmt.Errorf("no IP address found for %s", host)
-			}
-			for _, ip := range ips {
-				if err := g.ValidateIP(ip); err != nil {
-					return fmt.Errorf("query host %s resolves to restricted address: %w", host, err)
-				}
-			}
-		}
-		return nil
-	}
-
-	// For tcp://host:port
-	addr := strings.TrimPrefix(q, "tcp://")
-	host, portStr, err := net.SplitHostPort(addr)
-	if err != nil {
-		return fmt.Errorf("invalid tcp target '%s', expected host:port: %w", addr, err)
-	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil || port <= 0 || port > 65535 {
-		return fmt.Errorf("invalid tcp port '%s'", portStr)
-	}
-	if strings.EqualFold(host, "localhost") {
-		return fmt.Errorf("query tcp host is not permitted: %s", host)
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		if err := g.ValidateIP(ip); err != nil {
-			return fmt.Errorf("query tcp host is not permitted: %w", err)
-		}
-	} else {
-		ips, err := net.LookupIP(host)
-		if err != nil {
-			return fmt.Errorf("resolving tcp host %s: %w", host, err)
-		}
-		if len(ips) == 0 {
-			return fmt.Errorf("no IP address found for %s", host)
-		}
-		for _, ip := range ips {
-			if err := g.ValidateIP(ip); err != nil {
-				return fmt.Errorf("tcp host %s resolves to restricted address: %w", host, err)
-			}
-		}
-	}
-	return nil
-}
-
 // CreateSLODefinition handles POST /api/v1/observability/slo/definitions
 func (h *ObservabilityHandler) CreateSLODefinition(w http.ResponseWriter, r *http.Request) {
 	req, ok := decodeJSON[createSLODefinitionRequest](w, r)
@@ -187,7 +112,7 @@ func (h *ObservabilityHandler) CreateSLODefinition(w http.ResponseWriter, r *htt
 		writeError(w, http.StatusBadRequest, err.Error(), err)
 		return
 	}
-	if err := validateCustomSLOQueryURL(req.Query); err != nil {
+	if err := h.validateCustomSLOQueryURL(r.Context(), req.Query); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error(), err)
 		return
 	}
@@ -282,7 +207,7 @@ func (h *ObservabilityHandler) UpdateSLODefinition(w http.ResponseWriter, r *htt
 		existing.Window = strings.TrimSpace(req.Window)
 	}
 	if req.Query != "" {
-		if err := validateCustomSLOQueryURL(req.Query); err != nil {
+		if err := h.validateCustomSLOQueryURL(r.Context(), req.Query); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error(), err)
 			return
 		}

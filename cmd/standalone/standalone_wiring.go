@@ -283,7 +283,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		Compliance:      adapthttp.NewComplianceHandler(postgres.NewComplianceRepo(dbPool)),
 		Tagging:         adapthttp.NewTaggingHandler(postgres.NewTaggingRepo(dbPool)),
 		Runbook:         adapthttp.NewRunbookHandler(postgres.NewRunbookRepo(dbPool), auditRepo),
-		Observability:   adapthttp.NewObservabilityHandler(obsRepo),
+		Observability:   adapthttp.NewObservabilityHandler(obsRepo, adapthttp.WithComputeHostRepo(computeHostRepo)),
 		Capacity:        adapthttp.NewCapacityHandler(usecaseCapacity.NewForecaster(metricsCollector, usecaseCapacity.WithComputeHostRepo(computeHostRepo), usecaseCapacity.WithRepository(postgres.NewCapacityRepo(dbPool)))),
 		Changes:         adapthttp.NewChangeHandler(postgres.NewChangesRepo(dbPool)),
 		Promotion:       adapthttp.NewPromotionHandler(usecasePromotion.NewUsecase(postgres.NewPromotionRepo(dbPool), dockerRepo, auditRepo)),

@@ -48,23 +48,27 @@ func (t Type) String() string {
 type Status string
 
 const (
-	StatusDetected    Status = "detected"
-	StatusAnalyzing   Status = "analyzing"
-	StatusRemediating Status = "remediating"
-	StatusMitigating  Status = "mitigating"
-	StatusMitigated   Status = "mitigated"
-	StatusResolved    Status = "resolved"
-	StatusFailed      Status = "failed"
+	StatusDetected      Status = "detected"
+	StatusAcknowledged  Status = "acknowledged"
+	StatusInvestigating Status = "investigating"
+	StatusAnalyzing     Status = "analyzing"
+	StatusRemediating   Status = "remediating"
+	StatusMitigating    Status = "mitigating"
+	StatusMitigated     Status = "mitigated"
+	StatusResolved      Status = "resolved"
+	StatusFailed        Status = "failed"
 )
 
 var validStatuses = map[Status]bool{
-	StatusDetected:    true,
-	StatusAnalyzing:   true,
-	StatusRemediating: true,
-	StatusMitigating:  true,
-	StatusMitigated:   true,
-	StatusResolved:    true,
-	StatusFailed:      true,
+	StatusDetected:      true,
+	StatusAcknowledged:  true,
+	StatusInvestigating: true,
+	StatusAnalyzing:     true,
+	StatusRemediating:   true,
+	StatusMitigating:    true,
+	StatusMitigated:     true,
+	StatusResolved:      true,
+	StatusFailed:        true,
 }
 
 // IsValid returns true if the Status is a recognized status.
