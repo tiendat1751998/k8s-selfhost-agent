@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/timeline"
-	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type timelineRepo struct {
@@ -26,6 +25,7 @@ func (r *timelineRepo) getDB(ctx context.Context) DBTX {
 }
 
 func (r *timelineRepo) List(ctx context.Context, eventType *timeline.EventType, since time.Time, limit, offset int) ([]timeline.Event, int, error) {
+	ctx = EnsureTenantContext(ctx)
 	var query string
 	var countQuery string
 	var args []interface{}
@@ -107,6 +107,7 @@ func (r *timelineRepo) List(ctx context.Context, eventType *timeline.EventType, 
 }
 
 func (r *timelineRepo) GetByID(ctx context.Context, id string) (*timeline.Event, error) {
+	ctx = EnsureTenantContext(ctx)
 	query := `
 		SELECT id, type, title, detail, namespace, cluster, metadata, created_at 
 		FROM timeline_events 
@@ -146,10 +147,8 @@ func (r *timelineRepo) GetByID(ctx context.Context, id string) (*timeline.Event,
 }
 
 func (r *timelineRepo) Create(ctx context.Context, e *timeline.Event) error {
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
-	}
+	ctx = EnsureTenantContext(ctx)
+	tenantID := TenantIDOrDefault(ctx)
 
 	query := `
 		INSERT INTO timeline_events (type, title, detail, namespace, cluster, metadata, created_at, tenant_id)

@@ -7,7 +7,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/promotion"
-	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type promotionRepo struct {
@@ -24,6 +23,7 @@ func (r *promotionRepo) getDB(ctx context.Context) DBTX {
 }
 
 func (r *promotionRepo) List(ctx context.Context, status string, limit, offset int) ([]promotion.Promotion, int, error) {
+	ctx = EnsureTenantContext(ctx)
 	var query string
 	var countQuery string
 	var args []interface{}
@@ -92,6 +92,7 @@ func (r *promotionRepo) List(ctx context.Context, status string, limit, offset i
 }
 
 func (r *promotionRepo) GetByID(ctx context.Context, id string) (*promotion.Promotion, error) {
+	ctx = EnsureTenantContext(ctx)
 	query := `
 		SELECT id, service, version, from_env, to_env, status, requester, approver, approved_at, completed_at, created_at 
 		FROM promotions 
@@ -120,10 +121,8 @@ func (r *promotionRepo) GetByID(ctx context.Context, id string) (*promotion.Prom
 }
 
 func (r *promotionRepo) Create(ctx context.Context, p *promotion.Promotion) error {
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
-	}
+	ctx = EnsureTenantContext(ctx)
+	tenantID := TenantIDOrDefault(ctx)
 
 	query := `
 		INSERT INTO promotions (service, version, from_env, to_env, status, requester, created_at, tenant_id)
@@ -142,6 +141,7 @@ func (r *promotionRepo) Create(ctx context.Context, p *promotion.Promotion) erro
 }
 
 func (r *promotionRepo) Approve(ctx context.Context, id, approver string) error {
+	ctx = EnsureTenantContext(ctx)
 	query := `
 		UPDATE promotions 
 		SET status = 'approved', approver = $1, approved_at = NOW() 
@@ -159,6 +159,7 @@ func (r *promotionRepo) Approve(ctx context.Context, id, approver string) error 
 }
 
 func (r *promotionRepo) Reject(ctx context.Context, id, rejecter string) error {
+	ctx = EnsureTenantContext(ctx)
 	query := `
 		UPDATE promotions 
 		SET status = 'rejected', approver = $1, approved_at = NOW() 
@@ -176,6 +177,7 @@ func (r *promotionRepo) Reject(ctx context.Context, id, rejecter string) error {
 }
 
 func (r *promotionRepo) Complete(ctx context.Context, id string) error {
+	ctx = EnsureTenantContext(ctx)
 	query := `
 		UPDATE promotions 
 		SET status = 'completed', completed_at = NOW() 

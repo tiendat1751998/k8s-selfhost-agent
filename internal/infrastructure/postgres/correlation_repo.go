@@ -7,7 +7,6 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/domain/correlation"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
-	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // CorrelationRepo implements correlation.Repository using PostgreSQL.
@@ -25,6 +24,7 @@ func (r *CorrelationRepo) getDB(ctx context.Context) DBTX {
 }
 
 func (r *CorrelationRepo) ListCorrelated(ctx context.Context, status string, limit, offset int) ([]correlation.CorrelatedEvent, int, error) {
+	ctx = EnsureTenantContext(ctx)
 	query := `SELECT id, title, root_cause, severity, event_ids, event_count, cluster, namespace, status, correlated_at FROM correlated_events WHERE 1=1`
 	countQuery := `SELECT COUNT(*) FROM correlated_events WHERE 1=1`
 	args := []interface{}{}
@@ -69,6 +69,7 @@ func (r *CorrelationRepo) ListCorrelated(ctx context.Context, status string, lim
 }
 
 func (r *CorrelationRepo) GetByID(ctx context.Context, id string) (*correlation.CorrelatedEvent, error) {
+	ctx = EnsureTenantContext(ctx)
 	var e correlation.CorrelatedEvent
 	var eventIDsJSON []byte
 	query := `SELECT id, title, root_cause, severity, event_ids, event_count, cluster, namespace, status, correlated_at FROM correlated_events WHERE id = $1`
@@ -84,15 +85,13 @@ func (r *CorrelationRepo) GetByID(ctx context.Context, id string) (*correlation.
 }
 
 func (r *CorrelationRepo) Create(ctx context.Context, c *correlation.CorrelatedEvent) error {
+	ctx = EnsureTenantContext(ctx)
 	eventIDsJSON, err := json.Marshal(c.EventIDs)
 	if err != nil {
 		return errors.Wrap(err, "marshaling event_ids")
 	}
 
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
-	}
+	tenantID := TenantIDOrDefault(ctx)
 
 	query := `INSERT INTO correlated_events (title, root_cause, severity, event_ids, event_count, cluster, namespace, status, correlated_at, tenant_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -109,6 +108,7 @@ func (r *CorrelationRepo) Create(ctx context.Context, c *correlation.CorrelatedE
 }
 
 func (r *CorrelationRepo) Resolve(ctx context.Context, id string) error {
+	ctx = EnsureTenantContext(ctx)
 	query, args := BuildTenantQuery(ctx, `UPDATE correlated_events SET status = 'resolved' WHERE id = $1`, id)
 	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {
