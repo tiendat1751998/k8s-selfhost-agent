@@ -60,6 +60,7 @@ if (typeof globalThis.window === 'undefined') {
 
 const { createPinia, setActivePinia } = await import('pinia')
 const { api } = await import('../src/api/client.ts')
+const { useAuthStore } = await import('../src/stores/authStore.ts')
 const { useWebSocket } = await import('../src/composables/useWebSocket.ts')
 
 describe('Wave 1 Gate Fix — WebSocket Auth with In-Memory Bearer Token', () => {
@@ -100,6 +101,34 @@ describe('Wave 1 Gate Fix — WebSocket Auth with In-Memory Bearer Token', () =>
     assert.equal(lastWsProtocols, undefined, 'No protocols should be passed when unauthenticated')
     assert.equal(lastWsUrl, 'ws://localhost:3000/ws')
 
+    wsInstance.disconnect()
+  })
+
+  it('connects WebSocket using useAuthStore().token fallback when api.getToken() is null', () => {
+    api.clearToken()
+    assert.equal(api.getToken(), null)
+    const authStore = useAuthStore()
+    authStore.token = 'auth-store-jwt-token'
+
+    const wsInstance = useWebSocket({ url: 'ws://localhost:3000/ws' })
+    wsInstance.connect()
+
+    assert.ok(lastWsProtocols, 'WebSocket protocols must be provided')
+    assert.deepEqual(lastWsProtocols, ['bearer', 'auth-store-jwt-token'], 'WebSocket must connect with bearer protocol containing store token')
+    wsInstance.disconnect()
+  })
+
+  it('never reads token from localStorage even if stale tokens exist in storage', () => {
+    storage.set('k8s_token', 'stale-k8s-token')
+    storage.set('token', 'stale-legacy-token')
+    api.clearToken()
+    const authStore = useAuthStore()
+    authStore.token = null
+
+    const wsInstance = useWebSocket({ url: 'ws://localhost:3000/ws' })
+    wsInstance.connect()
+
+    assert.equal(lastWsProtocols, undefined, 'Must not fallback to localStorage token')
     wsInstance.disconnect()
   })
 })

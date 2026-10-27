@@ -1,5 +1,6 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../stores/app'
+import { useAuthStore } from '../stores/authStore'
 import { api } from '../api/client'
 import type { SystemOverview } from '../api/overview'
 
@@ -45,9 +46,7 @@ export function useWebSocket(options?: UseWebSocketOptions | string) {
     store.setConnection('connecting')
     try {
       const url = getWsUrl()
-      const token = api.getToken() || (typeof window !== 'undefined'
-        ? (localStorage.getItem('k8s_token') || localStorage.getItem('token'))
-        : null)
+      const token = api.getToken() || (typeof window !== 'undefined' ? useAuthStore().token : null)
       const protocols = token ? ['bearer', token] : undefined
       ws = protocols ? new WebSocket(url, protocols) : new WebSocket(url)
       
