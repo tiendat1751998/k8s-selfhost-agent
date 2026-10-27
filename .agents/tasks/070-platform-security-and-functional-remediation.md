@@ -1,6 +1,6 @@
 # Task 070 — Full-Platform Security Hardening & Remaining-Screens Functional Remediation
 
-- **Status**: `IN_PROGRESS (Wave 1 Active)`
+- **Status**: `IN_PROGRESS (Wave 1 Gate Fixup + Wave 2 Active)`
 - **Source Audit**: [`.agents/audit/2026-10-27-platform-security-and-functional-audit.md`](../audit/2026-10-27-platform-security-and-functional-audit.md)
 - **Target Branch**: `feat/declone-sre-ux` (or dedicated sub-branches merged cleanly into `feat/declone-sre-ux` before final PR to `master`)
 - **Hard Guardrails**:
