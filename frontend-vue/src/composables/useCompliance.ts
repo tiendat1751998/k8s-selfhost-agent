@@ -116,6 +116,7 @@ export function filterComplianceViolations(
 ): ComplianceViolation[] {
   const q = query.trim().toLowerCase()
   return (violations || []).filter(v => {
+    if (v.resolved) return false
     if (frameworkId && v.framework_id !== frameworkId) return false
     if (severity !== 'ALL' && (v.severity || '').toUpperCase() !== severity) return false
     if (q) {
@@ -274,13 +275,14 @@ export function useCompliance() {
 
   const passingControlsCount = computed(() => frameworks.value.reduce((acc, f) => acc + f.passed_checks, 0))
   const totalControlsCount = computed(() => frameworks.value.reduce((acc, f) => acc + f.total_checks, 0))
-  const criticalViolationsCount = computed(() => violations.value.filter(v => v.severity.toLowerCase() === 'critical').length)
-  const highViolationsCount = computed(() => violations.value.filter(v => v.severity.toLowerCase() === 'high').length)
-  const mediumViolationsCount = computed(() => violations.value.filter(v => v.severity.toLowerCase() === 'medium').length)
-  const lowViolationsCount = computed(() => violations.value.filter(v => v.severity.toLowerCase() === 'low').length)
+  const activeViolationsCount = computed(() => violations.value.filter(v => !v.resolved).length)
+  const criticalViolationsCount = computed(() => violations.value.filter(v => !v.resolved && v.severity.toLowerCase() === 'critical').length)
+  const highViolationsCount = computed(() => violations.value.filter(v => !v.resolved && v.severity.toLowerCase() === 'high').length)
+  const mediumViolationsCount = computed(() => violations.value.filter(v => !v.resolved && v.severity.toLowerCase() === 'medium').length)
+  const lowViolationsCount = computed(() => violations.value.filter(v => !v.resolved && v.severity.toLowerCase() === 'low').length)
 
   const severityFilters = computed(() => [
-    { key: 'ALL' as const, label: 'All Severities', count: violations.value.length, badgeClass: 'badge-cyan' },
+    { key: 'ALL' as const, label: 'All Severities', count: activeViolationsCount.value, badgeClass: 'badge-cyan' },
     { key: 'CRITICAL' as const, label: 'Critical', count: criticalViolationsCount.value, badgeClass: 'badge-rose' },
     { key: 'HIGH' as const, label: 'High', count: highViolationsCount.value, badgeClass: 'badge-amber' },
     { key: 'MEDIUM' as const, label: 'Medium', count: mediumViolationsCount.value, badgeClass: 'badge-amber' },
@@ -294,6 +296,7 @@ export function useCompliance() {
 
   const filteredViolations = computed(() => {
     return violations.value.filter(v => {
+      if (v.resolved) return false
       if (selectedFrameworkId.value && v.framework_id !== selectedFrameworkId.value) return false
       if (selectedStandard.value !== 'ALL') {
         const fw = frameworks.value.find(f => f.id === v.framework_id)
@@ -419,6 +422,7 @@ export function useCompliance() {
     overallScore,
     passingControlsCount,
     totalControlsCount,
+    activeViolationsCount,
     criticalViolationsCount,
     highViolationsCount,
     mediumViolationsCount,

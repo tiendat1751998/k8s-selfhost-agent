@@ -46,7 +46,7 @@ export function useTenancyRbac() {
 
   // Form State
   const newOrg = ref<Partial<Organization>>({ id: '', name: '', tier: 'Enterprise Tier-1', quotaPreset: 'standard' })
-  const newProj = ref({ id: '', orgId: '', name: '', envs: 'dev, staging, prod', workloads: 0 })
+  const newProj = ref({ id: '', orgId: '', name: '', envs: 'dev, staging, prod', workloads: 1 })
   const newMember = ref({ id: '', orgId: '', user: '', role: 'developer', scope: 'project-wide' })
   const isSubmitting = ref(false)
   const feedbackMessage = ref<string | null>(null)
@@ -252,7 +252,7 @@ export function useTenancyRbac() {
       projects.value.push(created || proj)
       showProjectModal.value = false
       showFeedback(`Project ${proj.name} successfully created.`)
-      newProj.value = { id: '', orgId: '', name: '', envs: 'dev, staging, prod', workloads: 0 }
+      newProj.value = { id: '', orgId: '', name: '', envs: 'dev, staging, prod', workloads: 1 }
     } catch (e: unknown) {
       showFeedback(`Failed to create project: ${e instanceof Error ? e.message : 'Unknown error'}`)
     } finally {
@@ -266,7 +266,7 @@ export function useTenancyRbac() {
     if (!target.user) return
     isSubmitting.value = true
     const mem: Member = {
-      id: target.id || ('mem-' + Date.now()),
+      id: target.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0')),
       orgId: target.orgId || (organizations.value[0]?.id ?? 'org-default'),
       user: target.user,
       role: target.role || 'developer',
@@ -304,6 +304,7 @@ export function useTenancyRbac() {
       await tenancyApi.updateQuota(orgId, quota)
       showQuotaModal.value = false
       showFeedback('Organization quota policy updated successfully.')
+      await loadData()
     } catch (e: unknown) {
       showQuotaModal.value = false
       showFeedback(`Failed to update quota policy: ${e instanceof Error ? e.message : 'API request failed'}`)

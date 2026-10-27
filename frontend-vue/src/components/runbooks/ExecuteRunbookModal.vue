@@ -34,6 +34,8 @@
             v-if="param.type === 'string' || param.type === 'number'"
             v-model="paramValues[param.key]"
             :type="param.type === 'number' ? 'number' : 'text'"
+            :min="param.type === 'number' ? 1 : undefined"
+            :max="param.type === 'number' ? 86400 : undefined"
             class="input-glass"
           />
           <label v-else-if="param.type === 'boolean'" class="checkbox-label">

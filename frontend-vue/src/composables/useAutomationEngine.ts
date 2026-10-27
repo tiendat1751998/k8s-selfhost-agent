@@ -44,6 +44,11 @@ export const ACTION_OPTIONS: WorkflowActionOption[] = [
   { value: 'cordon_node', label: 'Cordon & Drain Impacted Node', icon: 'shield', description: 'Evacuates workloads from distressed Kubernetes node' },
   { value: 'send_notification', label: 'Send High-Priority Slack / Webhook Alert', icon: 'bell', description: 'Dispatches rich incident payloads to on-call channels' },
   { value: 'create_incident', label: 'Open P1 Incident in Health Center', icon: 'file-text', description: 'Creates tracked incident ticket with severity metadata' },
+  { value: 'prune_logs_and_containers', label: 'Prune Stale Logs & Orphan Containers', icon: 'trash-2', description: 'Reclaims host disk by rotating journald logs and cleaning unused container layers' },
+  { value: 'disk_pressure_cleanup', label: 'Disk Pressure Cleanup', icon: 'hard-drive', description: 'Cleans temporary caches, old packages, and dangling images on host' },
+  { value: 'reap_zombies', label: 'Reap Defunct Zombie Processes', icon: 'zap', description: 'Terminates orphaned defunct PID trees across host cgroups' },
+  { value: 'restart_service', label: 'Restart Systemd Host Service', icon: 'refresh', description: 'Restarts target systemd service via local node agent' },
+  { value: 'prune_containers', label: 'Prune Exited Docker Containers', icon: 'trash', description: 'Removes exited containers and unreferenced local volumes' },
 ]
 
 export function useAutomationEngine() {

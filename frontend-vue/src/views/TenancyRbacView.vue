@@ -48,7 +48,8 @@ const {
   removeMember,
   openMemberDrawer,
   openRbacModal,
-  openQuotaModal
+  openQuotaModal,
+  handleUpdateQuota
 } = useTenancyRbac()
 </script>
 
@@ -282,7 +283,7 @@ const {
       v-model:show="showQuotaModal"
       :selected-org="selectedOrgForQuota"
       :stats="organizationStats"
-      @save="showFeedback('Resource quota saved for ' + $event.name)"
+      @save="handleUpdateQuota($event.orgId, $event.quota)"
     />
   </div>
 </template>

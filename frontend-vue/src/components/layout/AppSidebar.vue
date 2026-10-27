@@ -169,6 +169,19 @@ function navigateHome() {
             </option>
           </select>
         </div>
+        <div class="drawer-zerotrust-row" style="margin-bottom: 8px;">
+          <button
+            type="button"
+            class="sidebar-zerotrust-btn"
+            style="width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle); color: var(--text-muted); font-size: 11px; cursor: pointer;"
+            title="ZeroTrust Security Posture"
+            aria-label="Open ZeroTrust Security Drawer"
+            @click="emit('open-zerotrust')"
+          >
+            <BaseIcon name="shield" size="xs" />
+            <span>ZeroTrust Security Posture</span>
+          </button>
+        </div>
         <div v-if="authStore.user" class="drawer-user-row">
           <div class="drawer-user-badge">
             <span class="user-avatar">{{ userInitials }}</span>
