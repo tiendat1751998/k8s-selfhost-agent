@@ -1,8 +1,11 @@
 package http
 
 import (
+	"crypto/subtle"
 	"fmt"
+	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +15,22 @@ import (
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
+
+func isValidHostOrIP(host string) bool {
+	h := strings.TrimSpace(host)
+	if h == "" || len(h) > 255 {
+		return false
+	}
+	if net.ParseIP(h) != nil {
+		return true
+	}
+	for _, r := range h {
+		if !(r >= 'a' && r <= 'z') && !(r >= 'A' && r <= 'Z') && !(r >= '0' && r <= '9') && r != '.' && r != '-' {
+			return false
+		}
+	}
+	return !strings.HasPrefix(h, ".") && !strings.HasSuffix(h, ".") && !strings.HasPrefix(h, "-") && !strings.HasSuffix(h, "-")
+}
 
 // RegisterAgentRequest holds the auto-registration payload from k8s-agent.
 type RegisterAgentRequest struct {
@@ -36,6 +55,11 @@ func (r *RegisterAgentRequest) Validate() error {
 	}
 	if strings.TrimSpace(r.IPAddress) == "" {
 		ve.Add("ip_address", "ip_address is required")
+	} else if !isValidHostOrIP(r.IPAddress) {
+		ve.Add("ip_address", "ip_address must be a valid IP address or hostname")
+	}
+	if r.Port != 0 && (r.Port < 1 || r.Port > 65535) {
+		ve.Add("port", "port must be between 1 and 65535")
 	}
 	if ve.HasErrors() {
 		return ve
@@ -53,6 +77,29 @@ func (h *DockerHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 	req, ok := decodeJSON[RegisterAgentRequest](w, r)
 	if !ok {
 		return
+	}
+
+	userRole := tenancy.UserRoleFromContext(r.Context())
+	if userRole != "" && userRole != "platform_admin" {
+		writeError(w, http.StatusForbidden, "forbidden: agents registration requires platform_admin or valid agent token", nil)
+		return
+	}
+
+	expectedToken := os.Getenv("AGENT_AUTH_TOKEN")
+	if userRole != "platform_admin" && expectedToken != "" {
+		callerToken := r.Header.Get("X-Agent-Token")
+		if callerToken == "" {
+			if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+				callerToken = strings.TrimPrefix(auth, "Bearer ")
+			}
+		}
+		if callerToken == "" {
+			callerToken = req.AuthToken
+		}
+		if callerToken == "" || subtle.ConstantTimeCompare([]byte(callerToken), []byte(expectedToken)) != 1 {
+			writeError(w, http.StatusForbidden, "forbidden: invalid agent authentication token", nil)
+			return
+		}
 	}
 
 	port := req.Port
@@ -129,7 +176,7 @@ func (h *DockerHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"status":  "registered",
 			"host_id": existing.ID,
-			"host":    redactComputeHost(existing),
+			"host":    SanitizeComputeHost(existing),
 		})
 		return
 	}
@@ -155,6 +202,6 @@ func (h *DockerHandler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"status":  "registered",
 		"host_id": newHost.ID,
-		"host":    redactComputeHost(newHost),
+		"host":    SanitizeComputeHost(newHost),
 	})
 }

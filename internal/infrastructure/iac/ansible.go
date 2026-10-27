@@ -50,6 +50,7 @@ func NewAnsibleRunner(binaryPath string, defaultTimeout ...time.Duration) *Ansib
 	return &AnsibleRunner{
 		binaryPath:     binaryPath,
 		defaultTimeout: timeout,
+		baseDir:        DefaultSandboxDir(),
 		locks:          defaultIaCLocks,
 	}
 }
@@ -63,10 +64,17 @@ func (r *AnsibleRunner) DefaultTimeout() time.Duration {
 }
 
 func (r *AnsibleRunner) SetBaseDir(baseDir string) {
-	r.baseDir = baseDir
+	if strings.TrimSpace(baseDir) == "" {
+		r.baseDir = DefaultSandboxDir()
+	} else {
+		r.baseDir = baseDir
+	}
 }
 
 func (r *AnsibleRunner) BaseDir() string {
+	if strings.TrimSpace(r.baseDir) == "" {
+		return DefaultSandboxDir()
+	}
 	return r.baseDir
 }
 
@@ -99,6 +107,40 @@ func (r *AnsibleRunner) RunPlaybook(ctx context.Context, opts AnsiblePlaybookOpt
 	workDir, err := normalizeWorkDir(dir, r.baseDir)
 	if err != nil {
 		return nil, err
+	}
+
+	// SEC-CRIT-02: Validate Inventory against flag injection, null bytes, and path traversal escaping baseDir
+	if opts.Inventory != "" {
+		inv := strings.TrimSpace(opts.Inventory)
+		if strings.HasPrefix(inv, "-") {
+			return nil, errors.NewValidation("inventory", "invalid inventory parameter: flag injection detected")
+		}
+		if strings.ContainsRune(inv, 0) {
+			return nil, errors.NewValidation("inventory", "invalid inventory parameter: null bytes detected")
+		}
+		if !strings.Contains(inv, ",") {
+			effectiveBase := r.baseDir
+			if strings.TrimSpace(effectiveBase) == "" {
+				effectiveBase = DefaultSandboxDir()
+			}
+			absBase, err := filepath.Abs(filepath.Clean(effectiveBase))
+			if err != nil {
+				return nil, errors.NewValidation("inventory", "resolving base directory failed")
+			}
+			var absInv string
+			if filepath.IsAbs(inv) {
+				absInv, err = filepath.Abs(filepath.Clean(inv))
+				if err != nil {
+					return nil, errors.NewValidation("inventory", "resolving inventory path failed")
+				}
+			} else {
+				absInv = filepath.Join(workDir, inv)
+			}
+			rel, err := filepath.Rel(absBase, absInv)
+			if err != nil || strings.HasPrefix(rel, "..") || rel == ".." || filepath.IsAbs(rel) {
+				return nil, errors.NewValidation("inventory", "inventory file escapes allowed base directory")
+			}
+		}
 	}
 
 	locks := r.locks

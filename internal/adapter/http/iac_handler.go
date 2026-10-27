@@ -9,6 +9,7 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/iac"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // IaCHandler provides HTTP endpoints for Infrastructure as Code (Terraform & Ansible).
@@ -27,19 +28,23 @@ func NewIaCHandler(terraform *iac.TerraformRunner, ansible *iac.AnsibleRunner) *
 
 // RegisterRoutes registers IaC endpoints on the given Chi router.
 func (h *IaCHandler) RegisterRoutes(r chi.Router) {
-	r.Get("/status", h.GetStatus)
-
-	r.With(middleware.RequireRolesForMutations("platform_admin", "tenant_admin")).Group(func(mut chi.Router) {
-		mut.Post("/terraform/plan", h.TerraformPlan)
-		mut.Post("/terraform/apply", h.TerraformApply)
-		mut.Post("/ansible/playbook", h.AnsiblePlaybook)
+	r.With(middleware.RBACMiddleware("platform_admin")).Group(func(admin chi.Router) {
+		admin.Get("/status", h.GetStatus)
+		admin.Post("/terraform/plan", h.TerraformPlan)
+		admin.Post("/terraform/apply", h.TerraformApply)
+		admin.Post("/ansible/playbook", h.AnsiblePlaybook)
 	})
 }
 
 // GetStatus handles GET /api/v1/iac/status
 func (h *IaCHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
+	if tenancy.UserRoleFromContext(r.Context()) != "platform_admin" {
+		writeError(w, http.StatusForbidden, "forbidden: platform_admin required", nil)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status":              "ready",
+		"status":               "ready",
 		"terraform_configured": h.terraform != nil,
 		"ansible_configured":   h.ansible != nil,
 	})
@@ -47,6 +52,11 @@ func (h *IaCHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 
 // TerraformPlan handles POST /api/v1/iac/terraform/plan
 func (h *IaCHandler) TerraformPlan(w http.ResponseWriter, r *http.Request) {
+	if tenancy.UserRoleFromContext(r.Context()) != "platform_admin" {
+		writeError(w, http.StatusForbidden, "forbidden: platform_admin required", nil)
+		return
+	}
+
 	if h.terraform == nil {
 		writeError(w, http.StatusServiceUnavailable, "Terraform runner is not configured", nil)
 		return
@@ -70,6 +80,11 @@ func (h *IaCHandler) TerraformPlan(w http.ResponseWriter, r *http.Request) {
 
 // TerraformApply handles POST /api/v1/iac/terraform/apply
 func (h *IaCHandler) TerraformApply(w http.ResponseWriter, r *http.Request) {
+	if tenancy.UserRoleFromContext(r.Context()) != "platform_admin" {
+		writeError(w, http.StatusForbidden, "forbidden: platform_admin required", nil)
+		return
+	}
+
 	if h.terraform == nil {
 		writeError(w, http.StatusServiceUnavailable, "Terraform runner is not configured", nil)
 		return
@@ -93,6 +108,11 @@ func (h *IaCHandler) TerraformApply(w http.ResponseWriter, r *http.Request) {
 
 // AnsiblePlaybook handles POST /api/v1/iac/ansible/playbook
 func (h *IaCHandler) AnsiblePlaybook(w http.ResponseWriter, r *http.Request) {
+	if tenancy.UserRoleFromContext(r.Context()) != "platform_admin" {
+		writeError(w, http.StatusForbidden, "forbidden: platform_admin required", nil)
+		return
+	}
+
 	if h.ansible == nil {
 		writeError(w, http.StatusServiceUnavailable, "Ansible runner is not configured", nil)
 		return

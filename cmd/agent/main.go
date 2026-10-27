@@ -361,7 +361,7 @@ func main() {
 	}
 
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := ServeWithOptionalTLS(srv, GetAgentTLSConfig()); err != nil && err != http.ErrServerClosed {
 			logger.Error("Agent HTTP server failed", slog.String("error", err.Error()))
 			cancel()
 		}
