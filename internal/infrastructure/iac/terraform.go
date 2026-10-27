@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -18,6 +19,14 @@ const DefaultIaCTimeout = 15 * time.Minute
 
 var defaultIaCLocks = syncutil.NewKeyedMutex()
 
+// DefaultSandboxDir returns the dedicated fallback sandbox directory for IaC workspaces.
+func DefaultSandboxDir() string {
+	if env := os.Getenv("IAC_WORKSPACE_DIR"); env != "" {
+		return env
+	}
+	return filepath.Join(os.TempDir(), "k8s-iac-workspaces")
+}
+
 // IaCLocks returns the KeyedMutex used for synchronization across IaC runners.
 func IaCLocks() *syncutil.KeyedMutex {
 	return defaultIaCLocks
@@ -30,7 +39,7 @@ var forbiddenSystemPrefixes = []string{
 
 // NormalizeWorkDir validates, cleans, and sandboxes an IaC runner's working directory.
 // It rejects traversal (".."), forbidden system directories, and enforces containment
-// within baseDir (if configured).
+// within baseDir (which defaults to DefaultSandboxDir to prevent containment bypass).
 func NormalizeWorkDir(dir string, baseDir ...string) (string, error) {
 	return normalizeWorkDir(dir, baseDir...)
 }
@@ -52,9 +61,26 @@ func normalizeWorkDir(dir string, baseDir ...string) (string, error) {
 		}
 	}
 
-	abs, err := filepath.Abs(cleaned)
+	// SEC-CRIT-02: NEVER allow empty baseDir to bypass path containment! Default to dedicated sandbox.
+	effectiveBase := DefaultSandboxDir()
+	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
+		effectiveBase = strings.TrimSpace(baseDir[0])
+	}
+
+	baseClean := filepath.Clean(effectiveBase)
+	absBase, err := filepath.Abs(baseClean)
 	if err != nil {
-		return "", fmt.Errorf("resolving absolute path: %w", err)
+		return "", fmt.Errorf("resolving base directory: %w", err)
+	}
+
+	var abs string
+	if !filepath.IsAbs(cleaned) {
+		abs = filepath.Join(absBase, cleaned)
+	} else {
+		abs, err = filepath.Abs(cleaned)
+		if err != nil {
+			return "", fmt.Errorf("resolving absolute path: %w", err)
+		}
 	}
 
 	absSlash := strings.ToLower(filepath.ToSlash(abs))
@@ -71,16 +97,9 @@ func normalizeWorkDir(dir string, baseDir ...string) (string, error) {
 		}
 	}
 
-	if len(baseDir) > 0 && strings.TrimSpace(baseDir[0]) != "" {
-		baseClean := filepath.Clean(baseDir[0])
-		absBase, err := filepath.Abs(baseClean)
-		if err != nil {
-			return "", fmt.Errorf("resolving base directory: %w", err)
-		}
-		rel, err := filepath.Rel(absBase, abs)
-		if err != nil || strings.HasPrefix(rel, "..") || rel == ".." || filepath.IsAbs(rel) {
-			return "", fmt.Errorf("directory %s is outside allowed base directory %s", dir, baseDir[0])
-		}
+	rel, err := filepath.Rel(absBase, abs)
+	if err != nil || strings.HasPrefix(rel, "..") || rel == ".." || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("directory %s is outside allowed base directory %s", dir, effectiveBase)
 	}
 
 	return abs, nil
@@ -123,6 +142,7 @@ func NewTerraformRunner(binaryPath string, defaultTimeout ...time.Duration) *Ter
 	return &TerraformRunner{
 		binaryPath:     binaryPath,
 		defaultTimeout: timeout,
+		baseDir:        DefaultSandboxDir(),
 		locks:          defaultIaCLocks,
 	}
 }
@@ -182,10 +202,17 @@ func (r *TerraformRunner) Destroy(ctx context.Context, opts TerraformRunOptions,
 }
 
 func (r *TerraformRunner) SetBaseDir(baseDir string) {
-	r.baseDir = baseDir
+	if strings.TrimSpace(baseDir) == "" {
+		r.baseDir = DefaultSandboxDir()
+	} else {
+		r.baseDir = baseDir
+	}
 }
 
 func (r *TerraformRunner) BaseDir() string {
+	if strings.TrimSpace(r.baseDir) == "" {
+		return DefaultSandboxDir()
+	}
 	return r.baseDir
 }
 

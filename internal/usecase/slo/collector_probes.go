@@ -15,6 +15,7 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/domain/observability"
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	"github.com/datdt/k8sselfhost/internal/pkg/netguard"
 )
 
 // resolveHostAgentToken resolves Bearer auth token for agent requests.
@@ -288,15 +289,21 @@ func (c *SLOCollector) probeTraefikIngress(ctx context.Context, client *http.Cli
 	c.recordHealth(ctx, "traefik-ingress", desired, running, isHealthy, &latencyMs)
 }
 
-func (c *SLOCollector) probeCustomSLO(ctx context.Context, client *http.Client, d observability.SLODefinition) {
+func (c *SLOCollector) probeCustomSLO(ctx context.Context, _ *http.Client, d observability.SLODefinition) {
 	q := strings.TrimSpace(d.Query)
 	if strings.HasPrefix(q, "http://") || strings.HasPrefix(q, "https://") {
+		guard := netguard.New(netguard.WithAllowPrivate(false))
+		if _, err := guard.ValidateURL(q, "http", "https"); err != nil {
+			c.recordHealth(ctx, d.Service, 1, 0, false, nil)
+			return
+		}
+		safeClient := guard.NewClient(2 * time.Second)
 		start := time.Now()
 		probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
 		req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, q, nil)
 		if err == nil {
-			resp, rErr := client.Do(req)
+			resp, rErr := safeClient.Do(req)
 			if rErr == nil {
 				defer resp.Body.Close()
 				isHealthy := resp.StatusCode >= 200 && resp.StatusCode < 400
@@ -315,11 +322,11 @@ func (c *SLOCollector) probeCustomSLO(ctx context.Context, client *http.Client, 
 
 	if strings.HasPrefix(q, "tcp://") {
 		addr := strings.TrimPrefix(q, "tcp://")
+		guard := netguard.New(netguard.WithAllowPrivate(false))
 		start := time.Now()
-		dDial := net.Dialer{Timeout: 2 * time.Second}
 		probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
-		conn, err := dDial.DialContext(probeCtx, "tcp", addr)
+		conn, err := guard.DialContext(probeCtx, "tcp", addr)
 		if err == nil {
 			conn.Close()
 			latencyMs := int(time.Since(start).Milliseconds())

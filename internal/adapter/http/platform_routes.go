@@ -75,7 +75,7 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 
 	// 5. Infrastructure as Code (IaC)
 	if platform.IaC != nil {
-		r.With(mutRoles).Route("/iac", platform.IaC.RegisterRoutes)
+		r.With(adminOnly).Route("/iac", platform.IaC.RegisterRoutes)
 	}
 
 	// 6. Telegram SRE Copilot

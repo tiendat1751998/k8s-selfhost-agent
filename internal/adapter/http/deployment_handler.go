@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -10,6 +11,24 @@ import (
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 	deploymentUsecase "github.com/datdt/k8sselfhost/internal/usecase/deployment"
 )
+
+// checkWorkloadAccess verifies that the caller is authorized to operate on the given workload.
+// When namespace == "" (or workload type is "docker" / "swarm" / global host daemon),
+// requires role == "platform_admin" instead of silently skipping namespace checks.
+func checkWorkloadAccess(r *http.Request, workloadType, namespace string) error {
+	wType := strings.ToLower(strings.TrimSpace(workloadType))
+	ns := strings.TrimSpace(namespace)
+	userRole := tenancy.UserRoleFromContext(r.Context())
+
+	if ns == "" || wType == "docker" || wType == "swarm" {
+		if userRole != "platform_admin" {
+			return errors.New("forbidden: access to docker/host workloads without tenant namespace requires platform_admin")
+		}
+		return nil
+	}
+
+	return checkNamespaceAccess(r, ns)
+}
 
 // DeploymentHandler provides HTTP endpoints for managing deployments.
 type DeploymentHandler struct {
@@ -82,11 +101,9 @@ func (h *DeploymentHandler) ScaleDeployment(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if req.Namespace != "" {
-		if err := checkNamespaceAccess(r, req.Namespace); err != nil {
-			writeError(w, http.StatusForbidden, err.Error(), nil)
-			return
-		}
+	if err := checkWorkloadAccess(r, req.Type, req.Namespace); err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
 	}
 
 	err := h.usecase.ScaleDeployment(r.Context(), req.Type, req.Cluster, req.Namespace, req.Name, req.Replicas)
@@ -133,11 +150,9 @@ func (h *DeploymentHandler) UpdateResources(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if req.Namespace != "" {
-		if err := checkNamespaceAccess(r, req.Namespace); err != nil {
-			writeError(w, http.StatusForbidden, err.Error(), nil)
-			return
-		}
+	if err := checkWorkloadAccess(r, req.Type, req.Namespace); err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
 	}
 
 	err := h.usecase.UpdateResources(r.Context(), deploymentUsecase.UpdateResourcesRequest{
@@ -187,11 +202,9 @@ func (h *DeploymentHandler) RestartDeployment(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if req.Namespace != "" {
-		if err := checkNamespaceAccess(r, req.Namespace); err != nil {
-			writeError(w, http.StatusForbidden, err.Error(), nil)
-			return
-		}
+	if err := checkWorkloadAccess(r, req.Type, req.Namespace); err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
 	}
 
 	err := h.usecase.RestartDeployment(r.Context(), req.Type, req.Cluster, req.Namespace, req.Name)
@@ -236,11 +249,9 @@ func (h *DeploymentHandler) DeleteDeployment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if req.Namespace != "" {
-		if err := checkNamespaceAccess(r, req.Namespace); err != nil {
-			writeError(w, http.StatusForbidden, err.Error(), nil)
-			return
-		}
+	if err := checkWorkloadAccess(r, req.Type, req.Namespace); err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
 	}
 
 	err := h.usecase.DeleteDeployment(r.Context(), req.Type, req.Cluster, req.Namespace, req.Name)
@@ -293,6 +304,11 @@ func (h *DeploymentHandler) CreateDeployment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if err := checkWorkloadAccess(r, req.Type, req.Namespace); err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
+	}
+
 	err := h.usecase.CreateDeployment(r.Context(), req.Application)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create deployment", err)
@@ -329,11 +345,9 @@ func (h *DeploymentHandler) RollbackDeployment(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
-	if req.Namespace != "" {
-		if err := checkNamespaceAccess(r, req.Namespace); err != nil {
-			writeError(w, http.StatusForbidden, err.Error(), nil)
-			return
-		}
+	if err := checkWorkloadAccess(r, req.Type, req.Namespace); err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
 	}
 	if err := h.usecase.RestartDeployment(r.Context(), req.Type, req.Cluster, req.Namespace, req.Name); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to rollback deployment", err)
@@ -370,11 +384,9 @@ func (h *DeploymentHandler) SetCanaryWeight(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	if req.Namespace != "" {
-		if err := checkNamespaceAccess(r, req.Namespace); err != nil {
-			writeError(w, http.StatusForbidden, err.Error(), nil)
-			return
-		}
+	if err := checkWorkloadAccess(r, req.Type, req.Namespace); err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "canary_weight_updated"})
 }
@@ -408,11 +420,9 @@ func (h *DeploymentHandler) CutoverBlueGreen(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	if req.Namespace != "" {
-		if err := checkNamespaceAccess(r, req.Namespace); err != nil {
-			writeError(w, http.StatusForbidden, err.Error(), nil)
-			return
-		}
+	if err := checkWorkloadAccess(r, req.Type, req.Namespace); err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "bluegreen_cutover_completed"})
 }
@@ -441,11 +451,9 @@ func (h *DeploymentHandler) PauseDeployment(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	if req.Namespace != "" {
-		if err := checkNamespaceAccess(r, req.Namespace); err != nil {
-			writeError(w, http.StatusForbidden, err.Error(), nil)
-			return
-		}
+	if err := checkWorkloadAccess(r, req.Type, req.Namespace); err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "paused"})
 }
@@ -456,11 +464,9 @@ func (h *DeploymentHandler) ResumeDeployment(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	if req.Namespace != "" {
-		if err := checkNamespaceAccess(r, req.Namespace); err != nil {
-			writeError(w, http.StatusForbidden, err.Error(), nil)
-			return
-		}
+	if err := checkWorkloadAccess(r, req.Type, req.Namespace); err != nil {
+		writeError(w, http.StatusForbidden, err.Error(), nil)
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "resumed"})
 }
