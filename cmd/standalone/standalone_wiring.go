@@ -326,6 +326,10 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		SRE:             aux.SRE,
 	}
 
+	if aux.SRE != nil && aux.SRE.Crypto != nil && settingsRepo != nil {
+		aux.SRE.Crypto.SetSettingsRepo(settingsRepo)
+	}
+
 	router := adapthttp.NewRouterWithWS(healthHandler, wsHub, platformHandlers)
 	cleanup := func() {
 		mw.CloseDefaultTokenDenylist()

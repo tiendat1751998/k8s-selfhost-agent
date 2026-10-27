@@ -30,13 +30,28 @@ func (r *tenancyRepo) GetOrganizations(ctx context.Context) ([]tenancy.Organizat
 	defer rows.Close()
 
 	var result []tenancy.Organization
+	hasDefault := false
 	for rows.Next() {
 		var o tenancy.Organization
 		if err := rows.Scan(&o.ID, &o.Name, &o.Tier); err != nil {
 			return nil, fmt.Errorf("scanning organization: %w", err)
 		}
+		if o.ID == "default-tenant" {
+			hasDefault = true
+		}
 		result = append(result, o)
 	}
+
+	if !hasDefault {
+		// Ensure default-tenant is seeded cleanly if missing
+		_, _ = r.getDB(ctx).Exec(ctx, "INSERT INTO organizations (id, name, tier) VALUES ('default-tenant', 'Enterprise Operations Hub', 'Enterprise') ON CONFLICT (id) DO NOTHING")
+		result = append([]tenancy.Organization{{
+			ID:   "default-tenant",
+			Name: "Enterprise Operations Hub",
+			Tier: "Enterprise",
+		}}, result...)
+	}
+
 	return result, nil
 }
 
@@ -85,6 +100,16 @@ func (r *tenancyRepo) GetMembers(ctx context.Context) ([]tenancy.Member, error) 
 }
 
 func (r *tenancyRepo) GetRBAC(ctx context.Context) (map[string]map[string]bool, error) {
+	// 1. Check custom overrides persisted in platform_settings first
+	var settingsVal string
+	err := r.getDB(ctx).QueryRow(ctx, "SELECT value FROM platform_settings WHERE category = 'tenancy' AND key = 'tenancy.rbac_roles' LIMIT 1").Scan(&settingsVal)
+	if err == nil && settingsVal != "" {
+		var customMatrix map[string]map[string]bool
+		if jsonErr := json.Unmarshal([]byte(settingsVal), &customMatrix); jsonErr == nil && len(customMatrix) > 0 {
+			return customMatrix, nil
+		}
+	}
+
 	query, args := BuildTenantQuery(ctx, "SELECT permission, roles FROM rbac_matrix")
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
