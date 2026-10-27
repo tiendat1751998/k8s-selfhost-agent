@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -329,6 +330,44 @@ func TestHelmHandler_Conflict_409(t *testing.T) {
 
 	if w.Code != http.StatusConflict {
 		t.Fatalf("expected 409 Conflict on uninstall contention, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestHelmHandler_K8sUnavailable503(t *testing.T) {
+	tests := []struct {
+		errText  string
+		expected bool
+	}{
+		{"Get \"https://127.0.0.1:6443/version\": dial tcp 127.0.0.1:6443: connectex: No connection could be made", true},
+		{"Kubernetes cluster unreachable", true},
+		{"dial tcp: connection refused", true},
+		{"cluster not connected", true},
+		{"missing kubeconfig file", true},
+		{"release: not found", false},
+	}
+
+	for _, tt := range tests {
+		got := isK8sUnavailableErr(errors.New(tt.errText))
+		if got != tt.expected {
+			t.Errorf("isK8sUnavailableErr(%q) = %v, expected %v", tt.errText, got, tt.expected)
+		}
+	}
+
+	h, _, _ := setupHelmTestHandler(t)
+	w := httptest.NewRecorder()
+	h.handleReleaseError(w, "cluster-prod", "failed to install release", errors.New("dial tcp 10.0.0.1:6443: connect: connection refused"))
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 Service Unavailable, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	expectedMsg := "Kubernetes API (:6443) is unreachable on cluster cluster-prod — cannot deploy Helm release while control plane is offline"
+	if resp["error"] != expectedMsg {
+		t.Errorf("expected error %q, got %q", expectedMsg, resp["error"])
 	}
 }
 

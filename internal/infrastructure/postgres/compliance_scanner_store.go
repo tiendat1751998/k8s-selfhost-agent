@@ -173,7 +173,7 @@ func (s *complianceScannerStore) ReplaceViolations(ctx context.Context, violatio
 			namespace = EXCLUDED.namespace,
 			cluster = EXCLUDED.cluster,
 			message = EXCLUDED.message,
-			resolved = EXCLUDED.resolved,
+			resolved = (compliance_violations.resolved OR EXCLUDED.resolved),
 			detected_at = EXCLUDED.detected_at,
 			tenant_id = EXCLUDED.tenant_id
 	`

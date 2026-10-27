@@ -117,3 +117,32 @@ func TestDeriveTraefikURL_EdgeCases(t *testing.T) {
 		t.Errorf("expected http://traefik.prod:8000 from TRAEFIK_API_URL, got %q", got)
 	}
 }
+
+func TestIsSelfServerURL(t *testing.T) {
+	tests := []struct {
+		url        string
+		serverPort int
+		expected   bool
+	}{
+		{"http://localhost:8080", 8080, true},
+		{"http://127.0.0.1:8080", 8080, true},
+		{"http://0.0.0.0:8080", 8080, true},
+		{"http://[::1]:8080", 8080, true},
+		{"localhost:8080", 8080, true},
+		{"127.0.0.1:8080", 8080, true},
+		{"http://localhost:8081", 8080, false},
+		{"http://127.0.0.1:8081", 8080, false},
+		{"http://traefik.prod:8080", 8080, false},
+		{"http://192.168.1.50:8080", 8080, false},
+		{"", 8080, false},
+		{"http://localhost", 80, true},
+		{"http://localhost:8080", 0, true}, // defaults to 8080 when serverPort <= 0
+	}
+
+	for _, tc := range tests {
+		got := IsSelfServerURL(tc.url, tc.serverPort)
+		if got != tc.expected {
+			t.Errorf("IsSelfServerURL(%q, %d) = %v, expected %v", tc.url, tc.serverPort, got, tc.expected)
+		}
+	}
+}

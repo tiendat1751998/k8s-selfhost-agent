@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,7 +51,7 @@ func (c *TPSCollector) collectHTTPTPS(ctx context.Context, now time.Time) HTTPTP
 	var activeConns int
 	var queuedReqs int
 
-	if c.traefikAPIURL != "" {
+	if c.traefikAPIURL != "" && !IsSelfServerURL(c.traefikAPIURL, 8080) {
 		reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 
@@ -165,4 +167,40 @@ func DeriveTraefikURL(dockerHost string) string {
 		return "http://" + host + ":8080"
 	}
 	return ""
+}
+
+// IsSelfServerURL checks if lbURL points to the server's own host and port (e.g., localhost:8080, 127.0.0.1:8080).
+func IsSelfServerURL(lbURL string, serverPort int) bool {
+	lbURL = strings.TrimSpace(lbURL)
+	if lbURL == "" {
+		return false
+	}
+	if serverPort <= 0 {
+		serverPort = 8080
+	}
+	if !strings.Contains(lbURL, "://") {
+		lbURL = "http://" + lbURL
+	}
+	u, err := url.Parse(lbURL)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	portStr := u.Port()
+	if portStr == "" {
+		if strings.EqualFold(u.Scheme, "https") {
+			portStr = "443"
+		} else {
+			portStr = "80"
+		}
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return false
+	}
+	if port != serverPort {
+		return false
+	}
+	h := strings.Trim(strings.ToLower(host), "[]")
+	return h == "localhost" || h == "127.0.0.1" || h == "::1" || h == "0.0.0.0"
 }

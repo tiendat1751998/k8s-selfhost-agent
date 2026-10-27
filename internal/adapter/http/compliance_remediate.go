@@ -75,7 +75,21 @@ func (h *ComplianceHandler) RemediateViolation(w http.ResponseWriter, r *http.Re
 		}
 	}
 
+	type remediateRequest struct {
+		Confirm bool `json:"confirm"`
+	}
+	var reqBody remediateRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
+	}
+	isConfirmed := r.URL.Query().Get("confirm") == "true" || reqBody.Confirm
+
 	status, automated, summary, commands := h.evaluateRemediation(r.Context(), v, hosts)
+
+	if isConfirmed && status != "remediated" {
+		status = "remediated"
+		summary = fmt.Sprintf("Manual remediation confirmed by operator: %s", summary)
+	}
 
 	if status == "remediated" {
 		if err := h.repo.ResolveViolation(r.Context(), v.ID); err != nil {
