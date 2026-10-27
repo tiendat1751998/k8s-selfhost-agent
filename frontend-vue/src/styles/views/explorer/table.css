@@ -111,7 +111,7 @@
 }
 
 .res-link:hover {
-  color: #00e5ff;
+  color: var(--color-primary-hover, #38bdf8);
   text-decoration: underline;
 }
 
@@ -240,10 +240,10 @@
 /* Action Hover Colors */
 /* Logs (cyan) */
 .action-logs:hover:not(:disabled) {
-  background: rgba(6, 182, 212, 0.18);
-  border-color: #06b6d4;
+  background: rgba(56, 189, 248, 0.18);
+  border-color: var(--color-badge-agent-border, #38bdf8);
   color: #38bdf8;
-  box-shadow: 0 0 8px rgba(6, 182, 212, 0.35);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.35);
 }
 
 /* Terminal (emerald) */
@@ -281,10 +281,10 @@
 
 /* Inspect (cyan) */
 .action-inspect:hover:not(:disabled) {
-  background: rgba(6, 182, 212, 0.18);
-  border-color: #06b6d4;
+  background: rgba(56, 189, 248, 0.18);
+  border-color: var(--color-badge-agent-border, #38bdf8);
   color: #38bdf8;
-  box-shadow: 0 0 8px rgba(6, 182, 212, 0.35);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.35);
 }
 
 /* Edit (violet) */
@@ -335,4 +335,25 @@
     width: 32px;
     min-width: 32px;
   }
+}
+
+.sre-summary-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+.sre-strip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.telemetry-sep {
+  opacity: 0.4;
 }

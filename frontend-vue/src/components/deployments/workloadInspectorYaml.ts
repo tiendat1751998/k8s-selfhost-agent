@@ -1,6 +1,26 @@
 import type { DeploymentApp } from '../../api/compute'
 
 export function generateYamlManifest(app: DeploymentApp): string {
+  if (app.type === 'daemon' || app.type === 'host-daemon') {
+    return `[Unit]
+Description=${app.name} Host Daemon Service
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/${app.name} --port=${app.port || 9100}
+Restart=always
+RestartSec=5s
+LimitNOFILE=65536
+Environment=APP_ENV=${app.env || 'production'}
+Environment=PORT=${app.port || 9100}
+
+[Install]
+WantedBy=multi-user.target`
+  }
+
   if (app.type === 'swarm' || app.type === 'docker') {
     return `version: "3.8"
 services:

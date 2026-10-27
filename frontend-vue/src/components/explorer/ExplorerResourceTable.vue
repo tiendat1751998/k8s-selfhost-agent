@@ -109,7 +109,8 @@ function getRowActions(res: K8sResource): ActionItem[] {
 
   if (props.selectedKind === 'pods') {
     actions.push({ id: 'terminal', label: 'Terminal Exec', icon: 'terminal' })
-  } else if (props.selectedKind === 'deployments') {
+  } else if (props.selectedKind === 'deployments' || props.selectedKind === 'statefulsets') {
+    actions.push({ id: 'scale', label: 'Scale Replicas', icon: 'sliders' })
     actions.push({ id: 'restart', label: 'Restart Rollout', icon: 'refresh' })
   } else if (props.selectedKind === 'cronjobs') {
     const isSuspended = (res.spec as { suspend?: boolean } | undefined)?.suspend
@@ -137,6 +138,7 @@ function handleRowAction(actionId: string, res: K8sResource) {
   if (actionId === 'detail') emit('detail', res)
   else if (actionId === 'yaml') emit('yaml', res)
   else if (actionId === 'terminal') emit('terminal', res)
+  else if (actionId === 'scale') emit('scale', res)
   else if (actionId === 'restart') emit('restart', res)
   else if (actionId === 'toggle-suspend') emit('toggle-suspend', res)
   else if (actionId === 'drain') emit('drain', res)

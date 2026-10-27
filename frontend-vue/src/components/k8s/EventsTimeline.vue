@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useEventsTimeline, type EventsTimelineProps } from '../../composables/useEventsTimeline'
+import BaseIcon from '../ui/BaseIcon.vue'
 
 const props = withDefaults(defineProps<EventsTimelineProps>(), {
   autoRefresh: false,
@@ -42,7 +43,7 @@ const {
             :class="{ 'is-active': selectedTypeFilter === 'Warning' }"
             @click="selectedTypeFilter = 'Warning'"
           >
-            ⚠️ Warnings ({{ warningCount }})
+            <BaseIcon name="alert-triangle" size="xs" /> Warnings ({{ warningCount }})
           </button>
           <button
             type="button"
@@ -50,13 +51,13 @@ const {
             :class="{ 'is-active': selectedTypeFilter === 'Normal' }"
             @click="selectedTypeFilter = 'Normal'"
           >
-            ℹ️ Normal ({{ normalCount }})
+            <BaseIcon name="info" size="xs" /> Normal ({{ normalCount }})
           </button>
         </div>
 
         <!-- Search Input -->
         <div class="search-box">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon"><BaseIcon name="search" size="xs" /></span>
           <input
             v-model="searchQuery"
             type="text"
@@ -70,7 +71,7 @@ const {
             title="Clear search"
             @click="searchQuery = ''"
           >
-            ✕
+            <BaseIcon name="x" size="xs" />
           </button>
         </div>
       </div>
@@ -95,7 +96,7 @@ const {
           :disabled="loading"
           @click="loadEvents()"
         >
-          <span :class="{ 'spin-icon': loading }">🔄</span>
+          <span :class="{ 'spin-icon': loading }"><BaseIcon name="refresh" size="xs" /></span>
           <span>{{ loading ? 'Updating...' : 'Refresh' }}</span>
         </button>
       </div>
@@ -103,7 +104,7 @@ const {
 
     <!-- Error Banner -->
     <div v-if="error" class="events-error-banner glass-panel animate-fade-in">
-      <span class="err-icon">⚠️</span>
+      <BaseIcon name="alert-triangle" size="xs" class="err-icon text-amber" />
       <div class="err-text">
         <strong>Error loading events:</strong>
         <span class="font-mono font-small">{{ error }}</span>
@@ -123,7 +124,7 @@ const {
 
     <!-- Empty State -->
     <div v-else-if="filteredEvents.length === 0" class="events-empty glass-panel">
-      <div class="empty-icon">📢</div>
+      <div class="empty-icon"><BaseIcon name="activity" size="lg" /></div>
       <div class="empty-title">No Kubernetes Events Found</div>
       <div class="empty-desc text-muted">
         {{
@@ -162,7 +163,8 @@ const {
                 class="event-type-badge font-mono"
                 :class="ev.type === 'Warning' ? 'type-warning' : 'type-normal'"
               >
-                {{ ev.type === 'Warning' ? '⚠️ Warning' : 'ℹ️ Normal' }}
+                <BaseIcon :name="ev.type === 'Warning' ? 'alert-triangle' : 'info'" size="xs" />
+                <span>{{ ev.type === 'Warning' ? 'Warning' : 'Normal' }}</span>
               </span>
 
               <span class="event-reason font-mono font-bold">
@@ -180,7 +182,7 @@ const {
 
             <div class="event-meta-right">
               <span class="event-age font-mono" :title="ev.lastTimestamp || ev.eventTime || ev.firstTimestamp || ev.metadata?.creationTimestamp">
-                🕒 {{ getEventTime(ev) }}
+                <BaseIcon name="clock" size="xs" /> {{ getEventTime(ev) }}
               </span>
             </div>
           </div>

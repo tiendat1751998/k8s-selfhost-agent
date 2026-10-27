@@ -81,7 +81,14 @@ export function useLogStreamer(options: LogStreamerOptions = {}) {
   }
 
   function togglePause() {
-    logStore.togglePause()
+    const wasPaused = logStore.isPaused
+    if (wasPaused) {
+      const lastEntry = logStore.logs.length > 0 ? logStore.logs[logStore.logs.length - 1] : null
+      const since = lastEntry?.time || new Date().toISOString()
+      logStore.togglePause(since)
+    } else {
+      logStore.togglePause()
+    }
   }
 
   // Regex safe compiler

@@ -325,7 +325,7 @@ function handleServiceClick(svc: AvailableServiceItem) {
               :class="{ active: sourceCategory === 'app' }"
               @click="emit('update:sourceCategory', 'app')"
             >
-              📦 Apps
+              <BaseIcon name="box" size="xs" /> Apps
             </button>
             <button
               type="button"
@@ -335,13 +335,13 @@ function handleServiceClick(svc: AvailableServiceItem) {
               :class="{ active: sourceCategory === 'systemd' }"
               @click="emit('update:sourceCategory', 'systemd')"
             >
-              ⚙️ System
+              <BaseIcon name="cpu" size="xs" /> System
             </button>
           </div>
 
           <!-- Muted Services Reset Strip -->
           <div v-if="mutedServices && mutedServices.length > 0" class="tree-muted-strip font-mono">
-            <span class="muted-info">🔇 {{ mutedServices.length }} muted</span>
+            <span class="muted-info"><BaseIcon name="bell-off" size="xs" /> {{ mutedServices.length }} muted</span>
             <button
               type="button"
               class="muted-reset-btn"

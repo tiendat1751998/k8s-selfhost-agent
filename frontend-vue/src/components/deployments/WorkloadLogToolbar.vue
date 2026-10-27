@@ -130,17 +130,17 @@ const emit = defineEmits<{
   height: 28px;
   font-size: 11px;
   padding: 2px 8px;
-  background: var(--color-surface-inset, rgba(15, 23, 42, 0.7));
-  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.12));
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
-  color: var(--color-body, #e2e8f0);
+  color: var(--color-body);
   max-width: 170px;
   cursor: pointer;
 }
 
 .logs-select:focus {
   outline: none;
-  border-color: var(--accent-cyan, #06b6d4);
+  border-color: var(--color-primary);
 }
 
 @media (max-width: 640px) {

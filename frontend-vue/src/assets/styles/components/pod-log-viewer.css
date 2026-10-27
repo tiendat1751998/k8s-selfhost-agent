@@ -17,9 +17,9 @@
   flex-direction: column;
   gap: 10px;
   padding: 12px 16px;
-  background: var(--color-surface-card, rgba(15, 23, 42, 0.75));
+  background: var(--color-surface-card);
   border-radius: 10px;
-  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--color-border-subtle);
 }
 
 .toolbar-top-row,

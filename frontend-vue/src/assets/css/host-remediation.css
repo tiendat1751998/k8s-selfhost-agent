@@ -11,14 +11,14 @@
 
 .remediation-card {
   padding: 16px;
-  background: var(--color-surface-card, #161f30);
-  border: 1px solid var(--color-border-subtle, #243147);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   transition: border-color 0.15s ease;
 }
 
 .remediation-card:hover {
-  border-color: var(--color-border-strong, #384b6e);
+  border-color: var(--color-border-strong);
 }
 
 .rem-header-flex {
@@ -86,8 +86,8 @@
 }
 
 .rem-stat-cell {
-  background: var(--color-surface-inset, #111827);
-  border: 1px solid var(--color-hairline, #243147);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   padding: 10px;
   display: flex;
@@ -97,7 +97,7 @@
 
 .rem-stat-lbl {
   font-size: 10px;
-  color: var(--color-muted, #94a3b8);
+  color: var(--color-muted);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -106,7 +106,7 @@
 .rem-stat-val {
   font-size: 13px;
   font-weight: 700;
-  color: var(--color-body, #f8fafc);
+  color: var(--color-body);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -148,7 +148,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: var(--color-surface-inset, #111827);
+  background: var(--color-surface-inset);
   border: 1px solid rgba(248, 81, 73, 0.25);
   border-radius: 6px;
   padding: 8px 12px;
@@ -173,7 +173,7 @@
 
 .rem-container-meta {
   font-size: 10px;
-  color: var(--color-muted, #94a3b8);
+  color: var(--color-muted);
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -192,7 +192,7 @@
   flex-direction: column;
   gap: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--color-border-subtle, #243147);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .rem-service-row {
@@ -203,9 +203,9 @@
 
 .rem-select,
 .rem-input {
-  background: var(--color-surface-inset, #111827);
-  border: 1px solid var(--color-border-subtle, #243147);
-  color: var(--color-body, #f8fafc);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-body);
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 12px;
@@ -216,7 +216,7 @@
 
 .rem-select:focus,
 .rem-input:focus {
-  border-color: var(--color-primary, #326ce5);
+  border-color: var(--color-primary);
 }
 
 .rem-select {
@@ -287,8 +287,8 @@
 }
 
 .rem-history-item {
-  background: var(--color-surface-inset, #111827);
-  border: 1px solid var(--color-hairline, #243147);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-hairline);
   border-radius: 6px;
   padding: 8px 10px;
   font-size: 11px;
@@ -307,14 +307,14 @@
 
 .rem-history-action {
   font-weight: 700;
-  color: var(--color-body, #f8fafc);
+  color: var(--color-body);
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
 .rem-history-meta {
-  color: var(--color-muted, #94a3b8);
+  color: var(--color-muted);
   font-size: 10px;
   display: flex;
   align-items: center;
@@ -324,7 +324,7 @@
 .rem-history-output-toggle {
   background: transparent;
   border: none;
-  color: var(--color-primary-hover, #3b82f6);
+  color: var(--color-primary-hover);
   cursor: pointer;
   padding: 0;
   font-size: 10px;

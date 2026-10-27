@@ -104,6 +104,8 @@ const isWorkload = computed(() => {
         <EventsTimeline
           :cluster="cluster"
           :namespace="resource.metadata?.namespace"
+          :name="resource.metadata?.name"
+          :kind="resource.kind"
           :resource-name="resource.metadata?.name"
           :resource-kind="resource.kind"
         />

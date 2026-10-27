@@ -82,6 +82,43 @@ async function handleImportCluster() {
     loading.value = false
   }
 }
+
+const isValidating = ref(false)
+const validationSuccess = ref<string | null>(null)
+
+async function handleValidateConnectivity() {
+  errorMessage.value = null
+  validationSuccess.value = null
+
+  let fileToUpload: File | null = kubeconfigFile.value
+
+  if (importMode.value === 'text') {
+    if (!importForm.value.kubeconfigRaw.trim()) {
+      errorMessage.value = 'Kubeconfig content cannot be empty'
+      return
+    }
+    fileToUpload = new File([importForm.value.kubeconfigRaw], 'kubeconfig.yaml', {
+      type: 'text/yaml',
+    })
+  }
+
+  if (!fileToUpload) {
+    errorMessage.value = 'Please select or paste a kubeconfig to validate'
+    return
+  }
+
+  isValidating.value = true
+  try {
+    const formData = new FormData()
+    formData.append('kubeconfig', fileToUpload)
+    const res = await fleetApi.validateKubeconfig(formData)
+    validationSuccess.value = res.message || 'Connectivity validated successfully'
+  } catch (err: unknown) {
+    errorMessage.value = err instanceof Error ? err.message : 'Connectivity check failed'
+  } finally {
+    isValidating.value = false
+  }
+}
 </script>
 
 <template>
@@ -97,6 +134,10 @@ async function handleImportCluster() {
       <div v-if="errorMessage" class="toast-banner toast-error animate-fade-in" style="margin-bottom: 6px;">
         <BaseIcon name="alert-triangle" size="xs" />
         <span>{{ errorMessage }}</span>
+      </div>
+      <div v-if="validationSuccess" class="toast-banner toast-success animate-fade-in" style="margin-bottom: 6px;">
+        <BaseIcon name="check-circle" size="xs" />
+        <span>{{ validationSuccess }}</span>
       </div>
 
       <div class="form-group">
@@ -174,7 +215,10 @@ async function handleImportCluster() {
 
     <template #footer="{ close }">
       <button class="btn btn-secondary" @click="close">Cancel</button>
-      <button class="btn btn-primary" :disabled="loading" @click="handleImportCluster">
+      <button type="button" class="btn btn-secondary" :disabled="loading || isValidating" @click="handleValidateConnectivity">
+        <span><BaseIcon :name="isValidating ? 'activity' : 'check-circle'" size="xs" :class="{ 'spin-icon': isValidating }" /> Validate Connectivity</span>
+      </button>
+      <button class="btn btn-primary" :disabled="loading || isValidating" @click="handleImportCluster">
         <span><BaseIcon :name="loading ? 'activity' : 'play'" size="xs" :class="{ 'spin-icon': loading }" /> {{ loading ? 'Importing Cluster...' : 'Import Cluster' }}</span>
       </button>
     </template>

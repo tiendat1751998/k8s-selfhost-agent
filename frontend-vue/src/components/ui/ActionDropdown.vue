@@ -1,3 +1,7 @@
+<script lang="ts">
+let activeDropdownClose: (() => void) | null = null
+</script>
+
 <script setup lang="ts">
 import { ref, computed, nextTick, onUnmounted } from 'vue'
 import BaseIcon from './BaseIcon.vue'
@@ -108,6 +112,10 @@ function toggleListeners(add: boolean) {
 
 async function openMenu(focusFirst = false) {
   if (props.disabled || isOpen.value) return
+  if (activeDropdownClose && activeDropdownClose !== closeMenu) {
+    activeDropdownClose()
+  }
+  activeDropdownClose = closeMenu
   isOpen.value = true
   activeIndex.value = -1
   emit('open')
@@ -122,6 +130,9 @@ async function openMenu(focusFirst = false) {
 
 function closeMenu(focusTrigger = false) {
   if (!isOpen.value) return
+  if (activeDropdownClose === closeMenu) {
+    activeDropdownClose = null
+  }
   isOpen.value = false
   activeIndex.value = -1
   toggleListeners(false)
@@ -140,7 +151,12 @@ function selectItem(item: ActionItem) {
   closeMenu(true)
 }
 
-onUnmounted(() => toggleListeners(false))
+onUnmounted(() => {
+  toggleListeners(false)
+  if (activeDropdownClose === closeMenu) {
+    activeDropdownClose = null
+  }
+})
 </script>
 
 <template>
@@ -216,7 +232,7 @@ onUnmounted(() => toggleListeners(false))
 
 <style>
 .action-dropdown-menu {
-  position: fixed !important; z-index: 9999; min-width: 170px; background: var(--bg-card);
+  position: fixed !important; z-index: var(--z-dropdown, 30); min-width: 170px; background: var(--bg-card);
   border: 1px solid var(--color-border-subtle); border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), 0 2px 6px rgba(0, 0, 0, 0.15);
   padding: 4px; display: flex; flex-direction: column; gap: 2px;

@@ -3,7 +3,7 @@
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 95;
+  z-index: var(--z-banner, 25);
   width: calc(100% - 48px);
   max-width: 440px;
   background: var(--bg-card);
@@ -12,6 +12,12 @@
   border-radius: 8px;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
+}
+
+body:has(.modal-backdrop) .pwa-install-banner,
+body:has(.alert-modal-backdrop) .pwa-install-banner,
+body:has([role="dialog"]) .pwa-install-banner {
+  display: none !important;
 }
 
 .banner-content {
@@ -201,7 +207,7 @@
   display: none;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 767.98px) {
   .title-full,
   .desc-full,
   .btn-text-full {
@@ -213,7 +219,7 @@
     display: inline;
   }
   .pwa-install-banner {
-    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px)) !important;
     right: 8px;
     left: 8px;
     width: calc(100% - 16px);

@@ -196,13 +196,19 @@ function copyToClipboard(text: string) {
 
       <!-- Tab 3: Strategy & Traffic -->
       <div v-else-if="activeTab === 'strategy'" class="insp-panel animate-fade-in">
-        <div class="glass-panel p-4 mb-4">
-          <h4 class="strat-title mb-2">Active Strategy: {{ app.strategy || 'RollingUpdate' }}</h4>
-          <p class="strat-desc">Revision #{{ app.revision || 1 }} deployed on cluster {{ app.target }}.</p>
+        <div v-if="isDaemon" class="glass-panel p-4 mb-4 font-mono">
+          <h4 class="strat-title mb-2">Host Daemon Unit (systemd)</h4>
+          <p class="strat-desc">Managed directly as a Linux systemd service on host node. Dynamic traffic splitting (Canary / Blue-Green) is not applicable to standalone daemon workloads.</p>
         </div>
-        <button type="button" class="btn btn-primary btn-sm w-full" @click="emit('openStrategy', app)">
-          <span>Configure Canary & Blue-Green Traffic Controls <BaseIcon name="play" size="xs" /></span>
-        </button>
+        <div v-else>
+          <div class="glass-panel p-4 mb-4">
+            <h4 class="strat-title mb-2">Active Strategy: {{ app.strategy || 'RollingUpdate' }}</h4>
+            <p class="strat-desc">Revision #{{ app.revision || 1 }} deployed on cluster {{ app.target }}.</p>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm w-full" @click="emit('openStrategy', app)">
+            <span>Configure Canary & Blue-Green Traffic Controls <BaseIcon name="play" size="xs" /></span>
+          </button>
+        </div>
       </div>
 
       <!-- Tab 4: Networking -->
@@ -210,11 +216,11 @@ function copyToClipboard(text: string) {
         <div class="spec-grid font-mono">
           <div class="spec-row">
             <span class="spec-label">Service Type</span>
-            <span class="spec-val">{{ app.netType || 'ClusterIP' }}</span>
+            <span class="spec-val">{{ isDaemon ? 'Host Daemon Socket' : (app.netType || 'ClusterIP') }}</span>
           </div>
           <div class="spec-row">
             <span class="spec-label">Internal Endpoint</span>
-            <span class="spec-val text-cyan">{{ app.name }}.{{ app.namespace || 'default' }}.svc.cluster.local:{{ app.port }}</span>
+            <span class="spec-val text-cyan">{{ isDaemon ? `${app.namespace}:${app.port || 9100}` : `${app.name}.${app.namespace || 'default'}.svc.cluster.local:${app.port}` }}</span>
           </div>
           <div class="spec-row">
             <span class="spec-label">Ingress Hostname</span>
@@ -222,7 +228,7 @@ function copyToClipboard(text: string) {
           </div>
           <div class="spec-row">
             <span class="spec-label">Readiness Probe</span>
-            <span class="spec-val">{{ app.readinessProbe || '/healthz' }}</span>
+            <span class="spec-val">{{ isDaemon ? 'systemd is-active check' : (app.readinessProbe || '/healthz') }}</span>
           </div>
         </div>
       </div>

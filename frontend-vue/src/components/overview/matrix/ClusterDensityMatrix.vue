@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Quadtree, computeMatrixLayout } from '../../../utils/quadtreeIndex'
 
 export interface MatrixNode {
@@ -34,6 +34,19 @@ const hoveredNode = ref<MatrixNode | null>(null)
 const selectedNodeId = ref<string | null>(null)
 const tooltipX = ref(0)
 const tooltipY = ref(0)
+
+const onlineCount = computed(() => (props.nodes || []).filter(n => {
+  const s = (n.status || '').toLowerCase()
+  return s === 'ready' || s === 'healthy' || s === 'active' || s === 'online'
+}).length)
+const warningCount = computed(() => (props.nodes || []).filter(n => {
+  const s = (n.status || '').toLowerCase()
+  return s === 'warning' || s === 'degraded' || s === 'pending'
+}).length)
+const offlineCount = computed(() => (props.nodes || []).filter(n => {
+  const s = (n.status || '').toLowerCase()
+  return s === 'offline' || s === 'down' || s === 'critical' || s === 'unhealthy'
+}).length)
 
 let quadtree: Quadtree<MatrixNode> | null = null
 let resizeObserver: ResizeObserver | null = null
@@ -188,6 +201,13 @@ onUnmounted(() => {
         <div v-if="hoveredNode.region" class="tooltip-item full"><span class="label">REGION</span><span class="val tabular-nums font-mono">{{ hoveredNode.region }}</span></div>
       </div>
     </div>
+    <!-- Status Legend -->
+    <div class="matrix-legend font-mono">
+      <div class="legend-item"><span class="status-dot"></span><span>Healthy ({{ onlineCount }})</span></div>
+      <div class="legend-item"><span class="status-dot warning"></span><span>Degraded ({{ warningCount }})</span></div>
+      <div class="legend-item"><span class="status-dot offline"></span><span>Offline ({{ offlineCount }})</span></div>
+      <div class="legend-stats text-muted"><span>{{ onlineCount }}/{{ nodes.length }} Online</span></div>
+    </div>
   </div>
 </template>
 
@@ -196,8 +216,8 @@ onUnmounted(() => {
   position: relative;
   width: 100%;
   padding: 12px;
-  background: var(--color-surface-inset, rgba(15, 23, 42, 0.4));
-  border: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.06));
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   box-sizing: border-box;
 }
@@ -210,10 +230,10 @@ onUnmounted(() => {
 .matrix-canvas { display: block; cursor: crosshair; }
 .matrix-tooltip {
   position: fixed;
-  z-index: 9999;
+  z-index: var(--z-dropdown, 30);
   pointer-events: none;
-  background: var(--color-surface-card, rgba(15, 23, 42, 0.95));
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border-subtle);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   border-radius: 6px;
   padding: 8px 12px;
@@ -231,4 +251,18 @@ onUnmounted(() => {
 .label { color: var(--color-muted, #94a3b8); font-size: 0.6875rem; font-weight: 600; }
 .val { color: var(--color-body, #e2e8f0); font-weight: 700; }
 .tabular-nums { font-variant-numeric: tabular-nums; }
+
+.matrix-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+  margin-top: 8px;
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: 0.72rem;
+  flex-wrap: wrap;
+}
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.legend-stats { margin-left: auto; font-weight: 600; }
 </style>

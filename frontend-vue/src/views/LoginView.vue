@@ -32,7 +32,7 @@
         <!-- Status Pill -->
         <div class="env-pill">
           <span class="pulse-dot pulse-dot-emerald"></span>
-          <span class="env-text">System Online • TLS v1.3</span>
+          <span class="env-text">Authenticated Control Session</span>
         </div>
 
         <!-- Error Box -->

@@ -36,6 +36,7 @@ export interface LogFilterOptions {
   level?: string
   keyword?: string
   query?: string
+  since?: string
 }
 
 export function matchesTarget(entry: LogEntry, opts: LogFilterOptions): boolean {
@@ -167,6 +168,7 @@ export const useLogStore = defineStore('log', () => {
     if (opts.namespace) params.append('namespace', opts.namespace)
     if (opts.pod) params.append('pod', opts.pod)
     if (opts.level) params.append('level', opts.level)
+    if (opts.since) params.append('since', opts.since)
     const q = opts.query || opts.keyword
     if (q) params.append('query', q)
 
@@ -219,7 +221,7 @@ export const useLogStore = defineStore('log', () => {
   }
 
   function setFilter(options: LogFilterOptions) {
-    const keys: (keyof LogFilterOptions)[] = ['node', 'service', 'container', 'namespace', 'pod', 'level', 'keyword', 'query']
+    const keys: (keyof LogFilterOptions)[] = ['node', 'service', 'container', 'namespace', 'pod', 'level', 'keyword', 'query', 'since']
     const hasChanged = keys.some((k) => (options[k] || '') !== (activeFilter.value[k] || ''))
     if (!hasChanged && socket.value && socket.value.readyState === WebSocket.OPEN) return
     connect(options)
@@ -290,8 +292,11 @@ export const useLogStore = defineStore('log', () => {
     logs.value = []
   }
 
-  function togglePause() {
+  function togglePause(since?: string) {
     isPaused.value = !isPaused.value
+    if (!isPaused.value && since) {
+      setFilter({ ...activeFilter.value, since })
+    }
   }
 
   function openTraceDrawer(traceId: string) {

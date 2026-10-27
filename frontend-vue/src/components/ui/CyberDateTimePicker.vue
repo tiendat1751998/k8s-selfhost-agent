@@ -130,7 +130,7 @@ void pickerContainerRef
 
           <div class="time-column">
             <div class="time-header-box">
-              <span class="time-title font-mono">⏱️ TIME (24H)</span>
+              <span class="time-title font-mono"><BaseIcon name="clock" size="xs" /> TIME (24H)</span>
               <div class="time-digital-display font-mono">
                 <span class="time-digit">{{ pad(tempHour) }}</span>
                 <span class="time-colon">:</span>
