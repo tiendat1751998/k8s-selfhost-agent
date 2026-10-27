@@ -37,6 +37,25 @@ type AlertHistory struct {
 	Value          float64
 	Message        string
 	AcknowledgedBy string
+	ResolvedAt     *time.Time
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }
+
+type Silence struct {
+	ID              string    `json:"id"`
+	TenantID        string    `json:"tenant_id"`
+	AlertID         string    `json:"alert_id"`
+	Comment         string    `json:"comment"`
+	CreatedBy       string    `json:"created_by"`
+	DurationMinutes int       `json:"duration_minutes"`
+	StartsAt        time.Time `json:"starts_at"`
+	EndsAt          time.Time `json:"ends_at"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+func (s *Silence) IsActive() bool {
+	now := time.Now()
+	return (now.Equal(s.StartsAt) || now.After(s.StartsAt)) && now.Before(s.EndsAt)
+}
+

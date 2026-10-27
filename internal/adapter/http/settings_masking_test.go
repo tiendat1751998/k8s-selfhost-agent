@@ -152,6 +152,19 @@ func (m *mockAlertRepoForMasking) ListHistory(ctx context.Context, tenantID stri
 func (m *mockAlertRepoForMasking) AcknowledgeAlert(ctx context.Context, id, tenantID, userID string) error {
 	return nil
 }
+func (m *mockAlertRepoForMasking) ResolveAlert(ctx context.Context, id, tenantID, userID string) error {
+	return nil
+}
+func (m *mockAlertRepoForMasking) CreateSilence(ctx context.Context, s *alert.Silence) error {
+	return nil
+}
+func (m *mockAlertRepoForMasking) ListSilences(ctx context.Context, tenantID string) ([]*alert.Silence, error) {
+	return nil, nil
+}
+func (m *mockAlertRepoForMasking) IsAlertSilenced(ctx context.Context, tenantID, alertID string) (bool, error) {
+	return false, nil
+}
+
 
 func TestAlertHandler_ListChannels_Masking(t *testing.T) {
 	testChannels := []*alert.NotificationChannel{

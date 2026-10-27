@@ -100,7 +100,7 @@ func (m *ReleaseManager) InstallRelease(ctx context.Context, clusterID string, r
 	if strings.Contains(req.Chart, "..") || strings.HasPrefix(req.Chart, "/") || strings.HasPrefix(req.Chart, `\`) {
 		return nil, fmt.Errorf("invalid chart name or path: %q", req.Chart)
 	}
-	if req.Repo != "" {
+	if req.Repo != "" && strings.Contains(req.Repo, "://") {
 		if err := validateRepoURL(req.Repo); err != nil {
 			return nil, err
 		}
@@ -182,7 +182,7 @@ func (m *ReleaseManager) UpgradeRelease(ctx context.Context, clusterID string, r
 			return nil, fmt.Errorf("invalid chart name or path: %q", req.Chart)
 		}
 	}
-	if req.Repo != "" {
+	if req.Repo != "" && strings.Contains(req.Repo, "://") {
 		if err := validateRepoURL(req.Repo); err != nil {
 			return nil, err
 		}

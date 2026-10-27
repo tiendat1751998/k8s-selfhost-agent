@@ -257,3 +257,98 @@ func (r *AlertRepo) AcknowledgeAlert(ctx context.Context, id, tenantID, userID s
 	}
 	return nil
 }
+
+func (r *AlertRepo) ResolveAlert(ctx context.Context, id, tenantID, userID string) error {
+	now := time.Now().UTC()
+	query := `
+		UPDATE alert_history
+		SET status = 'resolved', acknowledged_by = $1, resolved_at = $2, updated_at = $2
+		WHERE id = $3 AND tenant_id = $4
+	`
+	_, err := r.getDB(ctx).Exec(ctx, query, userID, now, id, tenantID)
+	if err != nil {
+		fallbackQuery := `
+			UPDATE alert_history
+			SET status = 'resolved', acknowledged_by = $1, updated_at = $2
+			WHERE id = $3 AND tenant_id = $4
+		`
+		if _, fbErr := r.getDB(ctx).Exec(ctx, fallbackQuery, userID, now, id, tenantID); fbErr != nil {
+			return fmt.Errorf("failed to resolve alert: %w", fbErr)
+		}
+	}
+	return nil
+}
+
+func (r *AlertRepo) CreateSilence(ctx context.Context, s *alert.Silence) error {
+	if s.ID == "" {
+		s.ID = uuid.NewString()
+	}
+	if s.StartsAt.IsZero() {
+		s.StartsAt = time.Now().UTC()
+	}
+	if s.EndsAt.IsZero() {
+		dur := s.DurationMinutes
+		if dur <= 0 {
+			dur = 60
+		}
+		s.EndsAt = s.StartsAt.Add(time.Duration(dur) * time.Minute)
+	}
+	s.CreatedAt = time.Now().UTC()
+
+	query := `
+		INSERT INTO alert_silences (id, tenant_id, alert_id, comment, created_by, duration_minutes, starts_at, ends_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (id) DO UPDATE SET
+			comment = EXCLUDED.comment,
+			duration_minutes = EXCLUDED.duration_minutes,
+			starts_at = EXCLUDED.starts_at,
+			ends_at = EXCLUDED.ends_at
+	`
+	_, err := r.getDB(ctx).Exec(ctx, query,
+		s.ID, s.TenantID, s.AlertID, s.Comment, s.CreatedBy, s.DurationMinutes, s.StartsAt, s.EndsAt, s.CreatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to insert silence: %w", err)
+	}
+	return nil
+}
+
+func (r *AlertRepo) ListSilences(ctx context.Context, tenantID string) ([]*alert.Silence, error) {
+	query := `
+		SELECT id, tenant_id, alert_id, comment, created_by, duration_minutes, starts_at, ends_at, created_at
+		FROM alert_silences
+		WHERE tenant_id = $1 AND ends_at > NOW()
+		ORDER BY created_at DESC
+	`
+	rows, err := r.getDB(ctx).Query(ctx, query, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list silences: %w", err)
+	}
+	defer rows.Close()
+
+	var silences []*alert.Silence
+	for rows.Next() {
+		var s alert.Silence
+		if err := rows.Scan(
+			&s.ID, &s.TenantID, &s.AlertID, &s.Comment, &s.CreatedBy, &s.DurationMinutes, &s.StartsAt, &s.EndsAt, &s.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan silence: %w", err)
+		}
+		silences = append(silences, &s)
+	}
+	return silences, nil
+}
+
+func (r *AlertRepo) IsAlertSilenced(ctx context.Context, tenantID, alertID string) (bool, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM alert_silences
+		WHERE tenant_id = $1 AND alert_id = $2 AND starts_at <= NOW() AND ends_at > NOW()
+	`
+	var count int
+	if err := r.getDB(ctx).QueryRow(ctx, query, tenantID, alertID).Scan(&count); err != nil {
+		return false, fmt.Errorf("checking alert silence: %w", err)
+	}
+	return count > 0, nil
+}
+

@@ -101,6 +101,8 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 	}
 	if platform.Observability != nil {
 		r.With(mutRoles).Route("/observability", platform.Observability.RegisterRoutes)
+		r.With(mutRoles).Route("/slo", platform.Observability.RegisterSLORoutes)
+		r.With(mutRoles).Route("/slos", platform.Observability.RegisterSLORoutes)
 	}
 	if platform.Timeline != nil {
 		r.With(mutRoles).Route("/timeline", platform.Timeline.RegisterRoutes)
@@ -131,7 +133,13 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 		r.With(mutRoles).Get("/clusters", platform.Fleet.ListClusters)
 	}
 	if platform.Audit != nil {
-		r.With(adminOnly).Route("/audit", platform.Audit.RegisterRoutes)
+		r.Route("/audit", func(ar chi.Router) {
+			ar.With(mutRoles).Get("/findings", platform.Audit.ListFindings)
+			ar.With(mutRoles).Get("/logs", platform.Audit.ListLogs)
+			ar.With(mutRoles).Get("/runs/latest", platform.Audit.GetLatestRun)
+			ar.With(adminOnly).Post("/run", platform.Audit.TriggerAuditRun)
+			ar.With(adminOnly).Post("/findings/{id}/resolve", platform.Audit.ResolveFinding)
+		})
 	}
 	if platform.Docker != nil {
 		r.With(mutRoles).Route("/docker", platform.Docker.RegisterRoutes)
@@ -171,7 +179,7 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 		})
 	}
 	if platform.Tenancy != nil {
-		r.With(adminOnly).Route("/tenancy", platform.Tenancy.RegisterRoutes)
+		r.Route("/tenancy", platform.Tenancy.RegisterTenantScopedRoutes)
 	}
 	if platform.Alert != nil {
 		r.With(mutRoles).Route("/alerts", platform.Alert.RegisterRoutes)

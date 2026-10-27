@@ -39,6 +39,14 @@ func (m *mockRepo) ListHistory(ctx context.Context, tenantID string) ([]*domainA
 	return m.history, nil
 }
 func (m *mockRepo) AcknowledgeAlert(ctx context.Context, id, tenantID, userID string) error { return nil }
+func (m *mockRepo) ResolveAlert(ctx context.Context, id, tenantID, userID string) error     { return nil }
+func (m *mockRepo) CreateSilence(ctx context.Context, s *domainAlert.Silence) error          { return nil }
+func (m *mockRepo) ListSilences(ctx context.Context, tenantID string) ([]*domainAlert.Silence, error) {
+	return nil, nil
+}
+func (m *mockRepo) IsAlertSilenced(ctx context.Context, tenantID, alertName string) (bool, error) {
+	return false, nil
+}
 
 type mockNotifier struct {
 	sendErr error

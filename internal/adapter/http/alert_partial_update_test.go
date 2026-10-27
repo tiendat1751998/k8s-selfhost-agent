@@ -53,6 +53,19 @@ func (m *mockAlertRepoForPartialUpdate) ListHistory(ctx context.Context, tenantI
 func (m *mockAlertRepoForPartialUpdate) AcknowledgeAlert(ctx context.Context, id, tenantID, userID string) error {
 	return nil
 }
+func (m *mockAlertRepoForPartialUpdate) ResolveAlert(ctx context.Context, id, tenantID, userID string) error {
+	return nil
+}
+func (m *mockAlertRepoForPartialUpdate) CreateSilence(ctx context.Context, s *alert.Silence) error {
+	return nil
+}
+func (m *mockAlertRepoForPartialUpdate) ListSilences(ctx context.Context, tenantID string) ([]*alert.Silence, error) {
+	return nil, nil
+}
+func (m *mockAlertRepoForPartialUpdate) IsAlertSilenced(ctx context.Context, tenantID, alertID string) (bool, error) {
+	return false, nil
+}
+
 
 func TestAlertHandler_UpdateRule_PartialUpdate(t *testing.T) {
 	ruleID := uuid.NewString()
