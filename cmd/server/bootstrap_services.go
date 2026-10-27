@@ -162,10 +162,10 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 		lbURL = usecaseMetrics.DeriveTraefikURL(cfg.Docker.Host)
 	}
 	var lbProvider domainLB.Provider
-	if cfg.LoadBalancer.Provider == "traefik" || cfg.LoadBalancer.Provider == "" {
+	if (cfg.LoadBalancer.Provider == "traefik" || cfg.LoadBalancer.Provider == "") && lbURL != "" {
 		lbProvider = infraLB.NewTraefikProvider(lbURL)
 	}
-	if provider, ok := lbProvider.(*infraLB.TraefikProvider); ok {
+	if provider, ok := lbProvider.(*infraLB.TraefikProvider); ok && lbURL != "" {
 		go provider.StartBackgroundScraper(ctx)
 	}
 

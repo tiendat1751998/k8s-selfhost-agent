@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -88,11 +89,14 @@ func TestCollectHTTPTPS_ConfigSyntaxErrorsDoNotInflateHTTPErrorRate(t *testing.T
 }
 
 func TestDeriveTraefikURL_EdgeCases(t *testing.T) {
+	os.Unsetenv("TRAEFIK_API_URL")
+
 	tests := []struct {
 		input    string
 		expected string
 	}{
-		{"", "http://localhost:8080"},
+		{"", ""},
+		{"unix:///var/run/docker.sock", ""},
 		{"tcp://0.0.0.0:2375", "http://localhost:8080"},
 		{"tcp://192.168.1.50:2375", "http://192.168.1.50:8080"},
 		{"http://custom-traefik:9000", "http://custom-traefik:9000"},
@@ -104,5 +108,12 @@ func TestDeriveTraefikURL_EdgeCases(t *testing.T) {
 		if got != tc.expected {
 			t.Errorf("DeriveTraefikURL(%q) = %q, expected %q", tc.input, got, tc.expected)
 		}
+	}
+
+	// Test TRAEFIK_API_URL env var override
+	os.Setenv("TRAEFIK_API_URL", "http://traefik.prod:8000")
+	defer os.Unsetenv("TRAEFIK_API_URL")
+	if got := DeriveTraefikURL(""); got != "http://traefik.prod:8000" {
+		t.Errorf("expected http://traefik.prod:8000 from TRAEFIK_API_URL, got %q", got)
 	}
 }

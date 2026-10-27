@@ -199,7 +199,9 @@ func (r *deploymentRepo) List(ctx context.Context) ([]deployment.Application, er
 }
 
 func (r *deploymentRepo) Scale(ctx context.Context, targetType, targetCluster, namespace, name string, replicas int) error {
-	if targetType == "kubernetes" {
+	if isHostDaemonTarget(targetType, name) {
+		return r.scaleHostDaemon(ctx, targetCluster, namespace, name, replicas)
+	} else if targetType == "kubernetes" {
 		return r.scaleK8sDeployment(ctx, targetCluster, namespace, name, replicas)
 	} else if targetType == "swarm" || targetType == "docker" {
 		return r.scaleSwarmService(ctx, targetCluster, name, replicas)
@@ -208,7 +210,9 @@ func (r *deploymentRepo) Scale(ctx context.Context, targetType, targetCluster, n
 }
 
 func (r *deploymentRepo) Restart(ctx context.Context, targetType, targetCluster, namespace, name string) error {
-	if targetType == "kubernetes" {
+	if isHostDaemonTarget(targetType, name) {
+		return r.restartHostDaemon(ctx, targetCluster, namespace, name)
+	} else if targetType == "kubernetes" {
 		return r.restartK8sDeployment(ctx, targetCluster, namespace, name)
 	} else if targetType == "swarm" || targetType == "docker" {
 		return r.restartSwarmService(ctx, targetCluster, name)
@@ -217,7 +221,9 @@ func (r *deploymentRepo) Restart(ctx context.Context, targetType, targetCluster,
 }
 
 func (r *deploymentRepo) Delete(ctx context.Context, targetType, targetCluster, namespace, name string) error {
-	if targetType == "kubernetes" {
+	if isHostDaemonTarget(targetType, name) {
+		return r.deleteHostDaemon(ctx, targetCluster, namespace, name)
+	} else if targetType == "kubernetes" {
 		return r.deleteK8sDeployment(ctx, targetCluster, namespace, name)
 	} else if targetType == "swarm" || targetType == "docker" {
 		return r.deleteSwarmService(ctx, targetCluster, name)

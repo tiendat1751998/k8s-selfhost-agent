@@ -447,7 +447,7 @@ func (h *HelmHandler) recordAudit(r *http.Request, action, releaseName, clusterI
 }
 
 func (h *HelmHandler) handleReleaseError(w http.ResponseWriter, defaultMsg string, err error) {
-	if isK8sUnavailable(err) {
+	if isK8sUnavailable(err) || isK8sDialError(err) || (err != nil && strings.Contains(strings.ToLower(err.Error()), "6443")) {
 		writeK8sUnavailable(w)
 		return
 	}

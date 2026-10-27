@@ -277,6 +277,8 @@ func (c *Collector) ScrapeAgent(ctx context.Context, host docker.ComputeHost) {
 		RunningContainers: runningContainers,
 		PodCount:          podCount,
 		DetectedServices:  payload.DetectedServices,
+		Labels:            host.Labels,
+		Role:              host.HostType,
 		Status:            "online",
 		LastSeen:          collectedAt,
 	}

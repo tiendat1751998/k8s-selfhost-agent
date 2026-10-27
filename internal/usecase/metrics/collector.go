@@ -61,6 +61,8 @@ type AgentMetrics struct {
 	ActiveDaemons     int                `json:"active_daemons,omitempty"`
 	PodCount          int                `json:"pod_count,omitempty"`
 	DetectedServices  []string           `json:"detected_services,omitempty"`
+	Labels            map[string]string  `json:"labels,omitempty"`
+	Role              string             `json:"role,omitempty"`
 	Status            string             `json:"status"` // "online", "offline", "error"
 	LastSeen          time.Time          `json:"last_seen"`
 }

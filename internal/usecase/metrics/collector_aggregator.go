@@ -126,10 +126,12 @@ func (c *Collector) CollectOnce(ctx context.Context) (*SystemOverview, error) {
 			nodeIP = ExtractCleanHostIP(am.IPAddress, am.Endpoint, hostID, am.Hostname)
 		}
 
+		nodeRole := deriveNodeRole(am.Hostname, hostID, am.DetectedServices, am.Labels)
+
 		nodeMetricsList = append(nodeMetricsList, NodeMetrics{
 			NodeID:               hostID,
 			NodeName:             am.Hostname,
-			Role:                 "agent",
+			Role:                 nodeRole,
 			Status:               status,
 			IP:                   nodeIP,
 			IPAddress:            nodeIP,
@@ -381,3 +383,45 @@ func ExtractCleanHostIP(inputs ...string) string {
 	}
 	return ""
 }
+
+// deriveNodeRole classifies a node as "control-plane" or "worker".
+// It evaluates host labels, detected control-plane services, and hostname heuristics.
+func deriveNodeRole(nodeName string, hostID string, detectedServices []string, labels map[string]string) string {
+	if labels != nil {
+		for k, v := range labels {
+			kLower := strings.ToLower(k)
+			vLower := strings.ToLower(v)
+			if kLower == "role" || kLower == "node-role.kubernetes.io/control-plane" || kLower == "node-role.kubernetes.io/master" || kLower == "k8s_role" {
+				if vLower == "control-plane" || vLower == "master" || vLower == "true" {
+					return "control-plane"
+				}
+				if vLower == "worker" {
+					return "worker"
+				}
+			}
+			if strings.Contains(kLower, "master") || strings.Contains(kLower, "control") {
+				return "control-plane"
+			}
+		}
+	}
+
+	for _, s := range detectedServices {
+		sLower := strings.ToLower(s)
+		if strings.Contains(sLower, "kube-apiserver") ||
+			strings.Contains(sLower, "kube-controller-manager") ||
+			strings.Contains(sLower, "kube-scheduler") ||
+			strings.Contains(sLower, "etcd") {
+			return "control-plane"
+		}
+	}
+
+	nameLower := strings.ToLower(nodeName)
+	idLower := strings.ToLower(hostID)
+	if strings.Contains(nameLower, "master") || strings.Contains(nameLower, "control") ||
+		strings.Contains(idLower, "master") || strings.Contains(idLower, "control") {
+		return "control-plane"
+	}
+
+	return "worker"
+}
+

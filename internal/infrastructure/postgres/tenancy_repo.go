@@ -102,7 +102,8 @@ func (r *tenancyRepo) GetMembers(ctx context.Context) ([]tenancy.Member, error) 
 func (r *tenancyRepo) GetRBAC(ctx context.Context) (map[string]map[string]bool, error) {
 	// 1. Check custom overrides persisted in platform_settings first
 	var settingsVal string
-	err := r.getDB(ctx).QueryRow(ctx, "SELECT value FROM platform_settings WHERE category = 'tenancy' AND key = 'tenancy.rbac_roles' LIMIT 1").Scan(&settingsVal)
+	settingsQuery, settingsArgs := BuildTenantQuery(ctx, "SELECT value FROM platform_settings WHERE category = 'tenancy' AND key = 'tenancy.rbac_roles' LIMIT 1")
+	err := r.getDB(ctx).QueryRow(ctx, settingsQuery, settingsArgs...).Scan(&settingsVal)
 	if err == nil && settingsVal != "" {
 		var customMatrix map[string]map[string]bool
 		if jsonErr := json.Unmarshal([]byte(settingsVal), &customMatrix); jsonErr == nil && len(customMatrix) > 0 {

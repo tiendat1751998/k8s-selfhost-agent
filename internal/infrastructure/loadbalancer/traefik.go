@@ -85,9 +85,6 @@ func WithScrapeTimeout(d time.Duration) Option {
 // NewTraefikProvider creates a new Traefik load balancer provider.
 func NewTraefikProvider(apiURL string, opts ...Option) *TraefikProvider {
 	trimmed := strings.TrimRight(strings.TrimSpace(apiURL), "/")
-	if trimmed == "" {
-		trimmed = "http://localhost:8080"
-	}
 
 	transport := &http.Transport{
 		MaxIdleConns:        10,
@@ -127,7 +124,7 @@ func (p *TraefikProvider) Name() string {
 // StartBackgroundScraper starts a continuous background scraping loop for Traefik metrics and services.
 func (p *TraefikProvider) StartBackgroundScraper(ctx context.Context) {
 	p.mu.Lock()
-	if p.scraperStarted {
+	if p.apiURL == "" || p.scraperStarted {
 		p.mu.Unlock()
 		return
 	}
@@ -174,6 +171,9 @@ func (p *TraefikProvider) StopBackgroundScraper() {
 
 // scrapeOnce executes a single scrape iteration of Prometheus metrics and HTTP services.
 func (p *TraefikProvider) scrapeOnce(ctx context.Context) {
+	if p.apiURL == "" {
+		return
+	}
 	timeout := p.scrapeTimeout
 	if timeout <= 0 {
 		timeout = defaultScrapeTimeout
@@ -213,6 +213,9 @@ func (p *TraefikProvider) scrapeOnce(ctx context.Context) {
 
 // HealthCheck verifies connectivity to Traefik API.
 func (p *TraefikProvider) HealthCheck(ctx context.Context) error {
+	if p.apiURL == "" {
+		return nil
+	}
 	reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 

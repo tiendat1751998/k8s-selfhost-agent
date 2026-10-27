@@ -136,11 +136,11 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		lbURL = usecaseMetrics.DeriveTraefikURL(cfg.Docker.Host)
 	}
 	var lbProvider domainLB.Provider
-	if cfg.LoadBalancer.Provider == "traefik" || cfg.LoadBalancer.Provider == "" {
+	if (cfg.LoadBalancer.Provider == "traefik" || cfg.LoadBalancer.Provider == "") && lbURL != "" {
 		lbProvider = infraLB.NewTraefikProvider(lbURL)
 	}
 
-	if provider, ok := lbProvider.(*infraLB.TraefikProvider); ok {
+	if provider, ok := lbProvider.(*infraLB.TraefikProvider); ok && lbURL != "" {
 		go provider.StartBackgroundScraper(ctx)
 	}
 

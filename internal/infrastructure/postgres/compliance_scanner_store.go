@@ -124,32 +124,71 @@ func (s *complianceScannerStore) UpsertFramework(ctx context.Context, fw *usecas
 func (s *complianceScannerStore) ReplaceViolations(ctx context.Context, violations []usecaseCompliance.ViolationRecord) error {
 	tenantID := TenantIDOrDefault(ctx)
 
-	// Clean out stale seed violations from migration 062 and older scan detections scoped by tenant
-	delQuery := `
-		DELETE FROM compliance_violations 
-		WHERE (id::text LIKE 'd1000001%' 
-		   OR message LIKE '%AlwaysPullImages%' 
-		   OR message LIKE '%default-deny%' 
-		   OR message LIKE '%NetworkPolicy%' 
-		   OR message LIKE '%HostPID%'
-		   OR detected_at < NOW() - INTERVAL '1 hour')
-	`
-	delQuery, delArgs := BuildTenantQuery(ctx, delQuery)
-	if _, err := s.getDB(ctx).Exec(ctx, delQuery, delArgs...); err != nil {
-		return fmt.Errorf("deleting stale violations: %w", err)
+	var detectedIDs []string
+	for _, v := range violations {
+		key := fmt.Sprintf("%s:%s:%s:%s:%s", tenantID, v.Cluster, v.Namespace, v.Policy, v.Resource)
+		violID := uuid.NewSHA1(uuid.NameSpaceURL, []byte(key)).String()
+		detectedIDs = append(detectedIDs, violID)
+	}
+
+	// Delete stale seed violations from migration 062 and open scanner rows not detected in this scan
+	if len(detectedIDs) > 0 {
+		delQuery := `
+			DELETE FROM compliance_violations 
+			WHERE (id::text LIKE 'd1000001%' 
+			   OR message LIKE '%AlwaysPullImages%' 
+			   OR message LIKE '%default-deny%' 
+			   OR message LIKE '%NetworkPolicy%' 
+			   OR message LIKE '%HostPID%'
+			   OR (resolved = false AND NOT (id = ANY($1))))
+		`
+		delQuery, delArgs := BuildTenantQuery(ctx, delQuery, detectedIDs)
+		if _, err := s.getDB(ctx).Exec(ctx, delQuery, delArgs...); err != nil {
+			return fmt.Errorf("deleting stale violations: %w", err)
+		}
+	} else {
+		delQuery := `
+			DELETE FROM compliance_violations 
+			WHERE (id::text LIKE 'd1000001%' 
+			   OR message LIKE '%AlwaysPullImages%' 
+			   OR message LIKE '%default-deny%' 
+			   OR message LIKE '%NetworkPolicy%' 
+			   OR message LIKE '%HostPID%'
+			   OR resolved = false)
+		`
+		delQuery, delArgs := BuildTenantQuery(ctx, delQuery)
+		if _, err := s.getDB(ctx).Exec(ctx, delQuery, delArgs...); err != nil {
+			return fmt.Errorf("deleting stale violations: %w", err)
+		}
 	}
 
 	insertQuery := `
 		INSERT INTO compliance_violations (id, framework_id, severity, policy, resource, namespace, cluster, message, resolved, detected_at, tenant_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		ON CONFLICT (id) DO UPDATE SET
+			framework_id = EXCLUDED.framework_id,
+			severity = EXCLUDED.severity,
+			policy = EXCLUDED.policy,
+			resource = EXCLUDED.resource,
+			namespace = EXCLUDED.namespace,
+			cluster = EXCLUDED.cluster,
+			message = EXCLUDED.message,
+			resolved = EXCLUDED.resolved,
+			detected_at = EXCLUDED.detected_at,
+			tenant_id = EXCLUDED.tenant_id
 	`
-	for _, v := range violations {
-		violID := v.ID
-		if violID == "" {
-			violID = uuid.NewString()
+	for i, v := range violations {
+		violID := detectedIDs[i]
+		var fwID *string
+		if v.FrameworkID != "" && uuid.Validate(v.FrameworkID) == nil {
+			fwID = &v.FrameworkID
+		}
+		detAt := v.DetectedAt
+		if detAt.IsZero() {
+			detAt = time.Now().UTC()
 		}
 		_, err := s.getDB(ctx).Exec(ctx, insertQuery,
-			violID, v.FrameworkID, v.Severity, v.Policy, v.Resource, v.Namespace, v.Cluster, v.Message, v.Resolved, v.DetectedAt, tenantID,
+			violID, fwID, v.Severity, v.Policy, v.Resource, v.Namespace, v.Cluster, v.Message, v.Resolved, detAt, tenantID,
 		)
 		if err != nil {
 			return fmt.Errorf("inserting compliance violation: %w", err)

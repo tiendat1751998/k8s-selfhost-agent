@@ -17,6 +17,7 @@ var (
 	ErrTimeout        = errors.New("timeout")
 	ErrBinaryNotFound = errors.New("binary not found")
 	ErrK8sUnavailable = errors.New("kubernetes cluster not connected or unconfigured")
+	ErrUnprocessable  = errors.New("unprocessable entity")
 )
 
 // Error codes for DomainError.
@@ -30,6 +31,7 @@ const (
 	CodeTimeout        = "TIMEOUT"
 	CodeBinaryNotFound = "BINARY_NOT_FOUND"
 	CodeK8sUnavailable = "K8S_UNAVAILABLE"
+	CodeUnprocessable  = "UNPROCESSABLE_ENTITY"
 )
 
 // DomainError represents a domain-level error with context, an error code, and an underlying cause.
@@ -124,6 +126,15 @@ func NewK8sUnavailable(message string, cause error) *DomainError {
 		Code:    CodeK8sUnavailable,
 		Message: message,
 		Err:     cause,
+	}
+}
+
+// NewUnprocessable creates an unprocessable entity domain error.
+func NewUnprocessable(message string) *DomainError {
+	return &DomainError{
+		Code:    CodeUnprocessable,
+		Message: message,
+		Err:     ErrUnprocessable,
 	}
 }
 

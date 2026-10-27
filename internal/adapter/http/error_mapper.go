@@ -79,9 +79,14 @@ func mapDomainErrorToHTTP(err error) (int, string) {
 			return http.StatusForbidden, domErr.Message
 		case "ERR_ADMISSION_MUTATION_FAILED":
 			return http.StatusUnprocessableEntity, domErr.Message
+		case domainerrors.CodeUnprocessable:
+			return http.StatusUnprocessableEntity, domErr.Message
 		case domainerrors.CodeInternal:
 			return http.StatusInternalServerError, "Internal server error"
 		}
+	}
+	if errors.Is(err, domainerrors.ErrUnprocessable) {
+		return http.StatusUnprocessableEntity, err.Error()
 	}
 	return http.StatusInternalServerError, "Internal server error"
 }
