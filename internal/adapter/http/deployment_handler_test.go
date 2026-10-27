@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/deployment"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 	deploymentUsecase "github.com/datdt/k8sselfhost/internal/usecase/deployment"
 )
 
@@ -123,6 +124,8 @@ func TestDeploymentHandler_UpdateResources(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/deployments/resources", bytes.NewBufferString(body))
 		req.Header.Set("Content-Type", "application/json")
+		ctx := tenancy.WithUserRole(req.Context(), "platform_admin")
+		req = req.WithContext(ctx)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
 
@@ -132,6 +135,26 @@ func TestDeploymentHandler_UpdateResources(t *testing.T) {
 
 		if repo.lastUpdateName != "tiki_redis" {
 			t.Errorf("expected name tiki_redis, got %s", repo.lastUpdateName)
+		}
+	})
+
+	t.Run("forbidden docker swarm update without namespace for non-admin", func(t *testing.T) {
+		body := `{
+			"type": "docker",
+			"cluster": "swarm-cluster",
+			"name": "tiki_redis",
+			"replicas": 2
+		}`
+
+		req := httptest.NewRequest(http.MethodPost, "/deployments/resources", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		ctx := tenancy.WithUserRole(req.Context(), "viewer")
+		req = req.WithContext(ctx)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected status 403, got %d: %s", rec.Code, rec.Body.String())
 		}
 	})
 

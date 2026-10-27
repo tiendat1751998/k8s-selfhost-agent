@@ -326,6 +326,17 @@ func (c authCtx) Value(key any) any {
 // JWTAuthMiddleware validates the JWT token in the Authorization header or query parameters (for websockets and streaming).
 func JWTAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if matchAgentAuthToken(r) {
+			ctx := authCtx{
+				Context:  r.Context(),
+				userID:   "edge-agent",
+				userRole: "platform_admin",
+				tenantID: "default-tenant",
+			}
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
 		if len(jwtSecret) < 32 {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)

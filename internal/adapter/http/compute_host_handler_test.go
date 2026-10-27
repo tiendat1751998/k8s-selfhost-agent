@@ -50,8 +50,8 @@ func TestComputeHost_RedactionInAPIResponses(t *testing.T) {
 		require.Len(t, resp.Data, 1)
 
 		respHost := resp.Data[0]
-		assert.Equal(t, "***", respHost.Labels["auth_token"], "expected auth_token to be redacted to '***'")
-		assert.Equal(t, "***", respHost.Labels["token"], "expected token to be redacted to '***'")
+		assert.Equal(t, "***REDACTED***", respHost.Labels["auth_token"], "expected auth_token to be redacted to '***REDACTED***'")
+		assert.Equal(t, "***REDACTED***", respHost.Labels["token"], "expected token to be redacted to '***REDACTED***'")
 		assert.Equal(t, "production", respHost.Labels["env"], "expected non-token label to be preserved")
 
 		// Verify storage still has the original raw token
@@ -77,8 +77,8 @@ func TestComputeHost_RedactionInAPIResponses(t *testing.T) {
 		err := json.NewDecoder(rec.Body).Decode(&respHost)
 		require.NoError(t, err)
 
-		assert.Equal(t, "***", respHost.Labels["auth_token"], "expected auth_token to be redacted to '***'")
-		assert.Equal(t, "***", respHost.Labels["token"], "expected token to be redacted to '***'")
+		assert.Equal(t, "***REDACTED***", respHost.Labels["auth_token"], "expected auth_token to be redacted to '***REDACTED***'")
+		assert.Equal(t, "***REDACTED***", respHost.Labels["token"], "expected token to be redacted to '***REDACTED***'")
 		assert.Equal(t, "production", respHost.Labels["env"])
 	})
 
@@ -103,7 +103,7 @@ func TestComputeHost_RedactionInAPIResponses(t *testing.T) {
 		err := json.NewDecoder(rec.Body).Decode(&respHost)
 		require.NoError(t, err)
 
-		assert.Equal(t, "***", respHost.Labels["auth_token"], "expected auth_token to be redacted to '***'")
+		assert.Equal(t, "***REDACTED***", respHost.Labels["auth_token"], "expected auth_token to be redacted to '***REDACTED***'")
 		assert.Equal(t, "us-east-1", respHost.Labels["region"])
 
 		// Check storage
@@ -136,7 +136,7 @@ func TestComputeHost_RedactionInAPIResponses(t *testing.T) {
 		err := json.NewDecoder(rec.Body).Decode(&respHost)
 		require.NoError(t, err)
 
-		assert.Equal(t, "***", respHost.Labels["auth_token"])
+		assert.Equal(t, "***REDACTED***", respHost.Labels["auth_token"])
 		assert.Equal(t, "staging", respHost.Labels["env"])
 
 		// Check storage: must still hold the original token!

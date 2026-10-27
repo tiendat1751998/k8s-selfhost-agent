@@ -73,15 +73,13 @@ func TrustedProxyRealIP(explicitCIDRs ...string) func(http.Handler) http.Handler
 	if len(explicitCIDRs) > 0 && strings.TrimSpace(strings.Join(explicitCIDRs, ",")) != "" {
 		raw = strings.Join(explicitCIDRs, ",")
 	}
+	if raw == "" {
+		raw = os.Getenv("TRUSTED_PROXIES")
+	}
+	trustedCIDRs := ParseTrustedCIDRs(raw)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			cfg := raw
-			if cfg == "" {
-				cfg = os.Getenv("TRUSTED_PROXIES")
-			}
-			trustedCIDRs := ParseTrustedCIDRs(cfg)
-
 			peerHost, peerPort, err := net.SplitHostPort(r.RemoteAddr)
 			if err != nil {
 				peerHost = r.RemoteAddr

@@ -18,6 +18,7 @@ type Cluster struct {
 	LastHealthCheck     *time.Time             `json:"last_health_check,omitempty"`
 	HealthStatus        string                 `json:"health_status"`
 	DiscoveredResources map[string]interface{} `json:"discovered_resources,omitempty"`
+	APIServerURL        string                 `json:"api_server_url,omitempty"`
 	TenantID            string                 `json:"tenant_id"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`

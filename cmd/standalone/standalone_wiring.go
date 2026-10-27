@@ -232,7 +232,9 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		return nil, nil, fmt.Errorf("cluster encryption key validation failed: %w", err)
 	}
 	importUsecase := usecaseCluster.NewImportUsecase(fleetRepo, discoveryAdapter, logger.Get())
-	healthChecker := usecaseCluster.NewHealthChecker(fleetRepo, discoveryAdapter, logger.Get())
+	healthChecker := usecaseCluster.NewHealthChecker(fleetRepo, discoveryAdapter, logger.Get(),
+		usecaseCluster.WithComputeHostRepo(computeHostRepo),
+	)
 	go healthChecker.Start(ctx, 1*time.Minute)
 
 	obsRepo := postgres.NewObservabilityRepo(dbPool)
@@ -326,6 +328,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 
 	router := adapthttp.NewRouterWithWS(healthHandler, wsHub, platformHandlers)
 	cleanup := func() {
+		mw.CloseDefaultTokenDenylist()
 		stopBackup()
 		pgClient.Close()
 		if chCleanup != nil {

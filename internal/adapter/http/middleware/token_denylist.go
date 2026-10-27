@@ -16,38 +16,23 @@ type TokenDenylist struct {
 	stopOnce        sync.Once
 }
 
-// NewTokenDenylist constructs a new thread-safe TokenDenylist with a background sweep janitor.
+// NewTokenDenylist constructs a new thread-safe TokenDenylist with deterministic inline sweeping.
 func NewTokenDenylist(cleanupInterval time.Duration) *TokenDenylist {
 	if cleanupInterval <= 0 {
 		cleanupInterval = 5 * time.Minute
 	}
-	d := &TokenDenylist{
+	return &TokenDenylist{
 		revoked:         make(map[string]time.Time),
 		cleanupInterval: cleanupInterval,
 		stopCh:          make(chan struct{}),
 	}
-	go d.janitor()
-	return d
 }
 
-// Close stops the background janitor goroutine.
+// Close stops any resources associated with TokenDenylist.
 func (d *TokenDenylist) Close() {
 	d.stopOnce.Do(func() {
 		close(d.stopCh)
 	})
-}
-
-func (d *TokenDenylist) janitor() {
-	ticker := time.NewTicker(d.cleanupInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-d.stopCh:
-			return
-		case <-ticker.C:
-			d.cleanup()
-		}
-	}
 }
 
 func (d *TokenDenylist) cleanup() {
@@ -116,6 +101,13 @@ var defaultTokenDenylist = NewTokenDenylist(5 * time.Minute)
 // GetDefaultTokenDenylist returns the package-level default token denylist.
 func GetDefaultTokenDenylist() *TokenDenylist {
 	return defaultTokenDenylist
+}
+
+// CloseDefaultTokenDenylist closes the default token denylist.
+func CloseDefaultTokenDenylist() {
+	if defaultTokenDenylist != nil {
+		defaultTokenDenylist.Close()
+	}
 }
 
 // RevokeToken revokes a token on the default token denylist.
