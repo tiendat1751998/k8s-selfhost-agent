@@ -186,10 +186,17 @@ const emit = defineEmits<{
         </button>
       </div>
 
-      <!-- Inline compact KPI badge strip font-mono -->
+      <!-- Clean pipeline summary strip font-mono -->
       <div class="toolbar-kpi-strip font-mono" role="status" aria-label="Alerts Telemetry KPI summary">
-        <span class="kpi-badge font-mono">
-          {{ firingCount }} Firing ({{ criticalP1Count }} Critical · {{ warningCount }} Warning · {{ silencedRulesCount }} Silenced)
+        <span class="kpi-pipeline">
+          <span class="pipeline-badge pipeline-firing" :class="{ 'is-active': firingCount > 0 }">
+            <span class="pipeline-indicator" />
+            {{ firingCount }} Firing
+          </span>
+          <span class="pipeline-sep">·</span>
+          <span class="pipeline-badge pipeline-armed">{{ rulesCount }} Armed</span>
+          <span class="pipeline-sep">·</span>
+          <span class="pipeline-badge pipeline-silenced">{{ silencedRulesCount }} Silenced</span>
         </span>
       </div>
 

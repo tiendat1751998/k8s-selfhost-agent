@@ -7,6 +7,7 @@ import SettingsSecurityTab from '../components/settings/SettingsSecurityTab.vue'
 import SettingsTenancyTab from '../components/settings/SettingsTenancyTab.vue'
 import SettingsNotificationsTab from '../components/settings/SettingsNotificationsTab.vue'
 import SettingsApiKeysTab from '../components/settings/SettingsApiKeysTab.vue'
+import SettingsBackupTab from '../components/settings/SettingsBackupTab.vue'
 import AboutSettingsTab from '../components/settings/AboutSettingsTab.vue'
 import Disable2FAModal from '../components/settings/Disable2FAModal.vue'
 import SettingsMobileNav from '../components/settings/SettingsMobileNav.vue'
@@ -218,6 +219,11 @@ function handleResetSettings() {
         @save="saveCategory"
         @update:keys="apiKeys = $event"
         @refresh="loadApiKeys"
+      />
+
+      <SettingsBackupTab
+        v-if="activeTab === 'backup'"
+        :saving="saving"
       />
 
       <AboutSettingsTab

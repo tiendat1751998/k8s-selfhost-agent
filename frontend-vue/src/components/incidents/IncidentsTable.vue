@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import BaseIcon from '../ui/BaseIcon.vue'
 import StatusBadge from '../ui/StatusBadge.vue'
+import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 import type { Incident } from '../../api/compute'
 
 defineProps<{
@@ -17,6 +18,18 @@ const emit = defineEmits<{
   (e: 'mitigate', incident: Incident): void
   (e: 'resolve', incident: Incident): void
 }>()
+
+function getIncidentActions(inc: Incident): ActionItem[] {
+  return [
+    { id: 'mitigate', label: 'Mitigate Workload', icon: 'target', disabled: inc.status === 'resolved' },
+    { id: 'resolve', label: 'Resolve Anomaly', icon: 'check-circle', disabled: inc.status === 'resolved' }
+  ]
+}
+
+function handleDropdownAction(id: string, inc: Incident) {
+  if (id === 'mitigate') emit('mitigate', inc)
+  else if (id === 'resolve') emit('resolve', inc)
+}
 
 function formatTime(d?: string) {
   if (!d) return '-'
@@ -84,7 +97,7 @@ function formatTime(d?: string) {
               {{ formatTime(inc.created_at) }}
             </td>
             <td class="table-td text-right">
-              <div class="btn-action-group" @click.stop>
+              <div class="btn-action-group" style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;" @click.stop>
                 <button
                   type="button"
                   class="btn-action btn-action-triage"
@@ -99,26 +112,14 @@ function formatTime(d?: string) {
                   title="View chronological RCA reasoning timeline"
                   @click="emit('rca', inc)"
                 >
-                  <BaseIcon name="activity" size="xs" /> <span>RCA Timeline</span>
+                  <BaseIcon name="activity" size="xs" /> <span>Timeline</span>
                 </button>
-                <button
-                  type="button"
-                  class="btn-action btn-action-mitigate"
-                  :disabled="actionLoading === 'mitigate-' + inc.id || inc.status === 'resolved'"
-                  title="Initiate autonomous mitigation pipeline"
-                  @click="emit('mitigate', inc)"
-                >
-                  <BaseIcon :name="actionLoading === 'mitigate-' + inc.id ? 'clock' : 'target'" size="xs" /> <span>{{ actionLoading === 'mitigate-' + inc.id ? 'Mitigating' : 'Mitigate' }}</span>
-                </button>
-                <button
-                  type="button"
-                  class="btn-action btn-action-resolve"
-                  :disabled="actionLoading === 'resolve-' + inc.id || inc.status === 'resolved'"
-                  title="Immediately resolve and clear anomaly"
-                  @click="emit('resolve', inc)"
-                >
-                  <BaseIcon :name="actionLoading === 'resolve-' + inc.id ? 'clock' : 'check-circle'" size="xs" /> <span>Resolve</span>
-                </button>
+                <ActionDropdown
+                  :items="getIncidentActions(inc)"
+                  align="right"
+                  size="xs"
+                  @select="handleDropdownAction($event, inc)"
+                />
               </div>
             </td>
           </tr>

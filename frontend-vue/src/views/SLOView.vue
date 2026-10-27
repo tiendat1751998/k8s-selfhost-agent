@@ -9,10 +9,11 @@ import SloCreateModal from '../components/slo/SloCreateModal.vue'
 import SloInspectModal from '../components/slo/SloInspectModal.vue'
 import { useSLOMonitor, type TimeWindowFilter } from '../composables/useSLOMonitor'
 import type { SLODefinition, SLOSnapshot } from '../types/slo'
+import { sloApi, type UpdateSLOPayload } from '../api/compute'
 
 const {
   loading, actionInProgress, error, bannerMessage, definitions, snapshots,
-  selectedWindowFilter, viewMode, showCreateModal, showInspectModal, selectedInspectSLO,
+  selectedWindowFilter, viewMode, showCreateModal, showInspectModal, editingDefinition, selectedInspectSLO,
   realServices, totalSLOs, healthySLOs, activeBurnAlerts, enrichedSortedSLOs,
   fleetPulse, fetchSLOData, setWindowFilter, formatPercent, getEffectiveBurnRate,
   getBurnRateColor, getBudgetBarWidth, getSnapshotForDef, openCreateModal,
@@ -76,6 +77,21 @@ const filteredSnapshots = computed(() => {
 const openInspectFromTable = (row: SLODefinition) => openInspect(row, snapshots.value.find(s => s.slo_id === row.id || s.service === row.service))
 const handleMobileInspect = (def: SLODefinition, snap?: SLOSnapshot) => openInspect(def, snap)
 const handleEditSLO = (def: SLODefinition) => openCreateModal(def)
+
+async function handleSaveEditedSLO(data: { id: string; payload: UpdateSLOPayload }) {
+  actionInProgress.value = true
+  bannerMessage.value = null
+  try {
+    await sloApi.updateDefinition(data.id, data.payload)
+    showCreateModal.value = false
+    bannerMessage.value = { type: 'success', text: `SLO target objective successfully updated for service "${data.payload.service}".` }
+    await fetchSLOData()
+  } catch (err: unknown) {
+    bannerMessage.value = { type: 'error', text: err instanceof Error ? err.message : 'Failed to update SLO definition' }
+  } finally {
+    actionInProgress.value = false
+  }
+}
 </script>
 
 <template>
@@ -287,6 +303,7 @@ const handleEditSLO = (def: SLODefinition) => openCreateModal(def)
           :loading="loading"
           :error="error"
           @inspect="openInspectFromTable"
+          @edit-slo="handleEditSLO"
           @trigger-alert="handleTriggerAlert"
           @delete-slo="handleDeleteSLO"
         />
@@ -312,6 +329,8 @@ const handleEditSLO = (def: SLODefinition) => openCreateModal(def)
       v-model:show="showCreateModal"
       :real-services="realServices"
       :action-in-progress="actionInProgress"
+      :editing-definition="editingDefinition"
+      @save="handleSaveEditedSLO"
       @create="handleCreateSLO"
     />
     <SloInspectModal

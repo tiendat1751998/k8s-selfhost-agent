@@ -2,6 +2,7 @@
 import type { AIProvider } from '../../api/management'
 import type { ProviderQuota, LatencyTelemetry, FallbackRoute } from '../../composables/useAIProviderHub'
 import StatusBadge from '../ui/StatusBadge.vue'
+import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 
 const props = defineProps<{
   providers: AIProvider[]
@@ -41,6 +42,21 @@ function getLatencyColor(name: string, p: AIProvider) {
   if (ms < 50) return '#10b981'
   if (ms < 150) return '#f59e0b'
   return '#f43f5e'
+}
+
+function getProviderDropdownActions(_p: AIProvider): ActionItem[] {
+  return [
+    { id: 'route', label: 'Route Config', icon: 'sliders' },
+    { id: 'remove', label: 'Remove Provider', icon: 'trash', variant: 'danger' },
+  ]
+}
+
+function handleDropdownAction(actionId: string, p: AIProvider) {
+  if (actionId === 'route') {
+    emit('openRouting', p)
+  } else if (actionId === 'remove') {
+    emit('remove', p.name)
+  }
 }
 </script>
 
@@ -136,7 +152,7 @@ function getLatencyColor(name: string, p: AIProvider) {
 
             <!-- Action Buttons -->
             <td>
-              <div class="table-actions-cell">
+              <div class="table-actions-cell" style="display: inline-flex; align-items: center; gap: 6px;">
                 <button 
                   class="btn-table-action" 
                   :disabled="probingName === p.name"
@@ -152,20 +168,13 @@ function getLatencyColor(name: string, p: AIProvider) {
                 >
                   <BaseIcon name="activity" size="xs" /> <span>Metrics</span>
                 </button>
-                <button 
-                  class="btn-table-action" 
-                  title="Routing Configuration"
-                  @click="emit('openRouting', p)"
-                >
-                  <BaseIcon name="sliders" size="xs" /> <span>Route</span>
-                </button>
-                <button 
-                  class="btn-table-action btn-danger-crimson" 
-                  title="Remove Provider"
-                  @click="emit('remove', p.name)"
-                >
-                  <BaseIcon name="trash" size="xs" /> <span>Delete</span>
-                </button>
+                <ActionDropdown
+                  :items="getProviderDropdownActions(p)"
+                  align="right"
+                  size="xs"
+                  aria-label="More provider actions"
+                  @select="handleDropdownAction($event, p)"
+                />
               </div>
             </td>
           </tr>

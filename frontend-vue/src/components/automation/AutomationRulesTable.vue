@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { AutomationRule } from '../../api/governance'
 import DataTable, { type Column } from '../ui/DataTable.vue'
+import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
 
 export interface AutomationRuleRow extends AutomationRule {
   [key: string]: unknown
@@ -26,6 +27,18 @@ const emit = defineEmits<{
   (e: 'edit', rule: AutomationRule): void
   (e: 'delete', id: string): void
 }>()
+
+function getRuleDropdownActions(_rule: AutomationRule): ActionItem[] {
+  return [
+    { id: 'delete', label: 'Delete Rule', icon: 'trash', variant: 'danger' },
+  ]
+}
+
+function handleDropdownAction(actionId: string, rule: AutomationRule) {
+  if (actionId === 'delete') {
+    emit('delete', rule.id)
+  }
+}
 
 const tableRules = computed(() => props.rules as unknown as AutomationRuleRow[])
 
@@ -99,7 +112,7 @@ const ruleColumns: Column<AutomationRuleRow>[] = [
       </template>
 
       <template #cell-actions="{ row }">
-        <div class="actions-cell">
+        <div class="actions-cell" style="display: inline-flex; align-items: center; gap: 6px;">
           <button
             class="btn-icon-cmd btn-trigger-action"
             :disabled="triggeringId === row.id"
@@ -117,15 +130,13 @@ const ruleColumns: Column<AutomationRuleRow>[] = [
           >
             <BaseIcon name="sliders" size="xs" />
           </button>
-          <button
-            class="btn-icon-cmd btn-crimson-delete"
-            :disabled="deletingId === row.id"
-            :title="deletingId === row.id ? 'Deleting rule...' : 'Delete Rule'"
-            aria-label="Delete Rule"
-            @click="emit('delete', row.id)"
-          >
-            <BaseIcon :name="deletingId === row.id ? 'clock' : 'trash'" size="xs" />
-          </button>
+          <ActionDropdown
+            :items="getRuleDropdownActions(row)"
+            align="right"
+            size="xs"
+            aria-label="More rule actions"
+            @select="handleDropdownAction($event, row)"
+          />
         </div>
       </template>
     </DataTable>

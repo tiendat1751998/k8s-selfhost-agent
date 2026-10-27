@@ -94,7 +94,8 @@ export function useAutomationEngine() {
   })
 
   const savedEngineeringHours = computed(() => {
-    return '0.0'
+    const successful = executions.value.filter(e => e.result === 'success').length
+    return (successful * 0.5).toFixed(1)
   })
 
   // Data Fetching

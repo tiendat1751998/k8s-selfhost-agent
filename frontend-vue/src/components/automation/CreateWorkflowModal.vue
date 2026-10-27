@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, watch } from 'vue'
+import { reactive, watch, onMounted, onUnmounted } from 'vue'
 import type { AutomationRule } from '../../api/governance'
 import { TRIGGER_OPTIONS, ACTION_OPTIONS } from '../../composables/useAutomationEngine'
 import BaseIcon from '../ui/BaseIcon.vue'
@@ -46,6 +46,14 @@ watch(
   { immediate: true }
 )
 
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && props.show) {
+    emit('close')
+  }
+}
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+
 function handleSubmit() {
   const triggerConfig: Record<string, string> = {}
   if (formData.trigger_type === 'cron_schedule') {
@@ -78,13 +86,14 @@ function handleSubmit() {
           <span class="badge badge-cyan">AUTOMATION PIPELINE</span>
           <h3 class="modal-title">{{ ruleToEdit ? 'Edit Automation Rule' : 'Create Workflow Automation Rule' }}</h3>
         </div>
-        <button class="modal-close" @click="emit('close')"><BaseIcon name="x" size="xs" /></button>
+        <button class="modal-close" aria-label="Close modal" @click="emit('close')"><BaseIcon name="x" size="xs" /></button>
       </div>
 
-      <form class="modal-body" @submit.prevent="handleSubmit">
+      <form id="create-workflow-form" class="modal-body" @submit.prevent="handleSubmit">
         <div class="form-group">
-          <label class="form-label">Rule Name:</label>
+          <label class="form-label" for="workflow-name">Rule Name:</label>
           <input
+            id="workflow-name"
             v-model="formData.name"
             type="text"
             required
@@ -94,8 +103,8 @@ function handleSubmit() {
         </div>
 
         <div class="form-group">
-          <label class="form-label">Trigger Event / Schedule:</label>
-          <select v-model="formData.trigger_type" class="input-glass">
+          <label class="form-label" for="workflow-trigger">Trigger Event / Schedule:</label>
+          <select id="workflow-trigger" v-model="formData.trigger_type" class="input-glass">
             <optgroup label="Event-Driven Self Healing">
               <option v-for="t in TRIGGER_OPTIONS.filter(o => o.category === 'event')" :key="t.value" :value="t.value">
                 {{ t.label }}
@@ -113,10 +122,11 @@ function handleSubmit() {
         </div>
 
         <div class="form-group">
-          <label class="form-label">
+          <label class="form-label" for="workflow-condition">
             {{ formData.trigger_type === 'cron_schedule' ? 'Cron Expression:' : 'Condition / Threshold:' }}
           </label>
           <input
+            id="workflow-condition"
             v-model="formData.condition"
             type="text"
             class="input-glass"
@@ -125,8 +135,8 @@ function handleSubmit() {
         </div>
 
         <div class="form-group">
-          <label class="form-label">Automated Remediation Action:</label>
-          <select v-model="formData.action_type" class="input-glass">
+          <label class="form-label" for="workflow-action">Automated Remediation Action:</label>
+          <select id="workflow-action" v-model="formData.action_type" class="input-glass">
             <option v-for="a in ACTION_OPTIONS" :key="a.value" :value="a.value">
               {{ a.label }}
             </option>
@@ -143,8 +153,9 @@ function handleSubmit() {
         </div>
 
         <div class="form-group">
-          <label class="form-label">Target Workload / Scope (Optional):</label>
+          <label class="form-label" for="workflow-target">Target Workload / Scope (Optional):</label>
           <input
+            id="workflow-target"
             v-model="formData.target"
             type="text"
             class="input-glass"
@@ -154,7 +165,7 @@ function handleSubmit() {
 
         <div class="modal-footer" style="padding: 16px 0 0 0; background: transparent; border-top: none;">
           <button type="button" class="btn btn-secondary" @click="emit('close')">Cancel</button>
-          <button type="submit" class="btn btn-primary" :disabled="loading">
+          <button form="create-workflow-form" type="submit" class="btn btn-primary" :disabled="loading">
             <span>{{ loading ? 'Saving...' : (ruleToEdit ? 'Save Changes' : 'Save & Arm Automation') }}</span>
           </button>
         </div>

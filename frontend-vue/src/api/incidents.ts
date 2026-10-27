@@ -252,6 +252,17 @@ export const incidentsApi = {
     return normalizeIncident(raw)
   },
 
+  async acknowledge(id: string): Promise<Incident> {
+    const raw = await api.post<any>(`/incidents/${id}/acknowledge`)
+    return normalizeIncident(raw?.incident || raw)
+  },
+
+  async getPostmortem(id: string): Promise<{ markdown: string }> {
+    const raw = await api.get<any>(`/incidents/${id}/postmortem`)
+    if (typeof raw === 'string') return { markdown: raw }
+    return { markdown: raw?.markdown || raw?.postmortem || raw?.content || '' }
+  },
+
   async simulate(body?: { scenario?: string; pod_name?: string; namespace?: string }): Promise<Incident> {
     const raw = await api.post<any>('/incidents/simulate', body)
     return normalizeIncident(raw)

@@ -3,10 +3,11 @@ import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
-import ModalDrawer from '../components/ui/ModalDrawer.vue'
 import IncidentDetailPane from '../components/incidents/IncidentDetailPane.vue'
 import IncidentSimulationModal from '../components/incidents/IncidentSimulationModal.vue'
 import IncidentCreatePrModal from '../components/incidents/IncidentCreatePrModal.vue'
+import CreateIncidentModal from '../components/incidents/CreateIncidentModal.vue'
+import RcaTimelineModal from '../components/incidents/RcaTimelineModal.vue'
 import IncidentsHeaderBar from '../components/incidents/IncidentsHeaderBar.vue'
 import { useIncidents, isSimulationAllowed } from '../composables/useIncidents'
 import type { Incident } from '../api/compute'
@@ -30,7 +31,7 @@ const {
   showPRModal,
   showSimulateModal,
   showCreateModal,
-  createForm,
+  showRcaModal,
   handleCreateIncident,
   prForm,
   filteredIncidents,
@@ -42,15 +43,20 @@ const {
   countOpen,
   countInProgress,
   countResolved,
+  selectedBlastRadius,
+  rcaTimelineEvents,
   fetchIncidents,
   selectIncident,
   triggerAIAnalysis,
   handleSimulateIncident,
   handleMitigateIncident,
   handleResolveIncident,
+  handleAcknowledgeIncident,
+  handleExportPostmortem,
   openCreatePRModal,
   handleCreatePR,
-  handleMergePR
+  handleMergePR,
+  openRcaTimeline
 } = useIncidents()
 
 const cappedIncidents = computed(() => {
@@ -61,23 +67,6 @@ function resetFilters() {
   filterStatus.value = 'all'
   filterSeverity.value = 'all'
   searchQuery.value = ''
-}
-
-function openDeclareModal() {
-  createForm.value = {
-    pod_name: '',
-    namespace: 'default',
-    cluster_name: 'default',
-    type: 'CrashLoopBackOff',
-    severity: 'critical',
-    message: ''
-  }
-  showCreateModal.value = true
-}
-
-function submitDeclareIncident() {
-  if (!createForm.value.pod_name.trim()) return
-  handleCreateIncident(createForm.value)
 }
 
 // Mobile Ergonomics States
@@ -126,10 +115,42 @@ function formatRelativeTime(dateStr?: string): string {
       :filtered-count="filteredIncidents.length"
       :loading="loading"
       :allow-simulate="allowSimulate"
-      @declare-incident="openDeclareModal"
+      @declare-incident="showCreateModal = true"
       @simulate-incident="showSimulateModal = true"
       @refresh="fetchIncidents"
     />
+
+    <!-- SRE Incident Blast-Radius & MTTR Command Strip -->
+    <div class="sre-incident-command-strip glass-panel" role="region" aria-label="SRE Incident Command & Blast Radius Strip">
+      <div class="strip-item">
+        <span class="strip-label font-mono">BLAST RADIUS</span>
+        <span class="strip-val font-mono" :class="selectedBlastRadius?.riskLevel?.includes('Critical') ? 'text-rose' : 'text-cyan'">
+          <BaseIcon name="target" size="xs" /> {{ selectedBlastRadius?.riskLevel || 'Nominal Scope' }}
+          <template v-if="selectedBlastRadius">({{ selectedBlastRadius.impactScore }}/100)</template>
+        </span>
+      </div>
+      <span class="strip-divider font-mono">|</span>
+      <div class="strip-item">
+        <span class="strip-label font-mono">SCOPE</span>
+        <span class="strip-val font-mono text-amber truncate">
+          {{ selectedIncident ? `${selectedIncident.cluster_name}/${selectedIncident.namespace}/${selectedIncident.pod_name}` : 'No active incident selected' }}
+        </span>
+      </div>
+      <span class="strip-divider font-mono">|</span>
+      <div class="strip-item">
+        <span class="strip-label font-mono">HEALTH</span>
+        <span class="strip-val font-mono text-emerald">
+          {{ selectedBlastRadius?.nodeHealth || 'Nominal Workload Health' }}
+        </span>
+      </div>
+      <span class="strip-divider font-mono">|</span>
+      <div class="strip-item">
+        <span class="strip-label font-mono">TRIAGE MTTR</span>
+        <span class="strip-val font-mono text-cyan">
+          {{ criticalCount }} P1 Active · {{ countInProgress }} Mitigating · {{ countResolved }} Cleared
+        </span>
+      </div>
+    </div>
 
     <!-- Specialized Split-Pane Incident Inspector -->
     <div class="split-pane-layout" :class="{ 'mobile-showing-detail': showMobileDetail }">
@@ -211,6 +232,9 @@ function formatRelativeTime(dateStr?: string): string {
           :report-error="reportError"
           :action-loading="actionLoading"
           @analyze="triggerAIAnalysis"
+          @acknowledge="handleAcknowledgeIncident"
+          @export-postmortem="handleExportPostmortem"
+          @inspect-timeline="openRcaTimeline"
           @mitigate="handleMitigateIncident"
           @resolve="handleResolveIncident"
           @open-pr-modal="openCreatePRModal"
@@ -219,95 +243,21 @@ function formatRelativeTime(dateStr?: string): string {
       </div>
     </div>
 
-    <!-- Declare Operational Incident Modal -->
-    <ModalDrawer
+    <!-- Create Incident Modal Component -->
+    <CreateIncidentModal
       v-model:show="showCreateModal"
-      mode="modal"
-      title="Declare Operational Incident"
-      subtitle="Log an active Kubernetes workload anomaly for autonomous AI RCA and remediation"
-      max-width="560px"
-    >
-      <form class="modal-form" @submit.prevent="submitDeclareIncident">
-        <div class="form-row">
-          <div class="form-group flex-1">
-            <label class="form-label">Pod / Workload Name</label>
-            <input
-              v-model="createForm.pod_name"
-              type="text"
-              class="toolbar-search-input font-mono"
-              placeholder="e.g. checkout-api-7b9c6f8d"
-              required
-            />
-          </div>
-          <div class="form-group flex-1">
-            <label class="form-label">Namespace</label>
-            <input
-              v-model="createForm.namespace"
-              type="text"
-              class="toolbar-search-input font-mono"
-              placeholder="e.g. ecommerce"
-              required
-            />
-          </div>
-        </div>
+      :action-loading="actionLoading"
+      @create="handleCreateIncident"
+    />
 
-        <div class="form-row">
-          <div class="form-group flex-1">
-            <label class="form-label">Cluster</label>
-            <input
-              v-model="createForm.cluster_name"
-              type="text"
-              class="toolbar-search-input font-mono"
-              placeholder="e.g. default"
-              required
-            />
-          </div>
-          <div class="form-group flex-1">
-            <label class="form-label">Anomaly Type</label>
-            <input
-              v-model="createForm.type"
-              type="text"
-              class="toolbar-search-input font-mono"
-              placeholder="e.g. CrashLoopBackOff"
-              required
-            />
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Severity Level</label>
-          <select v-model="createForm.severity" class="toolbar-select">
-            <option value="critical">Critical (P1 Outage)</option>
-            <option value="high">High (P2 Degradation)</option>
-            <option value="medium">Medium (P3 Warning)</option>
-            <option value="low">Low (P4 Info)</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Incident Symptoms / Failure Log</label>
-          <textarea
-            v-model="createForm.message"
-            rows="3"
-            class="toolbar-search-input font-mono form-textarea"
-            placeholder="Describe symptoms, container exit code, or error output..."
-          ></textarea>
-        </div>
-      </form>
-
-      <template #footer="{ close }">
-        <button type="button" class="btn-slate" @click="close">Cancel</button>
-        <button
-          type="button"
-          class="btn-slate-primary"
-          :disabled="actionLoading === 'create-incident' || !createForm.pod_name.trim()"
-          @click="submitDeclareIncident"
-        >
-          <BaseIcon :name="actionLoading === 'create-incident' ? 'clock' : 'alert-triangle'" size="xs" />
-          <span>{{ actionLoading === 'create-incident' ? 'Declaring...' : 'Declare Incident' }}</span>
-        </button>
-      </template>
-    </ModalDrawer>
+    <!-- Interactive RCA Chronology & Reasoning Timeline Modal -->
+    <RcaTimelineModal
+      v-model:show="showRcaModal"
+      :incident="selectedIncident"
+      :report="selectedReport"
+      :active-pr="activePR"
+      :events="rcaTimelineEvents"
+    />
 
     <!-- Create PR Modal Component -->
     <IncidentCreatePrModal
@@ -328,4 +278,43 @@ function formatRelativeTime(dateStr?: string): string {
 
 <style scoped>
 @import '../assets/styles/views/incidents.css';
+
+.sre-incident-command-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
+  font-size: 12px;
+  margin-bottom: 2px;
+  flex-wrap: wrap;
+}
+
+.strip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.strip-label {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.strip-val {
+  font-size: 11.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.strip-divider {
+  color: var(--color-border-subtle);
+  user-select: none;
+}
 </style>

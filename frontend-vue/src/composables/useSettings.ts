@@ -27,6 +27,7 @@ export function buildSettingsTabsList(keys: ApiKeyItem[] = []): SettingsTabItem[
     { id: 'tenancy', label: 'Tenancy', icon: 'server', category: 'tenancy' },
     { id: 'notifications', label: 'Notifications', icon: 'bell', category: 'notifications' },
     { id: 'apikeys', label: 'API Keys', icon: 'key', category: 'apikeys', count: keys.length },
+    { id: 'backup', label: 'Backup & DR', icon: 'archive', category: 'backup' },
     { id: 'about', label: 'About', icon: 'help-circle' },
   ]
 }

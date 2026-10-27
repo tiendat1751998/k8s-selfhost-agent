@@ -73,7 +73,7 @@ const ruleColumns: Column<AlertRuleRow>[] = [
     </template>
 
     <template #cell-actions="{ row }">
-      <div class="rule-actions-cell flex items-center justify-end gap-2">
+      <div class="rule-actions-cell">
         <button 
           class="btn btn-secondary btn-sm" 
           title="Edit Rule Configuration" 
@@ -92,3 +92,18 @@ const ruleColumns: Column<AlertRuleRow>[] = [
     </template>
   </DataTable>
 </template>
+
+<style scoped>
+.rule-actions-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.rule-actions-cell button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+</style>

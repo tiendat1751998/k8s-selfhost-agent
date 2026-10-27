@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import BaseIcon from '../ui/BaseIcon.vue'
 import type { TOTPStatusResponse } from '../../api/auth'
+import { securityApi } from '../../api/security'
 import SettingsPasswordCard from './SettingsPasswordCard.vue'
+import ZeroTrustDrawer from '../layout/ZeroTrustDrawer.vue'
 
 const router = useRouter()
 
@@ -23,6 +26,25 @@ const emit = defineEmits<{
   (e: 'openDisable2FA'): void
   (e: 'openDisable2fa'): void
 }>()
+
+const showZeroTrustDrawer = ref(false)
+const loadingKms = ref(false)
+const kmsKey = ref<{ key_id: string; version: number; algorithm: string } | null>(null)
+
+async function loadKmsStatus() {
+  loadingKms.value = true
+  try {
+    kmsKey.value = await securityApi.getKmsKey()
+  } catch {
+    kmsKey.value = null
+  } finally {
+    loadingKms.value = false
+  }
+}
+
+onMounted(() => {
+  loadKmsStatus()
+})
 </script>
 
 <template>
@@ -192,6 +214,77 @@ const emit = defineEmits<{
     </form>
   </div>
 
+  <!-- ZeroTrust KMS & Envelope Encryption Card -->
+  <div class="settings-card glass-panel animate-fade-in" style="margin-top: 16px;">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">ZeroTrust KMS & Envelope Encryption</h2>
+        <p class="card-subtitle">
+          Cryptographic key management, hardware root-of-trust attestation, and data-at-rest envelope encryption.
+        </p>
+      </div>
+      <div class="kms-header-badge">
+        <span v-if="loadingKms" class="spinner spinner-xs"></span>
+        <span v-else-if="kmsKey?.key_id" class="badge badge-emerald">
+          <BaseIcon name="shield" size="xs" /> ENVELOPE ENCRYPTION ACTIVE
+        </span>
+        <span v-else class="badge badge-amber">
+          <BaseIcon name="alert-triangle" size="xs" /> KMS DEGRADED
+        </span>
+      </div>
+    </div>
+
+    <div class="kms-card-body font-mono text-xs">
+      <div class="kms-meta-grid">
+        <div class="kms-meta-item">
+          <span class="meta-label text-muted">Active Key ID:</span>
+          <span class="meta-val text-cyan font-bold">{{ kmsKey?.key_id || 'kms-primary-key-vault' }}</span>
+        </div>
+        <div class="kms-meta-item">
+          <span class="meta-label text-muted">Key Version:</span>
+          <span class="meta-val">v{{ kmsKey?.version || 1 }}</span>
+        </div>
+        <div class="kms-meta-item">
+          <span class="meta-label text-muted">Algorithm:</span>
+          <span class="meta-val">{{ kmsKey?.algorithm || 'AES-256-GCM / Hardware Envelope' }}</span>
+        </div>
+      </div>
+
+      <div class="kms-actions-bar" style="margin-top: 16px; display: flex; gap: 8px;">
+        <button
+          type="button"
+          class="btn btn-primary btn-sm"
+          @click="showZeroTrustDrawer = true"
+        >
+          <BaseIcon name="shield" size="xs" />
+          <span>Open ZeroTrust Drawer</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <SettingsPasswordCard />
+
+  <!-- ZeroTrust Posture Drawer -->
+  <ZeroTrustDrawer
+    v-model:show="showZeroTrustDrawer"
+  />
 </div>
 </template>
+
+<style scoped>
+.kms-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+}
+.kms-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+</style>
