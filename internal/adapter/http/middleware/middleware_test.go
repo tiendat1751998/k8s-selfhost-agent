@@ -147,9 +147,11 @@ func TestCORS_Preflight(t *testing.T) {
 	if methods == "" || !strings.Contains(methods, "PATCH") {
 		t.Errorf("expected CORS Allow-Methods header to contain PATCH, got: %s", methods)
 	}
-	if w.Header().Get("Access-Control-Allow-Headers") == "" {
-		t.Error("expected CORS Allow-Headers header")
+	headers := w.Header().Get("Access-Control-Allow-Headers")
+	if !strings.Contains(headers, "X-Tenant-ID") {
+		t.Errorf("expected CORS Allow-Headers header to contain X-Tenant-ID, got: %s", headers)
 	}
+
 
 	// Disallowed origin preflight receives 403
 	rDisallowed := httptest.NewRequest(http.MethodOptions, "/", nil)

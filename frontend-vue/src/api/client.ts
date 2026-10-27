@@ -18,24 +18,39 @@ class ApiClient {
 
   constructor() {
     this.baseUrl = import.meta.env?.VITE_API_BASE_URL || '/api/v1'
-    this.token = typeof window !== 'undefined' ? localStorage.getItem('k8s_token') : null
+    this.token = null
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('k8s_token')
+        localStorage.removeItem('k8s_auth_token')
+      } catch {
+        // Ignore storage errors in restricted contexts
+      }
+    }
   }
 
   setToken(token: string | null): void {
     this.token = token
     if (typeof window !== 'undefined') {
-      if (token) {
-        localStorage.setItem('k8s_token', token)
-      } else {
+      try {
         localStorage.removeItem('k8s_token')
+        localStorage.removeItem('k8s_auth_token')
+      } catch {
+        // Ignore
       }
     }
   }
 
   clearToken(): void {
-    this.setToken(null)
+    this.token = null
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('k8s_user')
+      try {
+        localStorage.removeItem('k8s_token')
+        localStorage.removeItem('k8s_auth_token')
+        localStorage.removeItem('k8s_user')
+      } catch {
+        // Ignore
+      }
     }
   }
 
@@ -113,8 +128,6 @@ class ApiClient {
 
       this.clearToken()
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('k8s_token')
-        localStorage.removeItem('k8s_user')
         if (!window.location.pathname.includes('/login')) {
           const currentPath = window.location.pathname + window.location.search
           window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`

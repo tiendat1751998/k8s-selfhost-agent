@@ -61,6 +61,17 @@ func (m *mockUserRepo) GetMFASecret(ctx context.Context, userID string) (string,
 	return "", errors.New("not found")
 }
 
+func (m *mockUserRepo) UpdatePassword(ctx context.Context, userID, newPasswordHash string) error {
+	for _, u := range m.users {
+		if u.ID == userID {
+			u.PasswordHash = newPasswordHash
+			u.RequiresPasswordChange = false
+			return nil
+		}
+	}
+	return errors.New("not found")
+}
+
 func TestAuthUsecase_Authenticate(t *testing.T) {
 	pass := "secret123"
 	hash, _ := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)

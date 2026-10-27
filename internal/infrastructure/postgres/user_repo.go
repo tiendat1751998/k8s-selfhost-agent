@@ -31,7 +31,8 @@ func (r *userRepo) GetByEmail(ctx context.Context, email string) (*user.User, er
 			COALESCE(u.mfa_secret, '') as mfa_secret,
 			COALESCE(u.mfa_enabled, false) as mfa_enabled,
 			COALESCE(u.mfa_recovery_codes, '') as mfa_recovery_codes,
-			u.mfa_verified_at
+			u.mfa_verified_at,
+			COALESCE(u.requires_password_change, false) as requires_password_change
 		FROM users u
 		LEFT JOIN user_roles ur ON u.id = ur.user_id
 		LEFT JOIN roles r_platform ON ur.role_id = r_platform.id AND r_platform.name = 'platform_admin'
@@ -52,6 +53,7 @@ func (r *userRepo) GetByEmail(ctx context.Context, email string) (*user.User, er
 		&u.MFAEnabled,
 		&u.MFARecoveryCodes,
 		&u.MFAVerifiedAt,
+		&u.RequiresPasswordChange,
 	)
 	if err != nil {
 		return nil, err
@@ -71,7 +73,8 @@ func (r *userRepo) GetByID(ctx context.Context, id string) (*user.User, error) {
 			COALESCE(u.mfa_secret, '') as mfa_secret,
 			COALESCE(u.mfa_enabled, false) as mfa_enabled,
 			COALESCE(u.mfa_recovery_codes, '') as mfa_recovery_codes,
-			u.mfa_verified_at
+			u.mfa_verified_at,
+			COALESCE(u.requires_password_change, false) as requires_password_change
 		FROM users u
 		LEFT JOIN user_roles ur ON u.id = ur.user_id
 		LEFT JOIN roles r_platform ON ur.role_id = r_platform.id AND r_platform.name = 'platform_admin'
@@ -92,6 +95,7 @@ func (r *userRepo) GetByID(ctx context.Context, id string) (*user.User, error) {
 		&u.MFAEnabled,
 		&u.MFARecoveryCodes,
 		&u.MFAVerifiedAt,
+		&u.RequiresPasswordChange,
 	)
 	if err != nil {
 		return nil, err
@@ -136,4 +140,10 @@ func (r *userRepo) GetMFASecret(ctx context.Context, userID string) (string, err
 		return "", err
 	}
 	return encryptedSecret, nil
+}
+
+func (r *userRepo) UpdatePassword(ctx context.Context, userID, newPasswordHash string) error {
+	query := `UPDATE users SET password_hash = $2, requires_password_change = FALSE, updated_at = NOW() WHERE id = $1::uuid`
+	_, err := r.getDB(ctx).Exec(ctx, query, userID, newPasswordHash)
+	return err
 }

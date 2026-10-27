@@ -87,10 +87,14 @@ func NewRouterWithPlatform(healthHandler *health.Handler, wsHub *WSHub, platform
 
 // NewRouterWithWS creates a new chi router with WebSocket hub and optional platform handlers.
 func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *PlatformHandlers) *chi.Mux {
+	if platform != nil && platform.Settings != nil && platform.Settings.Repo() != nil {
+		mw.SetAPIKeyValidator(NewSettingsAPIKeyValidator(platform.Settings.Repo()))
+	}
+
 	r := chi.NewRouter()
 
 	// Standard middleware stack
-	r.Use(chimw.RequestID, chimw.RealIP, chimw.Recoverer, conditionalTimeout(60*time.Second))
+	r.Use(chimw.RequestID, mw.TrustedProxyRealIP(), chimw.Recoverer, conditionalTimeout(60*time.Second))
 	r.Use(chimw.Heartbeat("/ping"), mw.RequestBodyLimit(1<<20), mw.StructuredLogger, mw.CORS)
 	r.Use(mw.Metrics, mw.RequestCounter, mw.Tracing, mw.SecurityHeaders)
 	r.Use(mw.AdaptiveLoadShedding(mw.DefaultLoadSheddingConfig()))
@@ -139,6 +143,8 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 
 				r.Group(func(r chi.Router) {
 					r.Use(mw.JWTAuthMiddleware)
+					r.Get("/me", platform.Auth.Me)
+					r.Post("/change-password", platform.Auth.ChangePassword)
 					r.Post("/totp/setup", platform.Auth.SetupTOTP)
 					r.Post("/totp/verify-setup", platform.Auth.VerifyTOTPSetup)
 					r.Post("/totp/disable", platform.Auth.DisableTOTP)

@@ -55,9 +55,10 @@ type RotateTokenInput struct {
 
 // RotateTokenResult contains the output of a successful token rotation.
 type RotateTokenResult struct {
-	AccessToken     string
-	RawRefreshToken string
-	UserID          string
+	AccessToken            string
+	RawRefreshToken        string
+	UserID                 string
+	RequiresPasswordChange bool
 }
 
 // RotateRefreshToken performs atomic refresh token rotation using row-level locking.
@@ -135,9 +136,10 @@ func (u *Usecase) RotateRefreshToken(ctx context.Context, input RotateTokenInput
 		}
 
 		result = &RotateTokenResult{
-			AccessToken:     accessToken,
-			RawRefreshToken: newRawRefreshToken,
-			UserID:          usr.ID,
+			AccessToken:            accessToken,
+			RawRefreshToken:        newRawRefreshToken,
+			UserID:                 usr.ID,
+			RequiresPasswordChange: usr.RequiresPasswordChange,
 		}
 		return nil
 	})

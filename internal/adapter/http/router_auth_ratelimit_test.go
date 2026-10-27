@@ -131,4 +131,35 @@ func TestRouter_AuthRateLimiting(t *testing.T) {
 			t.Fatalf("11th request across auth endpoints must return 429, got %d", rec.Code)
 		}
 	})
+
+	t.Run("SEC-HIGH-02: Spoofed XFF from untrusted peer does not bypass rate limiter", func(t *testing.T) {
+		t.Setenv("TRUSTED_PROXIES", "127.0.0.1/32, ::1/128")
+		untrustedPeer := "198.51.100.77:9999"
+		loginBody, _ := json.Marshal(map[string]string{"email": "spoof@example.com", "password": "wrong"})
+
+		// Attacker sends 10 requests from untrusted peer 198.51.100.77, rotating X-Forwarded-For
+		for i := 0; i < 10; i++ {
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("X-Forwarded-For", fmt.Sprintf("10.0.0.%d", i+1))
+			req.RemoteAddr = untrustedPeer
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			if rec.Code == http.StatusTooManyRequests {
+				t.Fatalf("request %d should not be rate limited yet", i+1)
+			}
+		}
+
+		// 11th request with a new spoofed X-Forwarded-For header MUST STILL BE RATE LIMITED!
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Forwarded-For", "10.0.0.99")
+		req.RemoteAddr = untrustedPeer
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusTooManyRequests {
+			t.Fatalf("11th request with spoofed XFF MUST return 429, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
 }

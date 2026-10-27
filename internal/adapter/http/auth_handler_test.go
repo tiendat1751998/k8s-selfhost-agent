@@ -95,6 +95,16 @@ func (m *mockUserRepo) GetMFASecret(ctx context.Context, userID string) (string,
 	return u.MFASecret, nil
 }
 
+func (m *mockUserRepo) UpdatePassword(ctx context.Context, userID, newPasswordHash string) error {
+	u, ok := m.users[userID]
+	if !ok {
+		return errors.New("user not found")
+	}
+	u.PasswordHash = newPasswordHash
+	u.RequiresPasswordChange = false
+	return nil
+}
+
 type mockTxManager struct {
 	mu sync.Mutex
 }

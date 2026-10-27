@@ -244,4 +244,35 @@ func (r *settingsRepo) GetAll(ctx context.Context, tenantID string) ([]settings.
 	return items, nil
 }
 
+// FindAPIKeyByHash looks up an active platform_setting in category 'api_keys' matching tokenHash.
+func (r *settingsRepo) FindAPIKeyByHash(ctx context.Context, tokenHash string) (*settings.Setting, error) {
+	query := `
+		SELECT id, category, key, value, tenant_id, updated_by, updated_at
+		FROM platform_settings
+		WHERE category = 'api_keys' AND value LIKE '%' || $1 || '%' AND value != 'deleted' AND value != ''
+		LIMIT 1
+	`
+	var s settings.Setting
+	var updatedBy *string
+	err := r.getDB(ctx).QueryRow(ctx, query, tokenHash).Scan(
+		&s.ID,
+		&s.Category,
+		&s.Key,
+		&s.Value,
+		&s.TenantID,
+		&updatedBy,
+		&s.UpdatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("finding api key by hash: %w", err)
+	}
+	if updatedBy != nil {
+		s.UpdatedBy = *updatedBy
+	}
+	return &s, nil
+}
+
 var _ settings.Repository = (*settingsRepo)(nil)
