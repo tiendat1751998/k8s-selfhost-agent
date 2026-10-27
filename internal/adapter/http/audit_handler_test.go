@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/datdt/k8sselfhost/internal/domain/audit"
+	usecaseCompliance "github.com/datdt/k8sselfhost/internal/usecase/compliance"
 )
 
 type mockAuditHandlerRepo struct {
@@ -185,3 +186,53 @@ func TestAuditHandler_ListLogs_RepoError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 }
+
+type mockAuditScannerStore struct {
+	scanned bool
+}
+
+func (m *mockAuditScannerStore) ListHosts(ctx context.Context) ([]usecaseCompliance.ComputeHostRow, error) {
+	m.scanned = true
+	return []usecaseCompliance.ComputeHostRow{}, nil
+}
+func (m *mockAuditScannerStore) CountActiveAutomationRules(ctx context.Context) (int, error) {
+	return 1, nil
+}
+func (m *mockAuditScannerStore) CountAuditLogs(ctx context.Context) (int, error) {
+	return 1, nil
+}
+func (m *mockAuditScannerStore) UpsertFramework(ctx context.Context, fw *usecaseCompliance.FrameworkRecord) error {
+	return nil
+}
+func (m *mockAuditScannerStore) ReplaceViolations(ctx context.Context, violations []usecaseCompliance.ViolationRecord) error {
+	return nil
+}
+func (m *mockAuditScannerStore) InsertAuditLog(ctx context.Context, log *usecaseCompliance.AuditLogRecord) error {
+	return nil
+}
+
+func TestAuditHandler_TriggerAuditRun_Synchronous(t *testing.T) {
+	repo := &mockAuditHandlerRepo{}
+	mockStore := &mockAuditScannerStore{}
+	scanner := usecaseCompliance.NewScanner(usecaseCompliance.WithDBStore(mockStore))
+
+	h := NewAuditHandler(repo, WithAuditScanner(scanner))
+	r := chi.NewRouter()
+	h.RegisterRoutes(r)
+
+	req := httptest.NewRequest(http.MethodPost, "/run", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	require.NotNil(t, repo.lastRun)
+	assert.Equal(t, "completed", repo.lastRun.Status)
+	assert.NotNil(t, repo.lastRun.EndTime)
+
+	var resp map[string]interface{}
+	err := json.NewDecoder(rec.Body).Decode(&resp)
+	require.NoError(t, err)
+	assert.Equal(t, "completed", resp["status"])
+	assert.Equal(t, "test-run-id", resp["run_id"])
+}

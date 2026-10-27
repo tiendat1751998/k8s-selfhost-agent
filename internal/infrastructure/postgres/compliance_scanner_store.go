@@ -1,0 +1,177 @@
+package postgres
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"strings"
+
+	"github.com/google/uuid"
+
+	usecaseCompliance "github.com/datdt/k8sselfhost/internal/usecase/compliance"
+)
+
+// complianceScannerStore implements usecaseCompliance.Store using PostgreSQL.
+type complianceScannerStore struct {
+	db DBTX
+}
+
+// NewComplianceScannerStore creates a new PostgreSQL store for the compliance scanner.
+func NewComplianceScannerStore(db DBTX) usecaseCompliance.Store {
+	return &complianceScannerStore{db: db}
+}
+
+func (s *complianceScannerStore) getDB(ctx context.Context) DBTX {
+	return ExtractTx(ctx, s.db)
+}
+
+func (s *complianceScannerStore) ListHosts(ctx context.Context) ([]usecaseCompliance.ComputeHostRow, error) {
+	query := `SELECT id, name, endpoint, status, labels FROM compute_hosts ORDER BY name ASC`
+	rows, err := s.getDB(ctx).Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("listing compute hosts: %w", err)
+	}
+	defer rows.Close()
+
+	var hosts []usecaseCompliance.ComputeHostRow
+	for rows.Next() {
+		var h usecaseCompliance.ComputeHostRow
+		var labelBytes []byte
+		if err := rows.Scan(&h.ID, &h.Name, &h.Endpoint, &h.Status, &labelBytes); err != nil {
+			return nil, fmt.Errorf("scanning compute host: %w", err)
+		}
+		if len(labelBytes) > 0 {
+			var m map[string]string
+			if err := json.Unmarshal(labelBytes, &m); err == nil {
+				h.Labels = m
+			}
+		}
+		if h.Labels == nil {
+			h.Labels = make(map[string]string)
+		}
+
+		// Resolve Address
+		if addr, ok := h.Labels["address"]; ok && addr != "" {
+			h.Address = addr
+		} else if h.Endpoint != "" {
+			u, err := url.Parse(h.Endpoint)
+			if err == nil && u.Hostname() != "" {
+				h.Address = u.Hostname()
+			} else {
+				parts := strings.Split(strings.TrimPrefix(h.Endpoint, "http://"), ":")
+				if len(parts) > 0 && parts[0] != "" {
+					h.Address = parts[0]
+				}
+			}
+		}
+		if h.Address == "" {
+			h.Address = "127.0.0.1"
+		}
+
+		hosts = append(hosts, h)
+	}
+
+	return hosts, nil
+}
+
+func (s *complianceScannerStore) CountActiveAutomationRules(ctx context.Context) (int, error) {
+	query := `SELECT COUNT(*) FROM automation_rules WHERE enabled = true`
+	var count int
+	if err := s.getDB(ctx).QueryRow(ctx, query).Scan(&count); err != nil {
+		return 0, fmt.Errorf("counting active automation rules: %w", err)
+	}
+	return count, nil
+}
+
+func (s *complianceScannerStore) CountAuditLogs(ctx context.Context) (int, error) {
+	query := `SELECT COUNT(*) FROM audit_logs`
+	var count int
+	if err := s.getDB(ctx).QueryRow(ctx, query).Scan(&count); err != nil {
+		return 0, fmt.Errorf("counting audit logs: %w", err)
+	}
+	return count, nil
+}
+
+func (s *complianceScannerStore) UpsertFramework(ctx context.Context, fw *usecaseCompliance.FrameworkRecord) error {
+	query := `
+		INSERT INTO compliance_frameworks (id, name, icon, total_checks, passed_checks, failed_checks, score, last_scan_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+		ON CONFLICT (name) DO UPDATE SET
+			icon = EXCLUDED.icon,
+			total_checks = EXCLUDED.total_checks,
+			passed_checks = EXCLUDED.passed_checks,
+			failed_checks = EXCLUDED.failed_checks,
+			score = EXCLUDED.score,
+			last_scan_at = EXCLUDED.last_scan_at,
+			updated_at = NOW()
+	`
+	_, err := s.getDB(ctx).Exec(ctx, query,
+		fw.ID, fw.Name, fw.Icon, fw.TotalChecks, fw.PassedChecks, fw.FailedChecks, fw.Score, fw.LastScanAt,
+	)
+	if err != nil {
+		return fmt.Errorf("upserting compliance framework %s: %w", fw.Name, err)
+	}
+	return nil
+}
+
+func (s *complianceScannerStore) ReplaceViolations(ctx context.Context, violations []usecaseCompliance.ViolationRecord) error {
+	// Clean out stale seed violations from migration 062 and older scan detections
+	delQuery := `
+		DELETE FROM compliance_violations 
+		WHERE id::text LIKE 'd1000001%' 
+		   OR message LIKE '%AlwaysPullImages%' 
+		   OR message LIKE '%default-deny%' 
+		   OR message LIKE '%NetworkPolicy%' 
+		   OR message LIKE '%HostPID%'
+		   OR detected_at < NOW() - INTERVAL '1 hour'
+	`
+	if _, err := s.getDB(ctx).Exec(ctx, delQuery); err != nil {
+		return fmt.Errorf("deleting stale violations: %w", err)
+	}
+
+	insertQuery := `
+		INSERT INTO compliance_violations (id, framework_id, severity, policy, resource, namespace, cluster, message, resolved, detected_at, tenant_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL)
+	`
+	for _, v := range violations {
+		violID := v.ID
+		if violID == "" {
+			violID = uuid.NewString()
+		}
+		_, err := s.getDB(ctx).Exec(ctx, insertQuery,
+			violID, v.FrameworkID, v.Severity, v.Policy, v.Resource, v.Namespace, v.Cluster, v.Message, v.Resolved, v.DetectedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("inserting compliance violation: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *complianceScannerStore) InsertAuditLog(ctx context.Context, log *usecaseCompliance.AuditLogRecord) error {
+	detailsJSON, err := json.Marshal(log.Details)
+	if err != nil {
+		detailsJSON = []byte("{}")
+	}
+
+	tenantID := log.TenantID
+	if tenantID == "" {
+		tenantID = "default-tenant"
+	}
+
+	logID := uuid.NewString()
+
+	query := `
+		INSERT INTO audit_logs (id, actor, action, target_type, target_name, result, details, ip_address, user_agent, tenant_id, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+	`
+	_, err = s.getDB(ctx).Exec(ctx, query,
+		logID, log.Actor, log.Action, log.TargetType, log.TargetName, log.Result, detailsJSON, log.IPAddress, log.UserAgent, tenantID,
+	)
+	if err != nil {
+		return fmt.Errorf("inserting audit log: %w", err)
+	}
+	return nil
+}

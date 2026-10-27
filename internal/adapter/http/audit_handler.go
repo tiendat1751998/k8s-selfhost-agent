@@ -8,6 +8,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/audit"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
+	usecaseCompliance "github.com/datdt/k8sselfhost/internal/usecase/compliance"
 )
 
 var render = struct {
@@ -18,14 +20,37 @@ var render = struct {
 	},
 }
 
+// AuditOption configures AuditHandler.
+type AuditOption func(*AuditHandler)
+
+// WithAuditScanner sets custom compliance scanner on AuditHandler.
+func WithAuditScanner(s *usecaseCompliance.FleetComplianceScanner) AuditOption {
+	return func(h *AuditHandler) {
+		h.scanner = s
+	}
+}
+
 // AuditHandler provides HTTP handlers for the platform audit API.
 type AuditHandler struct {
-	repo audit.Repository
+	repo    audit.Repository
+	scanner *usecaseCompliance.FleetComplianceScanner
 }
 
 // NewAuditHandler creates a new audit HTTP handler.
-func NewAuditHandler(repo audit.Repository) *AuditHandler {
-	return &AuditHandler{repo: repo}
+func NewAuditHandler(repo audit.Repository, opts ...AuditOption) *AuditHandler {
+	h := &AuditHandler{repo: repo}
+	for _, opt := range opts {
+		opt(h)
+	}
+
+	if h.scanner == nil && repo != nil {
+		if dbp, ok := repo.(interface{ DB() postgres.DBTX }); ok && dbp.DB() != nil {
+			store := postgres.NewComplianceScannerStore(dbp.DB())
+			h.scanner = usecaseCompliance.NewScanner(usecaseCompliance.WithDBStore(store))
+		}
+	}
+
+	return h
 }
 
 // RegisterRoutes registers audit routes.
@@ -68,12 +93,26 @@ func (h *AuditHandler) ResolveFinding(w http.ResponseWriter, r *http.Request) {
 
 // TriggerAuditRun handles POST /api/v1/audit/run
 func (h *AuditHandler) TriggerAuditRun(w http.ResponseWriter, r *http.Request) {
-	now := time.Now()
+	startTime := time.Now().UTC()
+	var findingsCount int
 
-	// Create and record a pending AuditRun
+	if h.scanner != nil {
+		res, err := h.scanner.Scan(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to execute compliance scan during audit run", err)
+			return
+		}
+		if res != nil {
+			findingsCount = len(res.Violations)
+		}
+	}
+
+	endTime := time.Now().UTC()
 	run := &audit.AuditRun{
-		Status:    "pending",
-		StartTime: now,
+		Status:        "completed",
+		StartTime:     startTime,
+		EndTime:       &endTime,
+		FindingsCount: findingsCount,
 	}
 
 	if err := h.repo.RecordRun(r.Context(), run); err != nil {
@@ -81,10 +120,11 @@ func (h *AuditHandler) TriggerAuditRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusAccepted, map[string]interface{}{
-		"status":  "audit_pending",
-		"run_id":  run.ID,
-		"message": "Audit run created. A background worker is needed to process it.",
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"status":         "completed",
+		"run_id":         run.ID,
+		"findings_count": findingsCount,
+		"message":        "Platform compliance audit completed successfully.",
 	})
 }
 
