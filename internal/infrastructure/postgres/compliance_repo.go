@@ -6,7 +6,6 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/domain/compliance"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
-	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // ComplianceRepo implements compliance.Repository using PostgreSQL.
@@ -29,6 +28,7 @@ func (r *ComplianceRepo) getDB(ctx context.Context) DBTX {
 }
 
 func (r *ComplianceRepo) ListFrameworks(ctx context.Context) ([]compliance.Framework, error) {
+	ctx = EnsureTenantContext(ctx)
 	query := `SELECT id, name, icon, total_checks, passed_checks, failed_checks, score, last_scan_at, created_at, updated_at FROM compliance_frameworks ORDER BY name`
 	query, args := BuildTenantQuery(ctx, query)
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
@@ -49,6 +49,7 @@ func (r *ComplianceRepo) ListFrameworks(ctx context.Context) ([]compliance.Frame
 }
 
 func (r *ComplianceRepo) GetFramework(ctx context.Context, id string) (*compliance.Framework, error) {
+	ctx = EnsureTenantContext(ctx)
 	var f compliance.Framework
 	query := `SELECT id, name, icon, total_checks, passed_checks, failed_checks, score, last_scan_at, created_at, updated_at FROM compliance_frameworks WHERE id = $1`
 	query, args := BuildTenantQuery(ctx, query, id)
@@ -60,10 +61,8 @@ func (r *ComplianceRepo) GetFramework(ctx context.Context, id string) (*complian
 }
 
 func (r *ComplianceRepo) UpsertFramework(ctx context.Context, f *compliance.Framework) error {
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
-	}
+	ctx = EnsureTenantContext(ctx)
+	tenantID := TenantIDOrDefault(ctx)
 
 	query := `INSERT INTO compliance_frameworks (name, icon, total_checks, passed_checks, failed_checks, score, last_scan_at, updated_at, tenant_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
@@ -82,6 +81,7 @@ func (r *ComplianceRepo) UpsertFramework(ctx context.Context, f *compliance.Fram
 }
 
 func (r *ComplianceRepo) ListViolations(ctx context.Context, severity *compliance.ViolationSeverity, limit, offset int) ([]compliance.Violation, int, error) {
+	ctx = EnsureTenantContext(ctx)
 	query := `SELECT id, framework_id, severity, policy, resource, namespace, cluster, message, resolved, detected_at FROM compliance_violations WHERE 1=1`
 	countQuery := `SELECT COUNT(*) FROM compliance_violations WHERE 1=1`
 	args := []interface{}{}
@@ -122,10 +122,8 @@ func (r *ComplianceRepo) ListViolations(ctx context.Context, severity *complianc
 }
 
 func (r *ComplianceRepo) CreateViolation(ctx context.Context, v *compliance.Violation) error {
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
-	}
+	ctx = EnsureTenantContext(ctx)
+	tenantID := TenantIDOrDefault(ctx)
 
 	query := `INSERT INTO compliance_violations (framework_id, severity, policy, resource, namespace, cluster, message, resolved, detected_at, tenant_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -141,6 +139,7 @@ func (r *ComplianceRepo) CreateViolation(ctx context.Context, v *compliance.Viol
 }
 
 func (r *ComplianceRepo) ResolveViolation(ctx context.Context, id string) error {
+	ctx = EnsureTenantContext(ctx)
 	query := `UPDATE compliance_violations SET resolved = TRUE WHERE id = $1`
 	query, args := BuildTenantQuery(ctx, query, id)
 	_, err := r.getDB(ctx).Exec(ctx, query, args...)

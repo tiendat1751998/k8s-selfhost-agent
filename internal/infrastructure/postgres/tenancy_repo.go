@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/datdt/k8sselfhost/internal/domain/tenancy"
-	pkgtenancy "github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type tenancyRepo struct {
@@ -42,6 +41,7 @@ func (r *tenancyRepo) GetOrganizations(ctx context.Context) ([]tenancy.Organizat
 }
 
 func (r *tenancyRepo) GetProjects(ctx context.Context) ([]tenancy.Project, error) {
+	ctx = EnsureTenantContext(ctx)
 	query, args := BuildTenantQuery(ctx, "SELECT id, org_id, name, envs, workloads FROM projects ORDER BY id LIMIT 500")
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
@@ -65,6 +65,7 @@ func (r *tenancyRepo) GetProjects(ctx context.Context) ([]tenancy.Project, error
 }
 
 func (r *tenancyRepo) GetMembers(ctx context.Context) ([]tenancy.Member, error) {
+	ctx = EnsureTenantContext(ctx)
 	query, args := BuildTenantQuery(ctx, "SELECT id, org_id, username, role, scope FROM tenant_members ORDER BY username LIMIT 500")
 	rows, err := r.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
@@ -171,17 +172,14 @@ func (r *tenancyRepo) CreateOrganization(ctx context.Context, org tenancy.Organi
 }
 
 func (r *tenancyRepo) CreateProject(ctx context.Context, proj tenancy.Project) error {
+	ctx = EnsureTenantContext(ctx)
 	envsJSON, err := json.Marshal(proj.Envs)
 	if err != nil {
 		return fmt.Errorf("marshaling envs: %w", err)
 	}
-	tenantID := pkgtenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		if proj.OrgID != "" {
-			tenantID = proj.OrgID
-		} else {
-			tenantID = "default-tenant"
-		}
+	tenantID := TenantIDOrDefault(ctx)
+	if tenantID == DefaultTenantID && proj.OrgID != "" {
+		tenantID = proj.OrgID
 	}
 	_, err = r.getDB(ctx).Exec(ctx, "INSERT INTO projects (id, org_id, name, envs, workloads, tenant_id) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, envs = EXCLUDED.envs, workloads = EXCLUDED.workloads, tenant_id = EXCLUDED.tenant_id",
 		proj.ID, proj.OrgID, proj.Name, envsJSON, proj.Workloads, tenantID)

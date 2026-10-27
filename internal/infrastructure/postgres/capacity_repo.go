@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/domain/capacity"
-	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type capacityRepo struct {
@@ -23,6 +22,7 @@ func (r *capacityRepo) getDB(ctx context.Context) DBTX {
 }
 
 func (r *capacityRepo) List(ctx context.Context, cluster string) ([]capacity.Forecast, error) {
+	ctx = EnsureTenantContext(ctx)
 	var query string
 	var args []interface{}
 
@@ -71,14 +71,12 @@ func (r *capacityRepo) List(ctx context.Context, cluster string) ([]capacity.For
 }
 
 func (r *capacityRepo) Record(ctx context.Context, f *capacity.Forecast) error {
+	ctx = EnsureTenantContext(ctx)
 	if f.RecordedAt.IsZero() {
 		f.RecordedAt = time.Now().UTC()
 	}
 
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
-	}
+	tenantID := TenantIDOrDefault(ctx)
 
 	query := `
 		INSERT INTO capacity_forecasts (cluster, resource_type, current_usage, forecast_7d, forecast_30d, forecast_90d, exhaustion_at, status, recorded_at, tenant_id)
@@ -98,6 +96,7 @@ func (r *capacityRepo) Record(ctx context.Context, f *capacity.Forecast) error {
 }
 
 func (r *capacityRepo) ListSnapshots(ctx context.Context, cluster string) ([]capacity.Snapshot, error) {
+	ctx = EnsureTenantContext(ctx)
 	query := `
 		SELECT cluster, resource_type, current_usage, recorded_at
 		FROM capacity_forecasts

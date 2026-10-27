@@ -7,7 +7,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/changes"
-	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type changesRepo struct {
@@ -24,6 +23,7 @@ func (r *changesRepo) getDB(ctx context.Context) DBTX {
 }
 
 func (r *changesRepo) ListRequests(ctx context.Context, status *changes.ChangeStatus, limit, offset int) ([]changes.ChangeRequest, int, error) {
+	ctx = EnsureTenantContext(ctx)
 	var query string
 	var countQuery string
 	var args []interface{}
@@ -93,6 +93,7 @@ func (r *changesRepo) ListRequests(ctx context.Context, status *changes.ChangeSt
 }
 
 func (r *changesRepo) GetRequest(ctx context.Context, id string) (*changes.ChangeRequest, error) {
+	ctx = EnsureTenantContext(ctx)
 	query := `
 		SELECT id, title, description, type, status, requester, approver, cluster, namespace, resource, scheduled_at, approved_at, created_at, updated_at 
 		FROM change_requests 
@@ -122,10 +123,8 @@ func (r *changesRepo) GetRequest(ctx context.Context, id string) (*changes.Chang
 }
 
 func (r *changesRepo) CreateRequest(ctx context.Context, req *changes.ChangeRequest) error {
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
-	}
+	ctx = EnsureTenantContext(ctx)
+	tenantID := TenantIDOrDefault(ctx)
 
 	query := `
 		INSERT INTO change_requests (title, description, type, status, requester, cluster, namespace, resource, scheduled_at, created_at, updated_at, tenant_id)
@@ -145,6 +144,7 @@ func (r *changesRepo) CreateRequest(ctx context.Context, req *changes.ChangeRequ
 }
 
 func (r *changesRepo) ApproveRequest(ctx context.Context, id, approver string) error {
+	ctx = EnsureTenantContext(ctx)
 	query := `
 		UPDATE change_requests 
 		SET status = 'approved', approver = $1, approved_at = NOW(), updated_at = NOW() 
@@ -162,6 +162,7 @@ func (r *changesRepo) ApproveRequest(ctx context.Context, id, approver string) e
 }
 
 func (r *changesRepo) RejectRequest(ctx context.Context, id, approver string) error {
+	ctx = EnsureTenantContext(ctx)
 	query := `
 		UPDATE change_requests 
 		SET status = 'rejected', approver = $1, updated_at = NOW() 
@@ -179,6 +180,7 @@ func (r *changesRepo) RejectRequest(ctx context.Context, id, approver string) er
 }
 
 func (r *changesRepo) ListWindows(ctx context.Context) ([]changes.MaintenanceWindow, error) {
+	ctx = EnsureTenantContext(ctx)
 	query := `
 		SELECT id, title, cluster, start_at, end_at, active, created_at 
 		FROM maintenance_windows 
@@ -208,10 +210,8 @@ func (r *changesRepo) ListWindows(ctx context.Context) ([]changes.MaintenanceWin
 }
 
 func (r *changesRepo) CreateWindow(ctx context.Context, w *changes.MaintenanceWindow) error {
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
-	}
+	ctx = EnsureTenantContext(ctx)
+	tenantID := TenantIDOrDefault(ctx)
 
 	query := `
 		INSERT INTO maintenance_windows (title, cluster, start_at, end_at, active, created_at, tenant_id)

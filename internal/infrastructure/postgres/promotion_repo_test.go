@@ -1,14 +1,49 @@
 package postgres_test
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/datdt/k8sselfhost/internal/domain/promotion"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/postgres"
 )
+
+func init() {
+	if os.Getenv("K8S_POSTGRES_HOST") == "" || os.Getenv("POSTGRES_PASSWORD") == "" {
+		if f, err := os.Open(`d:\project\k8sseflhost\.env`); err == nil {
+			scanner := bufio.NewScanner(f)
+			for scanner.Scan() {
+				line := strings.TrimSpace(scanner.Text())
+				if line == "" || strings.HasPrefix(line, "#") {
+					continue
+				}
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) == 2 {
+					k := strings.TrimSpace(parts[0])
+					v := strings.Trim(strings.TrimSpace(parts[1]), `"'`)
+					if os.Getenv(k) == "" {
+						os.Setenv(k, v)
+					}
+				}
+			}
+			f.Close()
+		}
+		if os.Getenv("K8S_POSTGRES_HOST") == "" {
+			os.Setenv("K8S_POSTGRES_HOST", "10.10.10.133")
+		}
+		if os.Getenv("K8S_POSTGRES_USER") == "" {
+			os.Setenv("K8S_POSTGRES_USER", "myuser")
+		}
+		if os.Getenv("K8S_POSTGRES_DBNAME") == "" {
+			os.Setenv("K8S_POSTGRES_DBNAME", "mydatabase")
+		}
+	}
+}
 
 func cleanupPromotions(ctx context.Context, pool postgres.DBTX, service string) {
 	_, _ = pool.Exec(ctx, "DELETE FROM promotions WHERE service = $1", service)

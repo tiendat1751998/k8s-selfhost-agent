@@ -12,7 +12,6 @@ import (
 	"github.com/datdt/k8sselfhost/internal/domain/drift"
 	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
-	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 	"go.uber.org/zap"
 )
 
@@ -31,6 +30,7 @@ func (r *DriftRepo) getDB(ctx context.Context) DBTX {
 }
 
 func (r *DriftRepo) detectSwarmDrift(ctx context.Context) {
+	ctx = EnsureTenantContext(ctx)
 	swarmCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
@@ -103,6 +103,7 @@ func (r *DriftRepo) detectSwarmDrift(ctx context.Context) {
 }
 
 func (r *DriftRepo) List(ctx context.Context, cluster string, status *drift.DriftStatus, limit, offset int) ([]drift.DriftRecord, int, error) {
+	ctx = EnsureTenantContext(ctx)
 	r.detectSwarmDrift(ctx)
 
 	query := `SELECT id, cluster, namespace, resource, resource_kind, expected_state, actual_state, diff, status, detected_at FROM drift_records WHERE 1=1`
@@ -151,10 +152,8 @@ func (r *DriftRepo) List(ctx context.Context, cluster string, status *drift.Drif
 }
 
 func (r *DriftRepo) Create(ctx context.Context, d *drift.DriftRecord) error {
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
-	}
+	ctx = EnsureTenantContext(ctx)
+	tenantID := TenantIDOrDefault(ctx)
 
 	query := `INSERT INTO drift_records (cluster, namespace, resource, resource_kind, expected_state, actual_state, diff, status, detected_at, tenant_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -172,6 +171,7 @@ func (r *DriftRepo) Create(ctx context.Context, d *drift.DriftRecord) error {
 }
 
 func (r *DriftRepo) Resolve(ctx context.Context, id string) error {
+	ctx = EnsureTenantContext(ctx)
 	query, args := BuildTenantQuery(ctx, `UPDATE drift_records SET status = 'in_sync' WHERE id = $1`, id)
 	_, err := r.getDB(ctx).Exec(ctx, query, args...)
 	if err != nil {

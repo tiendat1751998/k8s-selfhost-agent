@@ -7,7 +7,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/reporting"
-	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type reportingRepo struct {
@@ -24,6 +23,7 @@ func (r *reportingRepo) getDB(ctx context.Context) DBTX {
 }
 
 func (r *reportingRepo) ListReports(ctx context.Context, limit, offset int) ([]reporting.Report, int, error) {
+	ctx = EnsureTenantContext(ctx)
 	query := `
 		SELECT id, title, type, format, status, file_url, created_by, created_at, expires_at 
 		FROM reports 
@@ -66,6 +66,7 @@ func (r *reportingRepo) ListReports(ctx context.Context, limit, offset int) ([]r
 }
 
 func (r *reportingRepo) GetReport(ctx context.Context, id string) (*reporting.Report, error) {
+	ctx = EnsureTenantContext(ctx)
 	query := `
 		SELECT id, title, type, format, status, file_url, created_by, created_at, expires_at 
 		FROM reports 
@@ -87,10 +88,8 @@ func (r *reportingRepo) GetReport(ctx context.Context, id string) (*reporting.Re
 }
 
 func (r *reportingRepo) CreateReport(ctx context.Context, rep *reporting.Report) error {
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
-	}
+	ctx = EnsureTenantContext(ctx)
+	tenantID := TenantIDOrDefault(ctx)
 
 	query := `
 		INSERT INTO reports (title, type, format, status, created_by, created_at, expires_at, tenant_id)
@@ -109,6 +108,7 @@ func (r *reportingRepo) CreateReport(ctx context.Context, rep *reporting.Report)
 }
 
 func (r *reportingRepo) UpdateStatus(ctx context.Context, id, status, fileURL string) error {
+	ctx = EnsureTenantContext(ctx)
 	query := `
 		UPDATE reports 
 		SET status = $1, file_url = $2 
@@ -126,6 +126,7 @@ func (r *reportingRepo) UpdateStatus(ctx context.Context, id, status, fileURL st
 }
 
 func (r *reportingRepo) DeleteReport(ctx context.Context, id string) error {
+	ctx = EnsureTenantContext(ctx)
 	query := `DELETE FROM reports WHERE id = $1`
 	query, args := BuildTenantQuery(ctx, query, id)
 	cmd, err := r.getDB(ctx).Exec(ctx, query, args...)
