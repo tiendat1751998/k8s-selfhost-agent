@@ -2,6 +2,7 @@ package slo
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/domain/observability"
+	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 )
 
 // DockerClient defines the Docker API operations required for live health monitoring.
@@ -20,7 +22,20 @@ type DockerClient interface {
 	ContainerList(ctx context.Context, options container.ListOptions) ([]container.Summary, error)
 }
 
-// SLOCollector periodically queries Docker Engine / Swarm to record real-time service health samples.
+// DBPingFunc ping-probes the database pool.
+type DBPingFunc func(ctx context.Context) error
+
+// ComputeHostLister lists registered compute hosts across the fleet.
+type ComputeHostLister interface {
+	ListAll(ctx context.Context) ([]docker.ComputeHost, error)
+}
+
+// SLODefinitionLister lists registered SLO definitions.
+type SLODefinitionLister interface {
+	ListSLODefinitions(ctx context.Context) ([]observability.SLODefinition, error)
+}
+
+// SLOCollector periodically queries live fleet hosts and Docker Engine to record real-time service health samples.
 type SLOCollector struct {
 	dockerClient DockerClient
 	repo         observability.Repository
@@ -29,6 +44,11 @@ type SLOCollector struct {
 	tenantID     string
 	stopCh       chan struct{}
 	mu           sync.Mutex
+
+	hostRepo   ComputeHostLister
+	dbPingFn   DBPingFunc
+	defLister  SLODefinitionLister
+	httpClient *http.Client
 }
 
 // CollectorOption configures SLOCollector.
@@ -49,6 +69,22 @@ func WithCollectorTenantID(tenantID string) CollectorOption {
 		if tenantID != "" {
 			c.tenantID = tenantID
 		}
+	}
+}
+
+// WithFleetDependencies configures fleet hosts, database ping, and definition lister for multi-target probing.
+func WithFleetDependencies(hostRepo ComputeHostLister, dbPingFn DBPingFunc, defLister SLODefinitionLister) CollectorOption {
+	return func(c *SLOCollector) {
+		c.hostRepo = hostRepo
+		c.dbPingFn = dbPingFn
+		c.defLister = defLister
+	}
+}
+
+// WithHTTPClient configures a custom HTTP client for agent probing.
+func WithHTTPClient(client *http.Client) CollectorOption {
+	return func(c *SLOCollector) {
+		c.httpClient = client
 	}
 }
 
@@ -106,8 +142,28 @@ func (c *SLOCollector) Stop() {
 	}
 }
 
-// CollectOnce polls Docker Swarm services and standalone containers to record point-in-time health samples.
+func (c *SLOCollector) getSLODefinitions(ctx context.Context) ([]observability.SLODefinition, error) {
+	if c.defLister != nil {
+		return c.defLister.ListSLODefinitions(ctx)
+	}
+	if c.repo != nil {
+		return c.repo.ListSLODefinitions(ctx)
+	}
+	return nil, nil
+}
+
+// CollectOnce polls live fleet endpoints and Docker services to record point-in-time health samples.
 func (c *SLOCollector) CollectOnce(ctx context.Context) {
+	// 1. Probe live multi-target fleet SLOs
+	c.collectFleetSLOs(ctx)
+
+	// 2. Probe Docker Swarm services & standalone containers if dockerClient is configured
+	if c.dockerClient != nil {
+		c.collectDocker(ctx)
+	}
+}
+
+func (c *SLOCollector) collectDocker(ctx context.Context) {
 	if c.dockerClient == nil || c.repo == nil {
 		return
 	}

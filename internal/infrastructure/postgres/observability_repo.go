@@ -434,7 +434,7 @@ func (r *observabilityRepo) ComputeSLI(ctx context.Context, serviceName string, 
 	var query string
 	var args []any
 
-	if userRole != "platform_admin" && tenantID != "" {
+	if userRole != "platform_admin" && (tenantID != "" || userRole != "") {
 		tUUID := parseTenantUUID(tenantID)
 		query = `
 			SELECT 
@@ -462,7 +462,7 @@ func (r *observabilityRepo) ComputeSLI(ctx context.Context, serviceName string, 
 	}
 
 	if totalCount == 0 {
-		return 100.0, nil
+		return -1.0, nil
 	}
 
 	return (float64(healthyCount) / float64(totalCount)) * 100.0, nil

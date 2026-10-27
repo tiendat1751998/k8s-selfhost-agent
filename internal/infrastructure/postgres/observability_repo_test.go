@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -177,4 +178,41 @@ func TestObservabilityRepo_CreateSLOSnapshot_NeverInsertsNonUUID(t *testing.T) {
 	lastArgs := mock.args[len(mock.args)-1]
 	require.Len(t, lastArgs, 10)
 	assert.Equal(t, "00000000-0000-0000-0000-000000000000", lastArgs[9], "tenant_id must be valid UUID, not 'default-tenant'")
+}
+
+func TestObservabilityRepo_ComputeSLI_ZeroSamplesReturnsSentinelNegativeOne(t *testing.T) {
+	mock := &mockObservabilityDBTX{}
+	repo := NewObservabilityRepo(mock)
+
+	sli, err := repo.ComputeSLI(context.Background(), "k8s-agent-fleet", 7*24*time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, -1.0, sli, "ComputeSLI must return -1.0 sentinel when totalCount == 0 (zero samples)")
+}
+
+func TestObservabilityRepo_ComputeSLI_NormalizesTenantUUID(t *testing.T) {
+	mock := &mockObservabilityDBTX{}
+	repo := NewObservabilityRepo(mock)
+
+	// default-tenant should normalize to nil UUID
+	ctx := tenancy.WithTenantID(context.Background(), "default-tenant")
+	ctx = tenancy.WithUserRole(ctx, "operator")
+	_, err := repo.ComputeSLI(ctx, "k8s-agent-fleet", 7*24*time.Hour)
+	require.NoError(t, err)
+	require.NotEmpty(t, mock.args)
+	lastArgs := mock.args[len(mock.args)-1]
+	require.Len(t, lastArgs, 3)
+	assert.Equal(t, "00000000-0000-0000-0000-000000000000", lastArgs[2], "ComputeSLI must normalize 'default-tenant' to nil UUID")
+}
+
+func TestObservabilityRepo_RecordHealthSample_NormalizesDefaultTenant(t *testing.T) {
+	mock := &mockObservabilityDBTX{}
+	repo := NewObservabilityRepo(mock)
+
+	latency := 12
+	err := repo.RecordHealthSample(context.Background(), "default-tenant", "k8s-agent-fleet", 3, 3, true, &latency)
+	require.NoError(t, err)
+	require.NotEmpty(t, mock.args)
+	lastArgs := mock.args[len(mock.args)-1]
+	require.Len(t, lastArgs, 7)
+	assert.Equal(t, "00000000-0000-0000-0000-000000000000", lastArgs[1], "RecordHealthSample must normalize 'default-tenant' to nil UUID")
 }

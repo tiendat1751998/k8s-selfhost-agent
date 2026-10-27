@@ -236,7 +236,11 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	go healthChecker.Start(ctx, 1*time.Minute)
 
 	obsRepo := postgres.NewObservabilityRepo(dbPool)
-	sloCollector := usecaseSLO.NewSLOCollector(dockerClient, obsRepo, log)
+	sloCollector := usecaseSLO.NewSLOCollector(dockerClient, obsRepo, log,
+		usecaseSLO.WithCollectorInterval(30*time.Second),
+		usecaseSLO.WithFleetDependencies(computeHostRepo, dbPool.Ping, obsRepo),
+	)
+	sloCollector.CollectOnce(ctx)
 	go sloCollector.Start(ctx)
 
 	sloUpdater := usecaseSLO.NewSLOSnapshotUpdater(obsRepo, log)
@@ -294,7 +298,7 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 		Cost:            adapthttp.NewCostHandler(usecaseCost.NewCalculator(computeHostRepo, metricsCollector)),
 		Backup:          adapthttp.NewBackupHandler(backupUC),
 		Agents:          adapthttp.NewAgentHandler(agentRepo, orchestrator),
-		Deployments:     adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager))),
+		Deployments:     adapthttp.NewDeploymentHandler(usecaseDeployment.NewUsecase(infraK8s.NewDeploymentRepo(k8sClient, dockerRepo, fleetRepo, clientManager, infraK8s.WithComputeHostRepo(computeHostRepo)))),
 		Tenancy:         adapthttp.NewTenancyHandler(tenancyRepo),
 		Alert:           adapthttp.NewAlertHandler(alertUsecaseInstance),
 		K8s:             adapthttp.NewK8sResourceHandler(resourceRepo, auditRepo),

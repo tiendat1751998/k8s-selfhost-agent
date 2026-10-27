@@ -19,6 +19,23 @@ type deploymentRepo struct {
 	defaultDockerRepo domainDocker.Repository
 	fleetRepo         fleet.Repository
 	clientManager     *infraCluster.ClientManager
+	computeHostRepo   domainDocker.ComputeHostRepository
+}
+
+// DeploymentRepoOption configures deploymentRepo.
+type DeploymentRepoOption func(*deploymentRepo)
+
+// WithComputeHostRepo configures the compute host repository on DeploymentRepo for fleet daemon discovery.
+func WithComputeHostRepo(hostRepo domainDocker.ComputeHostRepository) DeploymentRepoOption {
+	return func(r *deploymentRepo) {
+		r.computeHostRepo = hostRepo
+	}
+}
+
+// WithComputeHostRepo sets the compute host repository directly on deploymentRepo.
+func (r *deploymentRepo) WithComputeHostRepo(hostRepo domainDocker.ComputeHostRepository) *deploymentRepo {
+	r.computeHostRepo = hostRepo
+	return r
 }
 
 // NewDeploymentRepo creates a new live deployment repository.
@@ -27,13 +44,18 @@ func NewDeploymentRepo(
 	defaultDockerRepo domainDocker.Repository,
 	fleetRepo fleet.Repository,
 	clientManager *infraCluster.ClientManager,
+	opts ...DeploymentRepoOption,
 ) deployment.Repository {
-	return &deploymentRepo{
+	r := &deploymentRepo{
 		defaultK8sClient:  defaultK8sClient,
 		defaultDockerRepo: defaultDockerRepo,
 		fleetRepo:         fleetRepo,
 		clientManager:     clientManager,
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 // NewDeploymentRepoWithInterface creates a deployment repository with any kubernetes.Interface.
@@ -42,13 +64,18 @@ func NewDeploymentRepoWithInterface(
 	defaultDockerRepo domainDocker.Repository,
 	fleetRepo fleet.Repository,
 	clientManager *infraCluster.ClientManager,
+	opts ...DeploymentRepoOption,
 ) deployment.Repository {
-	return &deploymentRepo{
+	r := &deploymentRepo{
 		defaultK8sClient:  defaultK8sClient,
 		defaultDockerRepo: defaultDockerRepo,
 		fleetRepo:         fleetRepo,
 		clientManager:     clientManager,
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 func isNilK8sClient(client kubernetes.Interface) bool {
@@ -157,8 +184,11 @@ func (r *deploymentRepo) List(ctx context.Context) ([]deployment.Application, er
 		}
 	}
 
-	if len(apps) == 0 {
-		apps = r.fallbackFleetWorkloads()
+	if len(apps) == 0 && r.computeHostRepo != nil {
+		fleetApps, err := r.discoverFleetWorkloads(ctx)
+		if err == nil && len(fleetApps) > 0 {
+			apps = fleetApps
+		}
 	}
 
 	if apps == nil {
@@ -166,84 +196,6 @@ func (r *deploymentRepo) List(ctx context.Context) ([]deployment.Application, er
 	}
 
 	return apps, nil
-}
-
-func (r *deploymentRepo) fallbackFleetWorkloads() []deployment.Application {
-	clusterName := "k8snode"
-	return []deployment.Application{
-		{
-			Name:              "traefik-ingress",
-			Team:              "infra",
-			Env:               "production",
-			Image:             "traefik:v3.1",
-			Target:            clusterName,
-			Namespace:         "ingress",
-			Type:              "kubernetes",
-			Replicas:          1,
-			Status:            "healthy",
-			CPU:               "150m",
-			Memory:            "128Mi",
-			Port:              80,
-			NetType:           "HostPort",
-		},
-		{
-			Name:              "postgres-db",
-			Team:              "data",
-			Env:               "production",
-			Image:             "postgres:16-alpine",
-			Target:            clusterName,
-			Namespace:         "database",
-			Type:              "kubernetes",
-			Replicas:          1,
-			Status:            "healthy",
-			CPU:               "250m",
-			Memory:            "512Mi",
-			Port:              5432,
-			Volume:            "pgdata-nvme",
-		},
-		{
-			Name:              "kube-apiserver",
-			Team:              "platform",
-			Env:               "production",
-			Image:             "registry.k8s.io/kube-apiserver:v1.28.2",
-			Target:            clusterName,
-			Namespace:         "kube-system",
-			Type:              "kubernetes",
-			Replicas:          1,
-			Status:            "healthy",
-			CPU:               "300m",
-			Memory:            "384Mi",
-			Port:              6443,
-		},
-		{
-			Name:              "coredns",
-			Team:              "platform",
-			Env:               "production",
-			Image:             "registry.k8s.io/coredns/coredns:v1.10.1",
-			Target:            clusterName,
-			Namespace:         "kube-system",
-			Type:              "kubernetes",
-			Replicas:          2,
-			Status:            "healthy",
-			CPU:               "100m",
-			Memory:            "70Mi",
-			Port:              53,
-		},
-		{
-			Name:              "k8s-agent",
-			Team:              "observability",
-			Env:               "production",
-			Image:             "k8s-agent:latest",
-			Target:            clusterName,
-			Namespace:         "observability",
-			Type:              "kubernetes",
-			Replicas:          3,
-			Status:            "healthy",
-			CPU:               "100m",
-			Memory:            "96Mi",
-			Port:              9100,
-		},
-	}
 }
 
 func (r *deploymentRepo) Scale(ctx context.Context, targetType, targetCluster, namespace, name string, replicas int) error {

@@ -2,6 +2,8 @@ package slo
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/domain/observability"
+	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 )
 
 type mockDockerClient struct {
@@ -153,7 +156,7 @@ func (r *mockObsRepo) ComputeSLI(ctx context.Context, serviceName string, window
 		}
 	}
 	if total == 0 {
-		return 100.0, nil
+		return -1.0, nil
 	}
 	return (float64(healthy) / float64(total)) * 100.0, nil
 }
@@ -293,4 +296,139 @@ func TestSLOSnapshotUpdater_UpdateOnce_ComputeSLIError_EradicateFakePerfection(t
 		t.Errorf("expected critical or error status, got %s", snap.BudgetStatus)
 	}
 }
+
+func TestSLOSnapshotUpdater_UpdateOnce_ZeroSamples_HonestUnmeasured(t *testing.T) {
+	repoMock := newMockObsRepo()
+	repoMock.defs = []observability.SLODefinition{
+		{
+			ID:             "def-unmeasured",
+			Service:        "idle_service",
+			Target:         99.9,
+			IndicatorType:  "availability",
+			Window:         "30d",
+			AlertThreshold: 1.5,
+		},
+	}
+	// 0 samples recorded
+	updater := NewSLOSnapshotUpdater(repoMock, zap.NewNop(), WithUpdaterInterval(10*time.Millisecond))
+	updater.UpdateOnce(context.Background())
+
+	snap := repoMock.snaps["def-unmeasured"]
+	if snap == nil {
+		t.Fatalf("expected snapshot created for def-unmeasured")
+	}
+
+	if snap.Actual != -1.0 {
+		t.Errorf("expected actual SLI -1.0 for unmeasured, got %f", snap.Actual)
+	}
+	if snap.BurnRate != 0.0 {
+		t.Errorf("expected burn rate 0.0 for unmeasured, got %f", snap.BurnRate)
+	}
+	if snap.ErrorBudget != 0.0 {
+		t.Errorf("expected error budget 0.0 for unmeasured, got %f", snap.ErrorBudget)
+	}
+	if snap.BudgetStatus != "unmeasured" {
+		t.Errorf("expected budget status 'unmeasured', got %s", snap.BudgetStatus)
+	}
+}
+
+type mockHostRepo struct {
+	hosts []docker.ComputeHost
+}
+
+func (m *mockHostRepo) ListAll(ctx context.Context) ([]docker.ComputeHost, error) {
+	return m.hosts, nil
+}
+
+func TestSLOCollector_MultiTargetFleetProbing(t *testing.T) {
+	// Create a test agent HTTP server
+	agentServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		case "/k8s/health":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"containerd_healthy":true}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer agentServer.Close()
+
+	repoMock := newMockObsRepo()
+	repoMock.defs = []observability.SLODefinition{
+		{ID: "def-1", Service: "k8s-agent-fleet", Target: 99.5},
+		{ID: "def-2", Service: "postgres-primary", Target: 99.9},
+		{ID: "def-3", Service: "workload-runtime", Target: 99.9},
+		{ID: "def-4", Service: "kube-apiserver", Target: 99.9},
+		{ID: "def-5", Service: "coredns", Target: 99.95},
+		{ID: "def-6", Service: "traefik-ingress", Target: 99.9},
+	}
+
+	hostRepoMock := &mockHostRepo{
+		hosts: []docker.ComputeHost{
+			{
+				ID:       "host-1",
+				Name:     "node-60",
+				Endpoint: agentServer.URL,
+				HostType: "k8s",
+				Labels:   map[string]string{"host_role": "k8s"},
+			},
+		},
+	}
+
+	dbPingMock := func(ctx context.Context) error {
+		return nil // DB is healthy
+	}
+
+	collector := NewSLOCollector(nil, repoMock, zap.NewNop(),
+		WithFleetDependencies(hostRepoMock, dbPingMock, repoMock),
+		WithHTTPClient(agentServer.Client()),
+	)
+
+	collector.CollectOnce(context.Background())
+
+	samplesByService := make(map[string]observability.HealthSample)
+	for _, s := range repoMock.samples {
+		samplesByService[s.ServiceName] = s
+	}
+
+	// 1. k8s-agent-fleet must be UP
+	agentSample, ok := samplesByService["k8s-agent-fleet"]
+	if !ok || !agentSample.IsHealthy || agentSample.RunningReplicas != 1 {
+		t.Errorf("expected k8s-agent-fleet UP (1 replica, healthy), got: %+v", agentSample)
+	}
+
+	// 2. postgres-primary must be UP
+	pgSample, ok := samplesByService["postgres-primary"]
+	if !ok || !pgSample.IsHealthy || pgSample.RunningReplicas != 1 {
+		t.Errorf("expected postgres-primary UP (1 replica, healthy), got: %+v", pgSample)
+	}
+
+	// 3. workload-runtime must be UP (containerd healthy)
+	rtSample, ok := samplesByService["workload-runtime"]
+	if !ok || !rtSample.IsHealthy || rtSample.RunningReplicas != 1 {
+		t.Errorf("expected workload-runtime UP (1 replica, healthy), got: %+v", rtSample)
+	}
+
+	// 4. kube-apiserver must be DOWN (port 6443 closed on httptest server)
+	k8sSample, ok := samplesByService["kube-apiserver"]
+	if !ok || k8sSample.IsHealthy || k8sSample.RunningReplicas != 0 {
+		t.Errorf("expected kube-apiserver DOWN (0 replicas, unhealthy), got: %+v", k8sSample)
+	}
+
+	// 5. coredns must be DOWN (port 53 closed)
+	dnsSample, ok := samplesByService["coredns"]
+	if !ok || dnsSample.IsHealthy || dnsSample.RunningReplicas != 0 {
+		t.Errorf("expected coredns DOWN (0 replicas, unhealthy), got: %+v", dnsSample)
+	}
+
+	// 6. traefik-ingress must be DOWN (port 80 closed)
+	traefikSample, ok := samplesByService["traefik-ingress"]
+	if !ok || traefikSample.IsHealthy || traefikSample.RunningReplicas != 0 {
+		t.Errorf("expected traefik-ingress DOWN (0 replicas, unhealthy), got: %+v", traefikSample)
+	}
+}
+
 

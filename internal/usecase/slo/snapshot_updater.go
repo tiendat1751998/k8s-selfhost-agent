@@ -114,30 +114,43 @@ func (u *SLOSnapshotUpdater) UpdateOnce(ctx context.Context) {
 		if target <= 0 {
 			target = 99.9
 		}
-		allowedUnhealthy := 100.0 - target
-		if allowedUnhealthy <= 0 {
-			allowedUnhealthy = 0.01
-		}
-		unhealthyActual := 100.0 - actualSLI
-		if unhealthyActual < 0 {
-			unhealthyActual = 0
-		}
-		burnRate := unhealthyActual / allowedUnhealthy
-		errorBudget := (1.0 - (unhealthyActual / allowedUnhealthy)) * 100.0
-		if errorBudget < 0 {
-			errorBudget = 0
-		}
-		if errorBudget > 100 {
-			errorBudget = 100
-		}
 
-		budgetStatus := "healthy"
-		if computeErr != nil {
-			budgetStatus = "critical"
-		} else if burnRate > 2.0 {
-			budgetStatus = "critical"
-		} else if burnRate > 1.0 {
-			budgetStatus = "warning"
+		var actual float64
+		var burnRate float64
+		var errorBudget float64
+		var budgetStatus string
+
+		if actualSLI < 0 {
+			actual = -1
+			burnRate = 0
+			errorBudget = 0
+			budgetStatus = "unmeasured"
+		} else {
+			actual = math.Round(actualSLI*1000) / 1000
+			allowedUnhealthy := 100.0 - target
+			if allowedUnhealthy <= 0 {
+				allowedUnhealthy = 0.01
+			}
+			unhealthyActual := 100.0 - actualSLI
+			if unhealthyActual < 0 {
+				unhealthyActual = 0
+			}
+			burnRate = math.Round((unhealthyActual/allowedUnhealthy)*100) / 100
+			errorBudget = math.Round(((1.0-(unhealthyActual/allowedUnhealthy))*100.0)*10) / 10
+			if errorBudget < 0 {
+				errorBudget = 0
+			}
+			if errorBudget > 100 {
+				errorBudget = 100
+			}
+
+			if computeErr != nil || errorBudget <= 0 {
+				budgetStatus = "critical"
+			} else if errorBudget < 25 {
+				budgetStatus = "warning"
+			} else {
+				budgetStatus = "healthy"
+			}
 		}
 
 		existing, getErr := u.repo.GetSLOSnapshotBySLOID(evalCtx, d.ID)
@@ -152,9 +165,9 @@ func (u *SLOSnapshotUpdater) UpdateOnce(ctx context.Context) {
 				SLOID:        d.ID,
 				Service:      d.Service,
 				Target:       d.Target,
-				Actual:       math.Round(actualSLI*1000) / 1000,
-				BurnRate:     math.Round(burnRate*100) / 100,
-				ErrorBudget:  math.Round(errorBudget*10) / 10,
+				Actual:       actual,
+				BurnRate:     burnRate,
+				ErrorBudget:  errorBudget,
 				BudgetStatus: budgetStatus,
 				RecordedAt:   now,
 			}
@@ -164,9 +177,9 @@ func (u *SLOSnapshotUpdater) UpdateOnce(ctx context.Context) {
 		} else {
 			existing.Service = d.Service
 			existing.Target = d.Target
-			existing.Actual = math.Round(actualSLI*1000) / 1000
-			existing.BurnRate = math.Round(burnRate*100) / 100
-			existing.ErrorBudget = math.Round(errorBudget*10) / 10
+			existing.Actual = actual
+			existing.BurnRate = burnRate
+			existing.ErrorBudget = errorBudget
 			existing.BudgetStatus = budgetStatus
 			existing.RecordedAt = now
 			if updateErr := u.repo.UpdateSLOSnapshot(evalCtx, existing); updateErr != nil {
