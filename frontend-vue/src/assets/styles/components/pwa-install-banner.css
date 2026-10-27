@@ -14,9 +14,7 @@
   overflow: hidden;
 }
 
-body:has(.modal-backdrop) .pwa-install-banner,
-body:has(.alert-modal-backdrop) .pwa-install-banner,
-body:has([role="dialog"]) .pwa-install-banner {
+body:has([role="dialog"], [aria-modal="true"], .modal-overlay, .modal-backdrop, .alert-modal-backdrop, .drawer-overlay, .inspector-backdrop) .pwa-install-banner {
   display: none !important;
 }
 

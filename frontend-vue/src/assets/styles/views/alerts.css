@@ -270,6 +270,7 @@
 .stream-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
 /* Compact 32px Action Buttons */
+.rule-actions-cell { white-space: nowrap; min-width: 160px; }
 .stream-actions .btn, .stream-actions button,
 .rule-actions-cell .btn, .rule-actions-cell button {
   height: 32px; min-height: 32px; padding: 0 10px; font-size: 11.5px;

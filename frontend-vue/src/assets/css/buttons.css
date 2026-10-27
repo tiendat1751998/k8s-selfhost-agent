@@ -51,14 +51,30 @@ a.btn-cyber {
   opacity: 0.85;
 }
 
-.btn-primary {
-  background: var(--accent-cyan, #3b82f6);
-  border-color: transparent;
-  color: #fff;
+.btn-primary,
+button.btn-primary,
+button.btn.btn-primary,
+button.btn-cyber.btn-primary,
+a.btn.btn-primary,
+a.btn-cyber.btn-primary,
+.btn.btn-primary,
+.btn-cyber.btn-primary {
+  background: var(--accent-primary, #2563eb);
+  border-color: var(--accent-primary, #2563eb);
+  color: #ffffff;
 }
 
-.btn-primary:hover {
-  background: #2563eb;
+.btn-primary:hover:not(:disabled),
+button.btn-primary:hover:not(:disabled),
+button.btn.btn-primary:hover:not(:disabled),
+button.btn-cyber.btn-primary:hover:not(:disabled),
+a.btn.btn-primary:hover,
+a.btn-cyber.btn-primary:hover,
+.btn.btn-primary:hover:not(:disabled),
+.btn-cyber.btn-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #ffffff;
 }
 
 .btn-secondary {

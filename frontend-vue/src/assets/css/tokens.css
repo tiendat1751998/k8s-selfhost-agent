@@ -1,6 +1,7 @@
 :root {
   /* Brand Accents - CNCF Kubernetes Blue */
   --color-primary: #326ce5;
+  --accent-primary: #2563eb;
   --color-primary-hover: #3b82f6;
   --color-primary-active: #2563eb;
   --color-primary-disabled: #1e293b;
@@ -137,6 +138,7 @@
 [data-theme="light"] {
   /* Brand Accents - Cloud Console Light */
   --color-primary: #1d4ed8;
+  --accent-primary: #2563eb;
   --color-primary-hover: #2563eb;
   --color-primary-active: #1e40af;
   --color-on-primary: #ffffff;

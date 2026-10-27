@@ -58,7 +58,7 @@ function switchTab(tab: 'overview' | 'strategy' | 'network' | 'logs' | 'env' | '
 function copyToClipboard(text: string) {
   if (typeof navigator !== 'undefined' && navigator.clipboard) {
     navigator.clipboard.writeText(text).then(() => {
-      emit('toast', 'YAML manifest copied to clipboard!', 'info')
+      emit('toast', isDaemon.value ? 'Systemd unit copied to clipboard!' : 'YAML manifest copied to clipboard!', 'info')
     })
   }
 }
@@ -90,9 +90,10 @@ function copyToClipboard(text: string) {
           :class="{ 'insp-tab-active': activeTab === 'logs' }"
           @click="switchTab('logs')"
         >
-          <BaseIcon name="file-text" size="xs" /> Container Logs
+          <BaseIcon name="file-text" size="xs" /> {{ isDaemon ? 'Daemon Logs' : 'Container Logs' }}
         </button>
         <button
+          v-if="!isDaemon"
           type="button"
           class="insp-tab"
           :class="{ 'insp-tab-active': activeTab === 'strategy' }"
@@ -114,7 +115,7 @@ function copyToClipboard(text: string) {
           :class="{ 'insp-tab-active': activeTab === 'yaml' }"
           @click="switchTab('yaml')"
         >
-          YAML Manifest
+          {{ isDaemon ? 'Systemd Unit' : 'YAML Manifest' }}
         </button>
       </div>
 
@@ -233,12 +234,12 @@ function copyToClipboard(text: string) {
         </div>
       </div>
 
-      <!-- Tab 5: YAML Manifest -->
+      <!-- Tab 5: YAML Manifest / Systemd Unit -->
       <div v-else-if="activeTab === 'yaml'" class="insp-panel animate-fade-in">
         <div class="yaml-actions-bar">
-          <span class="yaml-title font-mono">Live Kubernetes Spec</span>
+          <span class="yaml-title font-mono">{{ isDaemon ? 'Systemd Unit Spec' : 'Live Kubernetes Spec' }}</span>
           <button type="button" class="btn btn-secondary btn-xs" @click="copyToClipboard(generateYamlManifest(app))">
-            <span><BaseIcon name="file-text" size="xs" /> Copy Manifest</span>
+            <span><BaseIcon name="file-text" size="xs" /> {{ isDaemon ? 'Copy Unit' : 'Copy Manifest' }}</span>
           </button>
         </div>
         <pre class="yaml-viewer font-mono">{{ generateYamlManifest(app) }}</pre>

@@ -20,12 +20,12 @@ const emit = defineEmits<{
 const tableRows = computed<AlertRuleRow[]>(() => props.rules as unknown as AlertRuleRow[])
 
 const ruleColumns: Column<AlertRuleRow>[] = [
-  { key: 'Name', label: 'Rule Name & Description', sortable: true, width: '28%' },
+  { key: 'Name', label: 'Rule Name & Description', sortable: true, width: '24%' },
   { key: 'MetricName', label: 'Prometheus Metric / PromQL', sortable: true, width: '24%' },
-  { key: 'Condition', label: 'Trigger Condition', sortable: true, width: '16%' },
-  { key: 'Severity', label: 'Severity', sortable: true, width: '10%' },
-  { key: 'Enabled', label: 'Status', sortable: true, width: '10%' },
-  { key: 'actions', label: 'Management', align: 'right', width: '12%' }
+  { key: 'Condition', label: 'Trigger Condition', sortable: true, width: '15%' },
+  { key: 'Severity', label: 'Severity', sortable: true, width: '9%' },
+  { key: 'Enabled', label: 'Status', sortable: true, width: '9%' },
+  { key: 'actions', label: 'Management', align: 'right', width: '19%' }
 ]
 </script>
 
@@ -44,7 +44,7 @@ const ruleColumns: Column<AlertRuleRow>[] = [
     </template>
 
     <template #cell-MetricName="{ value }">
-      <span class="font-mono text-cyan truncate block" :title="String(value)">{{ value }}</span>
+      <span class="font-mono text-cyan truncate block promql-cell" :title="String(value)">{{ value }}</span>
     </template>
 
     <template #cell-Condition="{ row }">
@@ -100,10 +100,18 @@ const ruleColumns: Column<AlertRuleRow>[] = [
   justify-content: flex-end;
   gap: 6px;
   white-space: nowrap;
+  min-width: 160px;
 }
 
 .rule-actions-cell button {
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.promql-cell {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
