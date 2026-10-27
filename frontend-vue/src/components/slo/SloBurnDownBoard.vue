@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import BaseIcon from '../ui/BaseIcon.vue'
 import ActionDropdown, { type ActionItem } from '../ui/ActionDropdown.vue'
-import type { EnrichedSLOItem, FleetReliabilityPulse } from '../../composables/useSLOMonitor'
-import type { SLODefinition, SLOSnapshot } from '../../api/compute'
+import type { EnrichedSLOItem, FleetReliabilityPulse, SLODefinition, SLOSnapshot } from '../../types/slo'
+import { formatBurnVelocityBadge } from '../../composables/useSLOMonitor'
 
 const props = defineProps<{
   items: EnrichedSLOItem[]
@@ -38,16 +38,15 @@ function formatIndicatorType(type: string): string {
 }
 
 function getBurnVelocityInfo(item: EnrichedSLOItem): { label: string; cls: string } {
-  if (item.isFastBurn || item.burn_rate >= 14.4) {
-    return { label: `${item.burn_rate.toFixed(1)}x Fast Burn`, cls: 'pill-burn-fast' }
-  }
-  if (item.burn_rate > 1.0) {
-    return { label: `${item.burn_rate.toFixed(1)}x Elevated`, cls: 'pill-burn-elevated' }
-  }
-  return { label: `${item.burn_rate.toFixed(1)}x Normal`, cls: 'pill-burn-normal' }
+  const isDown = item.isExhausted || item.error_budget <= 0 || item.actual === 0
+  const isUnmeasured = item.isUnmeasured || item.budget_status === 'unmeasured' || item.actual < 0
+  return formatBurnVelocityBadge(item.burn_rate, isDown, isUnmeasured)
 }
 
-function getSegmentClass(segIndex: number, errorBudget: number): string {
+function getSegmentClass(segIndex: number, errorBudget: number, item?: EnrichedSLOItem): string {
+  if (item?.isUnmeasured || item?.budget_status === 'unmeasured' || (item && item.actual < 0)) {
+    return 'seg-empty'
+  }
   const segThreshold = segIndex * 5
   if (errorBudget < segThreshold) return 'seg-empty'
   if (errorBudget >= 50) return 'seg-filled-online'
@@ -66,13 +65,13 @@ function getSegmentClass(segIndex: number, errorBudget: number): string {
             <BaseIcon name="activity" size="xs" class="pulse-icon text-online" />
             <span class="pulse-card-title">Avg Error Budget</span>
           </div>
-          <span class="pulse-badge font-mono" :class="pulse.avgBudgetRemainingPct >= 50 ? 'badge-online' : pulse.avgBudgetRemainingPct >= 20 ? 'badge-warning' : 'badge-offline'">
-            {{ pulse.avgBudgetRemainingPct.toFixed(1) }}%
+          <span class="pulse-badge font-mono" :class="(pulse.monitoredCount > 0 && pulse.monitoredCount === pulse.unmeasuredCount) ? 'badge-primary' : pulse.avgBudgetRemainingPct >= 50 ? 'badge-online' : pulse.avgBudgetRemainingPct >= 20 ? 'badge-warning' : 'badge-offline'">
+            {{ (pulse.monitoredCount > 0 && pulse.monitoredCount === pulse.unmeasuredCount) ? '--%' : `${pulse.avgBudgetRemainingPct.toFixed(1)}%` }}
           </span>
         </div>
         <div class="pulse-metric-row">
-          <span class="pulse-big-val font-mono">{{ pulse.avgBudgetRemainingPct.toFixed(1) }}%</span>
-          <span class="pulse-sub font-mono">Fleet Margin</span>
+          <span class="pulse-big-val font-mono">{{ (pulse.monitoredCount > 0 && pulse.monitoredCount === pulse.unmeasuredCount) ? '--' : `${pulse.avgBudgetRemainingPct.toFixed(1)}%` }}</span>
+          <span class="pulse-sub font-mono">{{ (pulse.monitoredCount > 0 && pulse.monitoredCount === pulse.unmeasuredCount) ? 'No Telemetry Samples' : 'Fleet Margin' }}</span>
         </div>
         <div class="pulse-gauge-track" aria-hidden="true">
           <div class="pulse-gauge-fill" :class="pulse.avgBudgetRemainingPct >= 50 ? 'fill-online' : pulse.avgBudgetRemainingPct >= 20 ? 'fill-warning' : 'fill-offline'" :style="{ width: `${Math.min(100, Math.max(0, pulse.avgBudgetRemainingPct))}%` }"></div>
@@ -121,7 +120,7 @@ function getSegmentClass(segIndex: number, errorBudget: number): string {
         </div>
         <div class="pulse-metric-row">
           <span class="pulse-big-val font-mono">{{ pulse.monitoredCount }}</span>
-          <span class="pulse-sub font-mono">{{ pulse.healthyCount }} Healthy · {{ pulse.warningCount }} Warn</span>
+          <span class="pulse-sub font-mono">{{ pulse.healthyCount }} Healthy · {{ pulse.warningCount }} Warn<template v-if="pulse.unmeasuredCount > 0"> · {{ pulse.unmeasuredCount }} Unmeasured</template></span>
         </div>
       </div>
     </div>
@@ -172,12 +171,18 @@ function getSegmentClass(segIndex: number, errorBudget: number): string {
           <div class="hero-sli-block">
             <span class="hero-label">CURRENT SLI</span>
             <div class="hero-val-line">
-              <span class="hero-sli-val font-mono" :class="item.actual >= item.target ? 'text-online' : 'text-offline'">
-                {{ item.actual.toFixed(2) }}%
-              </span>
-              <span class="hero-sli-target font-mono text-muted">
-                Target {{ item.target.toFixed(2) }}%
-              </span>
+              <template v-if="item.isUnmeasured || item.budget_status === 'unmeasured' || item.actual < 0">
+                <span class="hero-sli-val font-mono text-muted">--</span>
+                <span class="hero-sli-target font-mono text-muted">No Telemetry Samples</span>
+              </template>
+              <template v-else>
+                <span class="hero-sli-val font-mono" :class="item.actual >= item.target ? 'text-online' : 'text-offline'">
+                  {{ item.actual.toFixed(2) }}%
+                </span>
+                <span class="hero-sli-target font-mono text-muted">
+                  Target {{ item.target.toFixed(2) }}%
+                </span>
+              </template>
             </div>
           </div>
           <div class="hero-velocity-block">
@@ -191,16 +196,22 @@ function getSegmentClass(segIndex: number, errorBudget: number): string {
         <div class="card-budget-section">
           <div class="budget-header-line">
             <span class="budget-title">Error Budget Remaining</span>
-            <span class="budget-pct font-mono" :class="item.error_budget >= 50 ? 'text-online' : item.error_budget >= 20 ? 'text-warning' : 'text-offline'">
+            <span v-if="item.isUnmeasured || item.budget_status === 'unmeasured' || item.actual < 0" class="budget-pct font-mono text-muted">
+              --%
+            </span>
+            <span v-else-if="item.isExhausted || item.error_budget <= 0 || item.actual === 0" class="budget-pct font-mono text-offline">
+              0.0% (Exhausted)
+            </span>
+            <span v-else class="budget-pct font-mono" :class="item.error_budget >= 50 ? 'text-online' : item.error_budget >= 20 ? 'text-warning' : 'text-offline'">
               {{ item.error_budget.toFixed(1) }}%
             </span>
           </div>
-          <div class="segmented-track" role="progressbar" :aria-valuenow="item.error_budget" aria-valuemin="0" aria-valuemax="100" aria-label="Error Budget 20 Segment Meter">
+          <div class="segmented-track" role="progressbar" :aria-valuenow="item.isUnmeasured ? 0 : item.error_budget" aria-valuemin="0" aria-valuemax="100" aria-label="Error Budget 20 Segment Meter">
             <span
               v-for="seg in 20"
               :key="seg"
               class="meter-seg"
-              :class="getSegmentClass(seg, item.error_budget)"
+              :class="getSegmentClass(seg, item.error_budget, item)"
             ></span>
           </div>
           <div class="budget-ticks-line font-mono text-muted">

@@ -1,57 +1,38 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import {
-  sloApi, dockerApi, type SLODefinition, type SLOSnapshot,
-  type CreateSLOPayload, type UpdateSLOPayload
-} from '../api/compute'
+import { sloApi, dockerApi } from '../api/compute'
+import type {
+  SLODefinition,
+  SLOSnapshot,
+  CreateSLOPayload,
+  UpdateSLOPayload,
+  TimeWindowFilter,
+  ServiceOption,
+  LatencyPercentiles,
+  InspectSLOState,
+  BannerMessage,
+  SLOFormState,
+  EnrichedSLOItem,
+  FleetReliabilityPulse,
+} from '../types/slo'
 
-export type TimeWindowFilter = '1h' | '6h' | '24h' | '7d' | '30d'
-export interface ServiceOption { id: string; name: string; desc: string }
-export interface LatencyPercentiles { p50: number; p90: number; p99: number; p999: number }
-export interface InspectSLOState { def?: SLODefinition; snap?: SLOSnapshot }
-export interface BannerMessage { type: 'success' | 'warning' | 'error'; text: string }
-
-export interface SLOFormState {
-  id?: string
-  selectedService: string
-  customServiceName: string
-  indicator_type: 'availability' | 'latency' | 'error_rate' | 'cache_hit_rate' | string
-  target: number
-  window: string
-  query: string
-  alert_threshold: number
-  target_latency_p99_ms?: number
-}
-
-export interface EnrichedSLOItem {
-  id: string
-  service: string
-  target: number
-  actual: number
-  error_budget: number
-  burn_rate: number
-  alert_threshold: number
-  budget_status: 'healthy' | 'warning' | 'critical' | string
-  indicator_type: string
-  window: string
-  query: string
-  isFastBurn: boolean
-  isExhausted: boolean
-  def: SLODefinition
-  snap?: SLOSnapshot
-}
-
-export interface FleetReliabilityPulse {
-  monitoredCount: number
-  healthyCount: number
-  warningCount: number
-  criticalCount: number
-  fastBurnCount: number
-  exhaustedCount: number
-  avgBudgetRemainingPct: number
+export type {
+  TimeWindowFilter,
+  ServiceOption,
+  LatencyPercentiles,
+  InspectSLOState,
+  BannerMessage,
+  SLOFormState,
+  EnrichedSLOItem,
+  FleetReliabilityPulse,
+  SLODefinition,
+  SLOSnapshot,
+  CreateSLOPayload,
+  UpdateSLOPayload,
 }
 
 // Error budget calculations & burn rate velocity
 export function calculateErrorBudget(target: number, actual: number): number {
+  if (actual <= 0) return 0
   const targetErrorRate = (100 - target) / 100
   if (targetErrorRate <= 0) return 100
   const actualErrorRate = Math.max(0, (100 - actual) / 100)
@@ -82,8 +63,22 @@ export function formatLatencyMetric(val?: number): string {
 
 export function formatPercent(val?: number): string {
   if (val === undefined || val === null || isNaN(val)) return '0.00%'
+  if (val < 0) return '--'
   const pct = val > 1 ? val : val * 100
   return `${pct.toFixed(2)}%`
+}
+
+export function formatBurnVelocityBadge(
+  burnRate: number,
+  isExhausted: boolean,
+  isUnmeasured: boolean
+): { label: string; cls: string } {
+  if (isUnmeasured) return { label: 'Unmeasured', cls: 'pill-burn-unmeasured' }
+  const rateLabel = burnRate >= 100 ? `${Math.round(burnRate)}x Burn` : `${burnRate.toFixed(1)}x Burn`
+  if (isExhausted) return { label: rateLabel, cls: 'pill-burn-exhausted' }
+  if (burnRate >= 14.4) return { label: burnRate >= 100 ? rateLabel : `${burnRate.toFixed(1)}x Fast Burn`, cls: 'pill-burn-fast' }
+  if (burnRate > 1.0) return { label: burnRate >= 100 ? rateLabel : `${burnRate.toFixed(1)}x Elevated`, cls: 'pill-burn-elevated' }
+  return { label: `${burnRate.toFixed(1)}x Normal`, cls: 'pill-burn-normal' }
 }
 
 export function getEffectiveBurnRate(rawRate?: number): number {
@@ -104,14 +99,24 @@ export function getBudgetBarWidth(budget?: number): number {
 export function enrichSLOItem(def: SLODefinition, snap?: SLOSnapshot): EnrichedSLOItem {
   const target = def.target > 1 ? def.target : Number((def.target * 100).toFixed(2))
   const alertThreshold = def.alert_threshold && def.alert_threshold > 0 ? def.alert_threshold : 1.5
-  let actual = target, burnRate = 1.0, budgetStatus = 'healthy', errorBudget = 100
+  const isUnmeasured = !snap || snap.budget_status === 'unmeasured' || (typeof snap.actual === 'number' && snap.actual < 0)
 
+  if (isUnmeasured) {
+    const rawBurn = snap && typeof snap.burn_rate === 'number' && !isNaN(snap.burn_rate) ? snap.burn_rate : 0
+    return {
+      id: def.id, service: def.service, target, actual: -1, error_budget: 0,
+      burn_rate: rawBurn, alert_threshold: alertThreshold, budget_status: 'unmeasured',
+      indicator_type: def.indicator_type || 'availability', window: def.window || '30d',
+      query: def.query || '', isFastBurn: false, isExhausted: false, isUnmeasured: true, def, snap,
+    }
+  }
+
+  let actual = target, burnRate = 1.0, budgetStatus = snap?.budget_status || 'healthy', errorBudget = 100
   if (snap) {
     if (typeof snap.actual === 'number' && !isNaN(snap.actual)) {
-      actual = snap.actual > 1 ? snap.actual : Number((snap.actual * 100).toFixed(2))
+      actual = snap.actual > 1 ? snap.actual : (snap.actual === 0 ? 0 : Number((snap.actual * 100).toFixed(2)))
     }
     if (typeof snap.burn_rate === 'number' && !isNaN(snap.burn_rate)) burnRate = snap.burn_rate
-    if (snap.budget_status) budgetStatus = snap.budget_status
     if (typeof snap.error_budget === 'number' && !isNaN(snap.error_budget)) {
       errorBudget = Math.max(0, Math.min(100, snap.error_budget))
     } else {
@@ -120,24 +125,32 @@ export function enrichSLOItem(def: SLODefinition, snap?: SLOSnapshot): EnrichedS
   }
 
   const isFastBurn = burnRate >= alertThreshold
-  const isExhausted = errorBudget <= 0
-  if ((isFastBurn || isExhausted) && budgetStatus === 'healthy') {
-    budgetStatus = isExhausted ? 'critical' : 'warning'
+  const isExhausted = actual === 0 || errorBudget <= 0 || budgetStatus === 'exhausted' || budgetStatus === 'critical'
+  if (isExhausted) {
+    budgetStatus = 'critical'
+    errorBudget = 0
+  } else if (isFastBurn && budgetStatus === 'healthy') {
+    budgetStatus = 'warning'
   }
 
   return {
-    id: def.id, service: def.service, target, actual,
-    error_budget: errorBudget, burn_rate: burnRate, alert_threshold: alertThreshold,
-    budget_status: budgetStatus, indicator_type: def.indicator_type || 'availability',
-    window: def.window || '30d', query: def.query || '',
-    isFastBurn, isExhausted, def, snap,
+    id: def.id, service: def.service, target, actual, error_budget: errorBudget,
+    burn_rate: burnRate, alert_threshold: alertThreshold, budget_status: budgetStatus,
+    indicator_type: def.indicator_type || 'availability', window: def.window || '30d',
+    query: def.query || '', isFastBurn, isExhausted, isUnmeasured: false, def, snap,
   }
 }
 
 export function sortSLOsByUrgency(items: EnrichedSLOItem[]): EnrichedSLOItem[] {
   return [...items].sort((a, b) => {
-    const rankA = (a.isExhausted || a.isFastBurn || a.budget_status === 'critical') ? 0 : a.budget_status === 'warning' ? 1 : 2
-    const rankB = (b.isExhausted || b.isFastBurn || b.budget_status === 'critical') ? 0 : b.budget_status === 'warning' ? 1 : 2
+    const getRank = (item: EnrichedSLOItem) => {
+      if (item.isExhausted || item.isFastBurn || item.budget_status === 'critical') return 0
+      if (item.budget_status === 'warning') return 1
+      if (item.isUnmeasured || item.budget_status === 'unmeasured') return 3
+      return 2
+    }
+    const rankA = getRank(a)
+    const rankB = getRank(b)
     if (rankA !== rankB) return rankA - rankB
     if (b.burn_rate !== a.burn_rate) return b.burn_rate - a.burn_rate
     if (a.error_budget !== b.error_budget) return a.error_budget - b.error_budget
@@ -146,21 +159,51 @@ export function sortSLOsByUrgency(items: EnrichedSLOItem[]): EnrichedSLOItem[] {
 }
 
 export function enrichAndSortSLOs(definitions: SLODefinition[], snapshots: SLOSnapshot[]): EnrichedSLOItem[] {
-  return sortSLOsByUrgency(definitions.map(def => enrichSLOItem(def, snapshots.find(s => s.slo_id === def.id || s.service === def.service))))
+  return sortSLOsByUrgency(
+    definitions.map(def => enrichSLOItem(def, snapshots.find(s => s.slo_id === def.id || s.service === def.service)))
+  )
 }
 
 export function deriveFleetPulse(items: EnrichedSLOItem[]): FleetReliabilityPulse {
   const monitoredCount = items.length
   if (monitoredCount === 0) {
-    return { monitoredCount: 0, healthyCount: 0, warningCount: 0, criticalCount: 0, fastBurnCount: 0, exhaustedCount: 0, avgBudgetRemainingPct: 100 }
+    return {
+      monitoredCount: 0,
+      healthyCount: 0,
+      warningCount: 0,
+      criticalCount: 0,
+      fastBurnCount: 0,
+      exhaustedCount: 0,
+      unmeasuredCount: 0,
+      avgBudgetRemainingPct: 100,
+    }
   }
-  const healthyCount = items.filter(s => s.budget_status === 'healthy' && !s.isFastBurn && !s.isExhausted).length
-  const warningCount = items.filter(s => s.budget_status === 'warning' && !s.isExhausted).length
-  const criticalCount = items.filter(s => s.budget_status === 'critical' || s.isExhausted).length
-  const fastBurnCount = items.filter(s => s.isFastBurn).length
-  const exhaustedCount = items.filter(s => s.isExhausted).length
-  const totalBudget = items.reduce((acc, s) => acc + s.error_budget, 0)
-  return { monitoredCount, healthyCount, warningCount, criticalCount, fastBurnCount, exhaustedCount, avgBudgetRemainingPct: Number((totalBudget / monitoredCount).toFixed(1)) }
+
+  const measuredItems = items.filter(s => !s.isUnmeasured && s.budget_status !== 'unmeasured' && s.actual >= 0)
+  const unmeasuredCount = items.length - measuredItems.length
+
+  const healthyCount = measuredItems.filter(s => s.budget_status === 'healthy' && !s.isFastBurn && !s.isExhausted).length
+  const warningCount = measuredItems.filter(s => s.budget_status === 'warning' && !s.isExhausted).length
+  const criticalCount = measuredItems.filter(s => s.budget_status === 'critical' || s.isExhausted).length
+  const fastBurnCount = measuredItems.filter(s => s.isFastBurn).length
+  const exhaustedCount = measuredItems.filter(s => s.isExhausted || s.error_budget <= 0).length
+
+  let avgBudgetRemainingPct = 0
+  if (measuredItems.length > 0) {
+    const totalBudget = measuredItems.reduce((acc, s) => acc + s.error_budget, 0)
+    avgBudgetRemainingPct = Number((totalBudget / measuredItems.length).toFixed(1))
+  }
+
+  return {
+    monitoredCount,
+    healthyCount,
+    warningCount,
+    criticalCount,
+    fastBurnCount,
+    exhaustedCount,
+    unmeasuredCount,
+    avgBudgetRemainingPct,
+  }
 }
 
 export function useSLOMonitor() {
@@ -196,15 +239,9 @@ export function useSLOMonitor() {
   })
 
   function getPromQLTemplate(service: string, indicator: string): string {
-    if (indicator === 'latency') {
-      return `histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service="${service}"}[5m])) by (le)) * 1000 < 100`
-    }
-    if (indicator === 'cache_hit_rate') {
-      return 'sum(rate(redis_keyspace_hits_total[5m])) / (sum(rate(redis_keyspace_hits_total[5m])) + sum(rate(redis_keyspace_hits_total[5m]))) * 100'
-    }
-    if (indicator === 'error_rate') {
-      return `(1 - sum(rate(http_requests_total{service="${service}",status=~"5.."}[5m])) / sum(rate(http_requests_total{service="${service}"}[5m]))) * 100`
-    }
+    if (indicator === 'latency') return `histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{service="${service}"}[5m])) by (le)) * 1000 < 100`
+    if (indicator === 'cache_hit_rate') return 'sum(rate(redis_keyspace_hits_total[5m])) / (sum(rate(redis_keyspace_hits_total[5m])) + sum(rate(redis_keyspace_hits_total[5m]))) * 100'
+    if (indicator === 'error_rate') return `(1 - sum(rate(http_requests_total{service="${service}",status=~"5.."}[5m])) / sum(rate(http_requests_total{service="${service}"}[5m]))) * 100`
     return `sum(rate(http_requests_total{service="${service}",status=~"2..|3.."}[5m])) / sum(rate(http_requests_total{service="${service}"}[5m])) * 100`
   }
 
@@ -445,7 +482,7 @@ export function useSLOMonitor() {
     enrichedSortedSLOs, fleetPulse, activeBurnAlerts, avgBurnRate, avgBurnRateNum,
     fetchSLOData, fetchRealServices, setWindowFilter,
     calculateErrorBudget, calculateBurnRateVelocity, getTargetLatencyPercentiles,
-    formatLatencyMetric, formatPercent, getEffectiveBurnRate, getBurnRateColor,
+    formatLatencyMetric, formatPercent, formatBurnVelocityBadge, getEffectiveBurnRate, getBurnRateColor,
     getBudgetBarWidth, formatDate, getSnapshotForDef, getDefForSnapshot,
     openCreateModal, closeCreateModal, openInspect, closeInspect,
     handleSaveSLO, handleCreateSLO, handleTriggerAlert, handleDeleteSLO,

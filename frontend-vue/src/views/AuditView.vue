@@ -208,7 +208,7 @@ const {
   modalMode,
   filteredViolations,
   fetchComplianceData,
-  triggerScan,
+  triggerComplianceScan,
   selectFramework,
   getSelectedFrameworkName,
   inspectControl,
@@ -305,27 +305,34 @@ async function handleRemediateViolation(violation: ComplianceViolation) {
 }
 
 async function handleTriggerScan() {
-  await triggerScan()
-  await Promise.allSettled([loadFindings(), fetchLogs()])
-  statusMessage.value = { type: 'success', text: 'Compliance and vulnerability scan completed.' }
+  try {
+    await triggerComplianceScan()
+    await Promise.all([
+      fetchComplianceData(),
+      loadFindings(),
+      fetchLogs(),
+    ])
+    const avgScore = frameworks.value.length > 0
+      ? (frameworks.value.reduce((acc, f) => acc + f.score, 0) / frameworks.value.length).toFixed(1)
+      : '100'
+    const openFindings = openFindingsCount.value
+    const openViolations = violations.value.filter(v => !v.resolved).length
+    statusMessage.value = {
+      type: 'success',
+      text: `Live compliance scan evaluated: Frameworks at ${avgScore}%, ${openViolations} active violation(s), ${openFindings} open container CVE(s).`,
+    }
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : 'Scan execution failed'
+    statusMessage.value = { type: 'error', text: `Compliance scan failed: ${errorMsg}` }
+  }
 }
 
 async function refreshAll() {
-  await Promise.allSettled([
-    fetchComplianceData(),
-    loadFindings(),
-    fetchLogs(),
-  ])
+  await Promise.allSettled([fetchComplianceData(), loadFindings(), fetchLogs()])
 }
 
 onMounted(async () => {
-  await Promise.allSettled([
-    fetchComplianceData(),
-    loadFindings(),
-    fetchLogs(),
-  ])
-  if (frameworks.value.length > 0 || violations.value.length > 0) {
-    activeTab.value = 'compliance'
-  }
+  await Promise.allSettled([fetchComplianceData(), loadFindings(), fetchLogs()])
+  if (frameworks.value.length > 0 || violations.value.length > 0) activeTab.value = 'compliance'
 })
 </script>

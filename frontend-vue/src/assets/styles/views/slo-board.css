@@ -141,29 +141,10 @@
   border-radius: 9999px;
 }
 
-.badge-online {
-  background: var(--color-status-online-bg);
-  border: 1px solid var(--color-status-online-border);
-  color: var(--color-status-online);
-}
-
-.badge-warning {
-  background: var(--color-status-warning-bg);
-  border: 1px solid var(--color-status-warning-border);
-  color: var(--color-status-warning);
-}
-
-.badge-offline {
-  background: var(--color-status-offline-bg);
-  border: 1px solid var(--color-status-offline-border);
-  color: var(--color-status-offline);
-}
-
-.badge-primary {
-  background: rgba(50, 108, 229, 0.15);
-  border: 1px solid rgba(50, 108, 229, 0.35);
-  color: #58a6ff;
-}
+.badge-online { background: var(--color-status-online-bg); border: 1px solid var(--color-status-online-border); color: var(--color-status-online); }
+.badge-warning { background: var(--color-status-warning-bg); border: 1px solid var(--color-status-warning-border); color: var(--color-status-warning); }
+.badge-offline { background: var(--color-status-offline-bg); border: 1px solid var(--color-status-offline-border); color: var(--color-status-offline); }
+.badge-primary { background: var(--color-status-online-bg); border: 1px solid var(--color-border-subtle); color: var(--color-endpoint-syntax, var(--text-primary)); }
 
 .fill-online { background: var(--color-status-online); }
 .fill-warning { background: var(--color-status-warning); }
@@ -245,6 +226,10 @@
   box-shadow: 0 0 8px var(--color-status-offline);
   animation: pulse-ring 1.8s infinite;
 }
+.dot-unmeasured {
+  background: var(--text-muted);
+  box-shadow: none;
+}
 
 @keyframes pulse-ring {
   0% { opacity: 1; transform: scale(1); }
@@ -273,9 +258,9 @@
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 4px;
-  background: rgba(50, 108, 229, 0.12);
-  border: 1px solid rgba(50, 108, 229, 0.3);
-  color: #58a6ff;
+  background: var(--color-status-online-bg);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-endpoint-syntax, var(--text-primary));
   letter-spacing: 0.03em;
 }
 
@@ -351,6 +336,16 @@
 }
 
 .pill-burn-fast {
+  background: var(--color-status-offline-bg);
+  border: 1px solid var(--color-status-offline-border);
+  color: var(--color-status-offline);
+}
+.pill-burn-unmeasured {
+  background: var(--bg-elevated);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--text-muted);
+}
+.pill-burn-exhausted {
   background: var(--color-status-offline-bg);
   border: 1px solid var(--color-status-offline-border);
   color: var(--color-status-offline);
@@ -473,24 +468,21 @@
   text-align: center;
   gap: 10px;
 }
-
 .empty-icon-wrap {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: rgba(50, 108, 229, 0.12);
+  background: var(--color-status-online-bg);
   display: flex;
   align-items: center;
   justify-content: center;
 }
-
 .empty-headline {
   font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
 }
-
 .empty-explanation {
   font-size: 12.5px;
   color: var(--text-secondary);
