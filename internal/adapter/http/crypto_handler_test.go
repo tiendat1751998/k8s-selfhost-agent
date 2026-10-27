@@ -22,6 +22,7 @@ import (
 
 	adapterhttp "github.com/datdt/k8sselfhost/internal/adapter/http"
 	domaincrypto "github.com/datdt/k8sselfhost/internal/domain/crypto"
+	"github.com/datdt/k8sselfhost/internal/domain/settings"
 	usecasecrypto "github.com/datdt/k8sselfhost/internal/usecase/crypto"
 )
 
@@ -281,6 +282,138 @@ func TestCryptoHandler_KMSKeyManagementRoutes(t *testing.T) {
 	r.ServeHTTP(recVer, reqVer)
 	if recVer.Code != http.StatusOK {
 		t.Fatalf("expected 200 on verify kms key, got %d: %s", recVer.Code, recVer.Body.String())
+	}
+
+	// 4. GET /api/v1/security/kms/status (Honest provider status)
+	reqStatus := httptest.NewRequest(http.MethodGet, "/api/v1/security/kms/status", nil)
+	recStatus := httptest.NewRecorder()
+	r.ServeHTTP(recStatus, reqStatus)
+	if recStatus.Code != http.StatusOK {
+		t.Fatalf("expected 200 on get kms status, got %d: %s", recStatus.Code, recStatus.Body.String())
+	}
+	var statusResp adapterhttp.KMSStatusResponse
+	if err := json.Unmarshal(recStatus.Body.Bytes(), &statusResp); err != nil {
+		t.Fatalf("failed to decode kms status response: %v", err)
+	}
+	if statusResp.Provider != "local-aes256-gcm" {
+		t.Errorf("expected provider 'local-aes256-gcm', got %q", statusResp.Provider)
+	}
+	if statusResp.HardwareBacked {
+		t.Errorf("expected hardware_backed=false, got true")
+	}
+	if statusResp.Mode != "envelope-aes-256-gcm" {
+		t.Errorf("expected mode 'envelope-aes-256-gcm', got %q", statusResp.Mode)
+	}
+
+	// 5. GET /api/v1/security/kms/keys
+	reqKeys := httptest.NewRequest(http.MethodGet, "/api/v1/security/kms/keys", nil)
+	recKeys := httptest.NewRecorder()
+	r.ServeHTTP(recKeys, reqKeys)
+	if recKeys.Code != http.StatusOK {
+		t.Fatalf("expected 200 on get kms keys, got %d: %s", recKeys.Code, recKeys.Body.String())
+	}
+	var keysResp adapterhttp.KMSKeysResponse
+	if err := json.Unmarshal(recKeys.Body.Bytes(), &keysResp); err != nil {
+		t.Fatalf("failed to decode kms keys response: %v", err)
+	}
+	if len(keysResp.Keys) == 0 {
+		t.Errorf("expected at least 1 key in keys response")
+	}
+}
+
+type mockKMSMemorySettingsRepo struct {
+	settings map[string]string // key -> value
+}
+
+func (m *mockKMSMemorySettingsRepo) GetByCategory(ctx context.Context, tenantID, category string) ([]settings.Setting, error) {
+	return nil, nil
+}
+func (m *mockKMSMemorySettingsRepo) GetByKey(ctx context.Context, tenantID, category, key string) (*settings.Setting, error) {
+	if v, ok := m.settings[key]; ok {
+		return &settings.Setting{Key: key, Value: v, Category: category, TenantID: tenantID}, nil
+	}
+	return nil, nil
+}
+func (m *mockKMSMemorySettingsRepo) Upsert(ctx context.Context, s *settings.Setting) error {
+	if m.settings == nil {
+		m.settings = make(map[string]string)
+	}
+	m.settings[s.Key] = s.Value
+	return nil
+}
+func (m *mockKMSMemorySettingsRepo) BulkUpsert(ctx context.Context, items []settings.Setting) error {
+	for _, it := range items {
+		_ = m.Upsert(ctx, &it)
+	}
+	return nil
+}
+func (m *mockKMSMemorySettingsRepo) GetAll(ctx context.Context, tenantID string) ([]settings.Setting, error) {
+	return nil, nil
+}
+func (m *mockKMSMemorySettingsRepo) FindAPIKeyByHash(ctx context.Context, tokenHash string) (*settings.Setting, error) {
+	return nil, nil
+}
+
+func TestKMS_HonestProviderStatus_VaultEnv(t *testing.T) {
+	t.Setenv("VAULT_ADDR", "https://vault.internal.net:8200")
+	manager := usecasecrypto.NewShieldManager(usecasecrypto.ShieldManagerOptions{})
+	handler := adapterhttp.NewCryptoHandler(manager)
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/security/kms/status", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp adapterhttp.KMSStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode: %v", err)
+	}
+	if resp.Provider != "hashicorp-vault" {
+		t.Errorf("expected provider 'hashicorp-vault' when VAULT_ADDR is set, got %q", resp.Provider)
+	}
+	if resp.HardwareBacked {
+		t.Errorf("expected hardware_backed=false, got true")
+	}
+}
+
+func TestKMS_MetadataPersistenceAcrossRestart(t *testing.T) {
+	memRepo := &mockKMSMemorySettingsRepo{settings: make(map[string]string)}
+
+	// 1. First run: Default KMS client initialized with settingsRepo
+	kms1 := adapterhttp.NewDefaultKMSClient()
+	kms1.SetSettingsRepo(memRepo)
+
+	// Rotate key -> version increments from 1 to 2
+	resp, err := kms1.RotateKey(context.Background())
+	if err != nil {
+		t.Fatalf("RotateKey failed: %v", err)
+	}
+	if resp.Version != 2 {
+		t.Fatalf("expected version 2, got %d", resp.Version)
+	}
+
+	// Verify that setting was saved to platform_settings without raw key material
+	savedMetaJSON, ok := memRepo.settings["security.kms_metadata"]
+	if !ok || savedMetaJSON == "" {
+		t.Fatalf("expected security.kms_metadata to be saved in settings")
+	}
+	if bytes.Contains([]byte(savedMetaJSON), []byte("raw_key")) || bytes.Contains([]byte(savedMetaJSON), []byte("production-secure")) {
+		t.Fatalf("CRITICAL SECURITY VIOLATION: raw key material leaked into metadata JSON: %s", savedMetaJSON)
+	}
+
+	// 2. Second run: server restart simulated by initializing a fresh DefaultKMSClient with the same settingsRepo
+	kms2 := adapterhttp.NewDefaultKMSClient()
+	kms2.SetSettingsRepo(memRepo)
+
+	details, err := kms2.GetKey(context.Background())
+	if err != nil {
+		t.Fatalf("GetKey on resumed kms client failed: %v", err)
+	}
+	if details.Version != 2 {
+		t.Errorf("expected resumed KMS client to load version 2 from settings, got %d", details.Version)
 	}
 }
 

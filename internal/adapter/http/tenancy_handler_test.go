@@ -18,6 +18,7 @@ type mockTenancyRepo struct {
 	projects []tenancy.Project
 	members  []tenancy.Member
 	rbac     map[string]map[string]bool
+	quotas   map[string]map[string]interface{}
 }
 
 func newMockTenancyRepo() *mockTenancyRepo {
@@ -34,6 +35,7 @@ func newMockTenancyRepo() *mockTenancyRepo {
 		rbac: map[string]map[string]bool{
 			"Admin": {"pods:read": true},
 		},
+		quotas: make(map[string]map[string]interface{}),
 	}
 }
 
@@ -58,9 +60,63 @@ func (m *mockTenancyRepo) CreateOrganization(ctx context.Context, org tenancy.Or
 	return nil
 }
 
+func (m *mockTenancyRepo) DeleteOrganization(ctx context.Context, id string) error {
+	var remaining []tenancy.Organization
+	for _, o := range m.orgs {
+		if o.ID != id {
+			remaining = append(remaining, o)
+		}
+	}
+	m.orgs = remaining
+	return nil
+}
+
 func (m *mockTenancyRepo) CreateProject(ctx context.Context, proj tenancy.Project) error {
 	m.projects = append(m.projects, proj)
 	return nil
+}
+
+func (m *mockTenancyRepo) CreateMember(ctx context.Context, member tenancy.Member) error {
+	m.members = append(m.members, member)
+	return nil
+}
+
+func (m *mockTenancyRepo) UpdateMemberRole(ctx context.Context, id string, role string) error {
+	for i := range m.members {
+		if m.members[i].ID == id {
+			m.members[i].Role = role
+			return nil
+		}
+	}
+	return nil
+}
+
+func (m *mockTenancyRepo) DeleteMember(ctx context.Context, id string) error {
+	var remaining []tenancy.Member
+	for _, mem := range m.members {
+		if mem.ID != id {
+			remaining = append(remaining, mem)
+		}
+	}
+	m.members = remaining
+	return nil
+}
+
+func (m *mockTenancyRepo) UpdateRBAC(ctx context.Context, rbac map[string]map[string]bool) error {
+	m.rbac = rbac
+	return nil
+}
+
+func (m *mockTenancyRepo) UpdateQuota(ctx context.Context, orgID string, quota map[string]interface{}) error {
+	m.quotas[orgID] = quota
+	return nil
+}
+
+func (m *mockTenancyRepo) GetQuota(ctx context.Context, orgID string) (map[string]interface{}, error) {
+	if q, ok := m.quotas[orgID]; ok {
+		return q, nil
+	}
+	return make(map[string]interface{}), nil
 }
 
 func TestTenancyHandler_MissingRoutes(t *testing.T) {
@@ -95,6 +151,16 @@ func TestTenancyHandler_MissingRoutes(t *testing.T) {
 		t.Fatalf("expected 2 members, got %d", len(members))
 	}
 
+	// 2b. PUT /tenancy/members/{id}/role
+	rolePayload := `{"role":"Developer"}`
+	req = httptest.NewRequest(http.MethodPut, "/tenancy/members/mem-2/role", bytes.NewBufferString(rolePayload))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for PUT /tenancy/members/mem-2/role, got %d: %s", rr.Code, rr.Body.String())
+	}
+
 	// 3. DELETE /tenancy/members/{id}
 	req = httptest.NewRequest(http.MethodDelete, "/tenancy/members/mem-2", nil)
 	rr = httptest.NewRecorder()
@@ -123,6 +189,14 @@ func TestTenancyHandler_MissingRoutes(t *testing.T) {
 		t.Fatalf("expected 200 for PUT /tenancy/organizations/org-1/quota, got %d: %s", rr.Code, rr.Body.String())
 	}
 
+	// 5b. GET /tenancy/organizations/{id}/quota
+	req = httptest.NewRequest(http.MethodGet, "/tenancy/organizations/org-1/quota", nil)
+	rr = httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 for GET quota, got %d: %s", rr.Code, rr.Body.String())
+	}
+
 	// 6. DELETE /tenancy/organizations/{id}
 	req = httptest.NewRequest(http.MethodDelete, "/tenancy/organizations/org-1", nil)
 	rr = httptest.NewRecorder()
@@ -144,5 +218,35 @@ func TestTenancyHandler_MissingRoutes(t *testing.T) {
 	}
 	if len(orgs) != 0 {
 		t.Fatalf("expected 0 orgs after delete, got %d", len(orgs))
+	}
+}
+
+func TestTenancyHandler_FallbackWhenNilRepo(t *testing.T) {
+	handler := NewTenancyHandler(nil)
+	r := chi.NewRouter()
+	r.Route("/tenancy", handler.RegisterRoutes)
+
+	req := httptest.NewRequest(http.MethodGet, "/tenancy/organizations", nil)
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 with nil repo fallback, got %d", rr.Code)
+	}
+
+	// Create and delete member in fallback
+	memPayload := `{"id":"mem-fb","orgId":"default-tenant","user":"alice","role":"admin","scope":"all"}`
+	req = httptest.NewRequest(http.MethodPost, "/tenancy/members", bytes.NewBufferString(memPayload))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201 created in fallback, got %d", rr.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/tenancy/members/mem-fb", nil)
+	rr = httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 deleted in fallback, got %d", rr.Code)
 	}
 }
