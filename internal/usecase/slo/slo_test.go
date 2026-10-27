@@ -431,4 +431,32 @@ func TestSLOCollector_MultiTargetFleetProbing(t *testing.T) {
 	}
 }
 
+func TestSLOSnapshotUpdater_BurnRateClampedToNumericMax(t *testing.T) {
+	repoMock := newMockObsRepo()
+	repoMock.defs = []observability.SLODefinition{
+		{ID: "def-high-burn", Service: "down-service", Target: 99.99, Window: "30d"},
+	}
+	// 1 sample, unhealthy -> actual SLI = 0.0 -> raw burn rate is (100-0)/(100-99.99) = 100/0.01 = 10000.0
+	_ = repoMock.RecordHealthSample(context.Background(), "", "down-service", 1, 0, false, nil)
+
+	updater := NewSLOSnapshotUpdater(repoMock, zap.NewNop())
+	updater.UpdateOnce(context.Background())
+
+	snap := repoMock.snaps["def-high-burn"]
+	if snap == nil {
+		t.Fatal("expected snapshot to be created")
+	}
+	if snap.Actual != 0.0 {
+		t.Errorf("expected actual 0.0, got %v", snap.Actual)
+	}
+	if snap.BurnRate != 999.99 {
+		t.Errorf("expected burn rate clamped to 999.99, got %v", snap.BurnRate)
+	}
+	if snap.BudgetStatus != "critical" {
+		t.Errorf("expected budget status critical, got %s", snap.BudgetStatus)
+	}
+}
+
+
+
 

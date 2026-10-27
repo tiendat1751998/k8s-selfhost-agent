@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -273,6 +274,19 @@ func (r *observabilityRepo) GetSLOSnapshotBySLOID(ctx context.Context, sloID str
 	return &s, nil
 }
 
+func clampSLOSnapshot(s *observability.SLOSnapshot) {
+	if s == nil {
+		return
+	}
+	s.Actual = math.Round(math.Max(-1.0, math.Min(100.0, s.Actual))*1000) / 1000
+	s.BurnRate = math.Round(math.Max(0.0, math.Min(999.99, s.BurnRate))*100) / 100
+	s.ErrorBudget = math.Round(math.Max(0.0, math.Min(100.0, s.ErrorBudget))*100) / 100
+}
+
+func (r *observabilityRepo) SaveSLOSnapshot(ctx context.Context, s *observability.SLOSnapshot) error {
+	return r.CreateSLOSnapshot(ctx, s)
+}
+
 func (r *observabilityRepo) CreateSLOSnapshot(ctx context.Context, s *observability.SLOSnapshot) error {
 	ctx = withValidTenantUUID(ctx)
 	if s.ID == "" {
@@ -281,6 +295,7 @@ func (r *observabilityRepo) CreateSLOSnapshot(ctx context.Context, s *observabil
 	if s.RecordedAt.IsZero() {
 		s.RecordedAt = time.Now().UTC()
 	}
+	clampSLOSnapshot(s)
 
 	tenantID := parseTenantUUID(tenancy.TenantIDFromContext(ctx))
 
@@ -308,6 +323,7 @@ func (r *observabilityRepo) CreateSLOSnapshot(ctx context.Context, s *observabil
 func (r *observabilityRepo) UpdateSLOSnapshot(ctx context.Context, s *observability.SLOSnapshot) error {
 	ctx = withValidTenantUUID(ctx)
 	s.RecordedAt = time.Now().UTC()
+	clampSLOSnapshot(s)
 	query := `
 		UPDATE slo_snapshots 
 		SET actual = $1, burn_rate = $2, error_budget = $3, budget_status = $4, recorded_at = $5 

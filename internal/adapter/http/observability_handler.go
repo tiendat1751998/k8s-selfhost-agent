@@ -246,28 +246,45 @@ func (h *ObservabilityHandler) TriggerBurnAlert(w http.ResponseWriter, r *http.R
 	if target <= 0 {
 		target = 99.9
 	}
-	allowedUnhealthy := 100.0 - target
-	if allowedUnhealthy <= 0 {
-		allowedUnhealthy = 0.01
-	}
-	unhealthyActual := 100.0 - actualSLI
-	if unhealthyActual < 0 {
-		unhealthyActual = 0
-	}
-	burnRate := unhealthyActual / allowedUnhealthy
-	errorBudget := (1.0 - (unhealthyActual / allowedUnhealthy)) * 100.0
-	if errorBudget < 0 {
-		errorBudget = 0
-	}
-	if errorBudget > 100 {
-		errorBudget = 100
-	}
+	var burnRate float64
+	var errorBudget float64
+	var budgetStatus string
 
-	budgetStatus := "healthy"
-	if burnRate > 2.0 {
-		budgetStatus = "critical"
-	} else if burnRate > 1.0 {
-		budgetStatus = "warning"
+	if actualSLI < 0 {
+		actualSLI = -1.0
+		burnRate = 0.0
+		errorBudget = 0.0
+		budgetStatus = "unmeasured"
+	} else {
+		allowedUnhealthy := 100.0 - target
+		if allowedUnhealthy <= 0 {
+			allowedUnhealthy = 0.01
+		}
+		unhealthyActual := 100.0 - actualSLI
+		if unhealthyActual < 0 {
+			unhealthyActual = 0
+		}
+		burnRate = unhealthyActual / allowedUnhealthy
+		if burnRate > 999.99 {
+			burnRate = 999.99
+		}
+		if burnRate < 0 {
+			burnRate = 0
+		}
+		errorBudget = (1.0 - (unhealthyActual / allowedUnhealthy)) * 100.0
+		if errorBudget < 0 {
+			errorBudget = 0
+		}
+		if errorBudget > 100 {
+			errorBudget = 100
+		}
+
+		budgetStatus = "healthy"
+		if burnRate > 2.0 {
+			budgetStatus = "critical"
+		} else if burnRate > 1.0 {
+			budgetStatus = "warning"
+		}
 	}
 
 	snap, err := h.repo.GetSLOSnapshotBySLOID(r.Context(), id)

@@ -1,13 +1,19 @@
 package postgres
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -216,3 +222,179 @@ func TestObservabilityRepo_RecordHealthSample_NormalizesDefaultTenant(t *testing
 	require.Len(t, lastArgs, 7)
 	assert.Equal(t, "00000000-0000-0000-0000-000000000000", lastArgs[1], "RecordHealthSample must normalize 'default-tenant' to nil UUID")
 }
+
+func TestObservabilityRepo_CreateAndUpdateSLOSnapshot_ClampsBurnRateToNumericMax(t *testing.T) {
+	mock := &mockObservabilityDBTX{}
+	repo := NewObservabilityRepo(mock)
+
+	// Create with out-of-bounds burn rate (e.g. 10000.0)
+	snap := &observability.SLOSnapshot{
+		Service:      "test-down-service",
+		Actual:       0.0,
+		BurnRate:     10000.0,
+		ErrorBudget:  -10.0,
+		BudgetStatus: "critical",
+	}
+	err := repo.CreateSLOSnapshot(context.Background(), snap)
+	require.NoError(t, err)
+	require.NotEmpty(t, mock.args)
+	lastArgs := mock.args[len(mock.args)-1]
+	require.Len(t, lastArgs, 10)
+	// $6 is burn_rate, $7 is error_budget
+	assert.Equal(t, 999.99, lastArgs[5], "CreateSLOSnapshot must clamp burn_rate to 999.99")
+	assert.Equal(t, 0.0, lastArgs[6], "CreateSLOSnapshot must clamp error_budget >= 0.0")
+
+	// Update with out-of-bounds burn rate
+	snap.BurnRate = 2000.0
+	err = repo.UpdateSLOSnapshot(context.Background(), snap)
+	require.NoError(t, err)
+	lastArgs = mock.args[len(mock.args)-1]
+	require.Len(t, lastArgs, 6)
+	// UPDATE slo_snapshots SET actual = $1, burn_rate = $2, error_budget = $3, ...
+	assert.Equal(t, 999.99, lastArgs[1], "UpdateSLOSnapshot must clamp burn_rate to 999.99")
+}
+
+func getLiveObservabilityPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	// Read .env if direct env vars are empty (never log or print secrets)
+	if os.Getenv("POSTGRES_PASSWORD") == "" && os.Getenv("K8S_POSTGRES_PASSWORD") == "" {
+		if f, err := os.Open(`d:\project\k8sseflhost\.env`); err == nil {
+			scanner := bufio.NewScanner(f)
+			for scanner.Scan() {
+				line := strings.TrimSpace(scanner.Text())
+				if line == "" || strings.HasPrefix(line, "#") {
+					continue
+				}
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) == 2 {
+					k := strings.TrimSpace(parts[0])
+					v := strings.Trim(strings.TrimSpace(parts[1]), `"'`)
+					if os.Getenv(k) == "" {
+						os.Setenv(k, v)
+					}
+				}
+			}
+			f.Close()
+		}
+	}
+
+	host := os.Getenv("K8S_POSTGRES_HOST")
+	if host == "" {
+		host = "10.10.10.133"
+	}
+	port := os.Getenv("K8S_POSTGRES_PORT")
+	if port == "" {
+		port = "5432"
+	}
+	user := os.Getenv("K8S_POSTGRES_USER")
+	if user == "" {
+		user = "myuser"
+	}
+	pass := os.Getenv("POSTGRES_PASSWORD")
+	if pass == "" {
+		pass = os.Getenv("K8S_POSTGRES_PASSWORD")
+	}
+	if pass == "" {
+		t.Skip("Skipping live database test: POSTGRES_PASSWORD not set")
+		return nil
+	}
+	dbname := os.Getenv("K8S_POSTGRES_DBNAME")
+	if dbname == "" {
+		dbname = "mydatabase"
+	}
+
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", user, pass, host, port, dbname)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Skipf("Skipping live database test: unable to connect: %v", err)
+		return nil
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		t.Skipf("Skipping live database test: unable to ping: %v", err)
+		return nil
+	}
+	return pool
+}
+
+func TestObservabilityRepo_LiveDB_SaveDownAndUnmeasuredSnapshot(t *testing.T) {
+	pool := getLiveObservabilityPool(t)
+	if pool == nil {
+		return
+	}
+	defer pool.Close()
+
+	repo := NewObservabilityRepo(pool)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	testSLOID := uuid.NewString()
+	testSnapID1 := uuid.NewString()
+	testSnapID2 := uuid.NewString()
+
+	// Clean up any test rows on defer
+	defer func() {
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanCancel()
+		_, _ = pool.Exec(cleanCtx, "DELETE FROM slo_snapshots WHERE id IN ($1, $2) OR slo_id = $3", testSnapID1, testSnapID2, testSLOID)
+		_, _ = pool.Exec(cleanCtx, "DELETE FROM slo_definitions WHERE id = $1", testSLOID)
+	}()
+
+	// Create test SLO definition
+	testDef := &observability.SLODefinition{
+		ID:             testSLOID,
+		Service:        "test-down-service-" + testSLOID[:8],
+		Target:         99.99,
+		IndicatorType:  "availability",
+		Window:         "30d",
+		AlertThreshold: 1.0,
+	}
+	err := repo.CreateSLODefinition(ctx, testDef)
+	require.NoError(t, err, "failed to create test SLO definition")
+
+	// 1. Down Service Snapshot: Actual: 0.0, BurnRate: 10000.0 (clamps to 999.99), BudgetStatus: "critical"
+	downSnap := &observability.SLOSnapshot{
+		ID:           testSnapID1,
+		SLOID:        testSLOID,
+		Service:      testDef.Service,
+		Target:       testDef.Target,
+		Actual:       0.0,
+		BurnRate:     10000.0, // Out-of-bounds -> must clamp to 999.99 without SQLSTATE 22003
+		ErrorBudget:  0.0,
+		BudgetStatus: "critical",
+	}
+	err = repo.CreateSLOSnapshot(ctx, downSnap)
+	require.NoError(t, err, "saving down snapshot with high burn rate must succeed without SQLSTATE 22003")
+
+	// Verify it was persisted and read back
+	savedDown, err := repo.GetSLOSnapshotBySLOID(ctx, testSLOID)
+	require.NoError(t, err)
+	require.NotNil(t, savedDown)
+	assert.Equal(t, 0.0, savedDown.Actual)
+	assert.Equal(t, 999.99, savedDown.BurnRate, "burn_rate in PostgreSQL must be clamped to 999.99")
+	assert.Equal(t, "critical", savedDown.BudgetStatus)
+
+	// 2. Unmeasured Service Snapshot: Actual: -1.0, BurnRate: 0.0, BudgetStatus: "unmeasured"
+	unmeasuredSnap := &observability.SLOSnapshot{
+		ID:           testSnapID2,
+		SLOID:        testSLOID,
+		Service:      testDef.Service,
+		Target:       testDef.Target,
+		Actual:       -1.0, // Sentinel value for 0 samples
+		BurnRate:     0.0,
+		ErrorBudget:  0.0,
+		BudgetStatus: "unmeasured",
+	}
+	err = repo.CreateSLOSnapshot(ctx, unmeasuredSnap)
+	require.NoError(t, err, "saving unmeasured snapshot with -1.0 actual must succeed without SQLSTATE 22003")
+
+	// 3. Update existing snapshot with out-of-bounds burn rate
+	savedDown.BurnRate = 2000.0
+	err = repo.UpdateSLOSnapshot(ctx, savedDown)
+	require.NoError(t, err, "updating snapshot with out-of-bounds burn rate must succeed without SQLSTATE 22003")
+}
+
+

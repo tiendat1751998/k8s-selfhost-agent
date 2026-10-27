@@ -136,6 +136,12 @@ func (u *SLOSnapshotUpdater) UpdateOnce(ctx context.Context) {
 				unhealthyActual = 0
 			}
 			burnRate = math.Round((unhealthyActual/allowedUnhealthy)*100) / 100
+			if burnRate > 999.99 {
+				burnRate = 999.99
+			}
+			if burnRate < 0 {
+				burnRate = 0
+			}
 			errorBudget = math.Round(((1.0-(unhealthyActual/allowedUnhealthy))*100.0)*10) / 10
 			if errorBudget < 0 {
 				errorBudget = 0
