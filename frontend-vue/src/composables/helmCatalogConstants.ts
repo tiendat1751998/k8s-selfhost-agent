@@ -136,14 +136,42 @@ export function filterReleases(releases: HelmRelease[], filter: string, search: 
 
 export function filterCharts(charts: HelmChart[], repoFilter: string, tagFilter: string): HelmChart[] {
   let list = [...charts]
-  if (repoFilter !== 'all') list = list.filter(c => c.repo === repoFilter)
+  if (repoFilter !== 'all') list = list.filter(c => c.repo.toLowerCase() === repoFilter.toLowerCase())
   if (tagFilter !== 'all') {
     const tag = tagFilter.toLowerCase()
-    list = list.filter(c =>
-      (c.name || '').toLowerCase().includes(tag) ||
-      (c.description || '').toLowerCase().includes(tag) ||
-      (c.keywords || []).some(k => k.toLowerCase().includes(tag))
-    )
+    list = list.filter(c => {
+      const name = (c.name || '').toLowerCase()
+      const desc = (c.description || '').toLowerCase()
+      const kws = (c.keywords || []).map(k => k.toLowerCase())
+      const repo = (c.repo || '').toLowerCase()
+
+      if (tag === 'database') {
+        const dbKeywords = ['database', 'sql', 'postgres', 'mysql', 'mariadb', 'redis', 'mongo', 'memcached', 'cockroach', 'cassandra', 'db']
+        return dbKeywords.some(k => name.includes(k) || desc.includes(k) || kws.includes(k))
+      }
+      if (tag === 'networking') {
+        const netKeywords = ['network', 'ingress', 'mesh', 'traefik', 'nginx', 'cilium', 'istio', 'gateway', 'envoy', 'dns', 'metallb']
+        return netKeywords.some(k => name.includes(k) || desc.includes(k) || kws.includes(k))
+      }
+      if (tag === 'monitoring') {
+        const monKeywords = ['monitor', 'prom', 'grafana', 'loki', 'telemetry', 'metric', 'alert', 'trace', 'jaeger', 'tempo', 'thanos']
+        return monKeywords.some(k => name.includes(k) || desc.includes(k) || kws.includes(k))
+      }
+      if (tag === 'security') {
+        const secKeywords = ['security', 'auth', 'cert', 'vault', 'keycloak', 'policy', 'gatekeeper', 'trivy', 'falco', 'sealed-secrets', 'kyverno']
+        return secKeywords.some(k => name.includes(k) || desc.includes(k) || kws.includes(k))
+      }
+      if (tag === 'storage') {
+        const storKeywords = ['storage', 'backup', 'nfs', 'csi', 'volume', 'velero', 'minio', 'rook', 'ceph', 'longhorn']
+        return storKeywords.some(k => name.includes(k) || desc.includes(k) || kws.includes(k))
+      }
+      if (tag === 'web') {
+        const webKeywords = ['web', 'api', 'http', 'frontend', 'app', 'node', 'ui', 'server', 'wordpress', 'ghost']
+        return webKeywords.some(k => name.includes(k) || desc.includes(k) || kws.includes(k))
+      }
+
+      return name.includes(tag) || desc.includes(tag) || kws.includes(tag) || repo.includes(tag)
+    })
   }
   return list
 }

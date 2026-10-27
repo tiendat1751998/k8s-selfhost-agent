@@ -18,6 +18,7 @@ defineProps<{
     loadingDefaultValues: boolean
   }
   installing: boolean
+  installError?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -179,6 +180,11 @@ const emit = defineEmits<{
               <span class="summary-val font-mono text-gold">v{{ installForm.version }}</span>
             </div>
           </div>
+        </div>
+
+        <div v-if="installError" class="install-error-banner font-mono" role="alert">
+          <BaseIcon name="alert-triangle" size="xs" />
+          <span>{{ installError }}</span>
         </div>
 
         <div class="modal-footer-actions">

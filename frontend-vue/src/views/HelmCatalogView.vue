@@ -20,7 +20,7 @@ const {
   showRollbackModal, rollbackTarget, rollbackRevision, rollbackHistoryList, loadingRollbackHistory, rollingBack,
   showUninstallModal, uninstallTarget, uninstalling,
   charts, chartSearch, selectedRepoFilter, selectedCategoryTag, loadingCharts,
-  showInstallModal, selectedChartForInstall, installStep, installForm, installing,
+  showInstallModal, selectedChartForInstall, installStep, installForm, installing, installError,
   repos, loadingRepos, showAddRepoModal, addRepoForm, addingRepo, updatingAllRepos, showRemoveRepoModal, repoToRemove, removingRepo,
   repoPresets, categoryTags,
   totalReleasesCount, deployedRate, filteredReleases, filteredCharts,
@@ -273,6 +273,7 @@ const filteredRepos = computed(() => {
       :install-step="installStep"
       :install-form="installForm"
       :installing="installing"
+      :install-error="installError"
       @close="showInstallModal = false"
       @step-change="installStep = $event"
       @reset-values="selectedChartForInstall && openInstallWizard(selectedChartForInstall)"

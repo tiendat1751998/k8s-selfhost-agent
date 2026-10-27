@@ -58,6 +58,10 @@ function handleBootstrapped() {
             <StatusBadge :status="cluster.health_status || cluster.status || 'unknown'" size="sm" />
           </div>
 
+          <div v-if="cluster.health_status === 'degraded'" class="degraded-notice font-mono">
+            <BaseIcon name="alert-triangle" size="xs" /> Control Plane :6443 unreachable · Host agents reporting
+          </div>
+
           <div class="meta-grid font-mono">
             <div class="meta-item">
               <span class="meta-lbl">K8s Version:</span>
@@ -65,7 +69,7 @@ function handleBootstrapped() {
             </div>
             <div class="meta-item">
               <span class="meta-lbl">Active Nodes:</span>
-              <span class="meta-val text-emerald">{{ cluster.nodes ?? 1 }} Nodes</span>
+              <span class="meta-val text-emerald">{{ cluster.nodes ?? (cluster as any).node_count ?? 1 }} Nodes</span>
             </div>
             <div class="meta-item">
               <span class="meta-lbl">Tier / Group:</span>
@@ -126,4 +130,17 @@ function handleBootstrapped() {
 
 <style scoped>
 @import '../../assets/styles/views/fleet.css';
+
+.degraded-notice {
+  margin: var(--spacing-sm, 8px) 0;
+  padding: 8px 12px;
+  background: var(--color-warning-subtle, rgba(245, 158, 11, 0.12));
+  border: 1px solid var(--color-warning, #f59e0b);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--color-warning, #f59e0b);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 </style>

@@ -17,6 +17,16 @@ export interface ApiPostClient {
   post<T = unknown>(endpoint: string, data?: unknown): Promise<T>
 }
 
+export interface RemediationResponse {
+  success?: boolean
+  violation_id?: string
+  status?: 'remediated' | 'manual_action_required' | 'pending' | 'failed' | string
+  automated?: boolean
+  summary?: string
+  commands?: string[]
+  message?: string
+}
+
 export const complianceApi = {
   async getFrameworks(): Promise<ComplianceFramework[]> {
     const res = await api.get<ApiResponse<ComplianceFramework[]>>('/compliance/frameworks')
@@ -34,7 +44,7 @@ export const complianceApi = {
   },
 
   remediateViolation: (id: string) =>
-    api.post<{ success: boolean; message?: string }>(`/compliance/violations/${id}/remediate`, {}),
+    api.post<RemediationResponse>(`/compliance/violations/${id}/remediate`, {}),
 
   async triggerScan(customClient?: ApiPostClient): Promise<ComplianceScanResult> {
     const client = customClient || api

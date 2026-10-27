@@ -21,19 +21,31 @@ const menuPos = ref({ top: 0, left: 0, width: 230 })
 
 const currentCluster = computed(() => {
   return availableClusters.value.find(c => c.id === activeClusterId.value) || {
-    id: activeClusterId.value || 'local', name: activeClusterId.value || 'local', status: 'healthy'
+    id: activeClusterId.value || 'local',
+    name: activeClusterId.value || 'local',
+    status: 'unknown',
+    health_status: 'unknown',
   }
 })
 
-function getClusterDotClass(status?: string): string {
-  const s = (status || '').toLowerCase()
-  if (['healthy', 'ready', 'active', 'online', 'ok', 'running'].includes(s)) return 'dot-emerald'
+function getClusterDotClass(status?: string, healthStatus?: string): string {
+  const hs = (healthStatus || '').toLowerCase().trim()
+  const s = (status || '').toLowerCase().trim()
+
+  if (['degraded', 'warning', 'pending', 'elevated'].includes(hs)) return 'dot-amber dot-pulse'
+  if (['offline', 'disconnected', 'unhealthy', 'error', 'failed', 'critical', 'down'].includes(hs)) return 'dot-rose'
+  if (hs === 'unknown') return 'dot-slate'
+
   if (['degraded', 'warning', 'pending', 'elevated'].includes(s)) return 'dot-amber dot-pulse'
-  if (['offline', 'failed', 'critical', 'down', 'error'].includes(s)) return 'dot-rose'
+  if (['offline', 'failed', 'critical', 'down', 'error', 'disconnected', 'unhealthy'].includes(s)) return 'dot-rose'
+
+  if (['healthy', 'ready', 'active', 'online', 'ok', 'running', 'connected'].includes(hs)) return 'dot-emerald'
+  if (['healthy', 'ready', 'active', 'online', 'ok', 'running', 'connected'].includes(s)) return 'dot-emerald'
+
   return 'dot-slate'
 }
 
-const clusterStatusDotClass = computed(() => getClusterDotClass(currentCluster.value.status))
+const clusterStatusDotClass = computed(() => getClusterDotClass(currentCluster.value.status, currentCluster.value.health_status))
 
 const activeNamespaceDisplay = computed(() => (!activeNamespace.value || activeNamespace.value === 'all') ? 'All Namespaces' : activeNamespace.value)
 
@@ -185,7 +197,7 @@ onUnmounted(() => {
               role="option" :aria-selected="c.id === activeClusterId" @mouseenter="focusedIndex = idx" @click="selectCluster(c.id)"
             >
               <div class="item-main">
-                <span class="status-dot" :class="getClusterDotClass(c.status)" />
+                <span class="status-dot" :class="getClusterDotClass(c.status, c.health_status)" />
                 <span class="item-name font-mono">{{ c.name || c.id }}</span>
               </div>
               <span v-if="c.region" class="item-region">{{ c.region }}</span>

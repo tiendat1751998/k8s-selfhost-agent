@@ -8,7 +8,7 @@ export interface RunbookStep {
   content: string;
   command?: string;
   dependencies?: string[];
-  status: 'idle' | 'running' | 'completed' | 'failed' | 'skipped';
+  status: 'idle' | 'running' | 'completed' | 'succeeded' | 'degraded' | 'failed' | 'skipped';
   durationMs?: number;
   output?: string;
   error?: string;
@@ -148,6 +148,7 @@ export function useRunbooks() {
   const executingRunbook = ref<Runbook | null>(null)
   const activeExecution = ref<RunbookExecutionRecord | null>(null)
   const executingId = ref<string | null>(null)
+  const activeSteps = ref<RunbookStep[]>([])
   const completedSteps = ref<Set<number>>(new Set())
 
   const showCreateModal = ref(false)
@@ -176,6 +177,7 @@ export function useRunbooks() {
       runbooks.value = res.data || []
       if (runbooks.value.length > 0 && (!selectedRunbook.value || !runbooks.value.some(r => r.id === selectedRunbook.value?.id))) {
         selectedRunbook.value = runbooks.value[0]
+        activeSteps.value = parseRunbookSteps(selectedRunbook.value.content, selectedRunbook.value.title)
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to load runbooks'
@@ -219,9 +221,18 @@ export function useRunbooks() {
 
 
 
+  function selectRunbook(rb: Runbook) {
+    selectedRunbook.value = rb
+    activeSteps.value = parseRunbookSteps(rb.content, rb.title)
+    completedSteps.value = new Set()
+  }
+
   const parsedSteps = computed<RunbookStep[]>(() => {
     if (!selectedRunbook.value) return []
-    return parseRunbookSteps(selectedRunbook.value.content, selectedRunbook.value.title)
+    if (activeSteps.value.length === 0) {
+      activeSteps.value = parseRunbookSteps(selectedRunbook.value.content, selectedRunbook.value.title)
+    }
+    return activeSteps.value
   })
 
   const parameterSchemas = computed<RunbookParam[]>(() => {
@@ -242,8 +253,7 @@ export function useRunbooks() {
   })
 
   function openInspectDrawer(rb: Runbook) {
-    selectedRunbook.value = rb
-    completedSteps.value = new Set()
+    selectRunbook(rb)
     showExecutionDrawer.value = true
     executionLogs.value = [
       `[${new Date().toLocaleTimeString()}] [INFO] Loaded runbook: ${rb.title} (${rb.steps_count || 3} steps)`,
@@ -296,6 +306,27 @@ export function useRunbooks() {
       const now = new Date().toISOString()
       rb.last_used_at = res.executed_at || now
 
+      const responseSteps = (res as { steps?: Array<{ step_num?: number; status?: string; output?: string; duration_ms?: number }> }).steps
+      if (Array.isArray(responseSteps) && responseSteps.length > 0) {
+        responseSteps.forEach(s => {
+          const idx = s.step_num !== undefined ? (s.step_num - 1) : -1
+          if (idx >= 0 && idx < activeSteps.value.length) {
+            const st = activeSteps.value[idx]
+            st.status = s.status === 'degraded' ? 'degraded' : (s.status === 'failed' ? 'failed' : 'succeeded')
+            if (s.output) st.output = s.output
+            if (s.duration_ms) st.durationMs = s.duration_ms
+            if (st.status === 'succeeded') completedSteps.value.add(idx)
+          }
+        })
+      } else {
+        activeSteps.value.forEach((st, idx) => {
+          st.status = 'succeeded'
+          st.durationMs = Math.round(elapsedMs / (activeSteps.value.length || 1))
+          st.output = `Executed via playbook dispatch (200 OK)`
+          completedSteps.value.add(idx)
+        })
+      }
+
       const execRecord: RunbookExecutionRecord = {
         id: `exec-${Date.now().toString(36)}`,
         runbookId: rb.id,
@@ -307,15 +338,16 @@ export function useRunbooks() {
         status: 'completed',
         startedAt: now,
         completedAt: new Date().toISOString(),
+        durationMs: elapsedMs,
         executedBy: rb.author || 'Operator',
         summary: res.message || `${isDry ? '[DRY-RUN] ' : ''}Runbook "${rb.title}" execution completed successfully.`,
         logs: [
           `[${new Date().toLocaleTimeString()}] [INIT] Initiating ${isDry ? 'DRY-RUN' : 'LIVE'} execution for "${rb.title}"`,
           `[${new Date().toLocaleTimeString()}] [TARGET] Cluster: ${options.target?.cluster || 'production-01'} | Namespace: ${options.target?.namespace || 'default'}`,
-          `[${new Date().toLocaleTimeString()}] [EXEC] Dispatched ${rb.steps_count || 3} procedure steps. Done in ${elapsedMs}ms.`,
-          `[${new Date().toLocaleTimeString()}] [OUTPUT] ${res.message || 'All steps exited with code 0.'}`,
+          `[${new Date().toLocaleTimeString()}] [EXEC] Dispatched ${rb.steps_count || 3} procedure steps in ${elapsedMs}ms.`,
+          `[${new Date().toLocaleTimeString()}] [OUTPUT] ${res.message || 'All steps completed.'}`,
         ],
-        steps: parseRunbookSteps(rb.content, rb.title).map(s => ({ ...s, status: 'completed' })),
+        steps: activeSteps.value.slice(),
       }
 
       activeExecution.value = execRecord
@@ -339,32 +371,31 @@ export function useRunbooks() {
   async function executeSingleStep(step: RunbookStep, idx?: number) {
     const stepIdx = idx !== undefined ? idx : (step.stepNum - 1)
     step.status = 'running'
-    executionLogs.value.push(
-      `[${new Date().toLocaleTimeString()}] [EXEC] Executing Step ${stepIdx + 1}: ${step.title}`,
-    )
-    if (step.command) {
-      executionLogs.value.push(`[${new Date().toLocaleTimeString()}] [CMD] $ ${step.command}`)
-    }
+    const startTime = Date.now()
+    executionLogs.value.push(`[${new Date().toLocaleTimeString()}] [EXEC] Executing Step ${stepIdx + 1}: ${step.title}`)
+    if (step.command) executionLogs.value.push(`[${new Date().toLocaleTimeString()}] [CMD] $ ${step.command}`)
     try {
       const rbId = selectedRunbook.value?.id || executingRunbook.value?.id || 'default'
       const res = await runbookApi.executeStep(rbId, stepIdx)
-      step.status = res.success !== false ? 'completed' : 'failed'
-      if (step.status === 'completed') {
+      const durationMs = Date.now() - startTime
+      step.durationMs = durationMs
+      const isDegraded = res.status === 'degraded'
+      const isSuccess = res.success !== false && res.status !== 'failed'
+      step.status = isDegraded ? 'degraded' : (isSuccess ? 'succeeded' : 'failed')
+      step.output = res.output || (isSuccess ? `Step ${stepIdx + 1} completed successfully in ${durationMs}ms.` : `Step execution failed.`)
+      if (step.status === 'succeeded') {
         completedSteps.value.add(stepIdx)
-        executionLogs.value.push(
-          `[${new Date().toLocaleTimeString()}] [VERIFIED] Step ${stepIdx + 1} completed: ${res.output || 'OK'}`,
-        )
+        executionLogs.value.push(`[${new Date().toLocaleTimeString()}] [SUCCEEDED] Step ${stepIdx + 1} (${durationMs}ms): ${step.output}`)
       } else {
-        executionLogs.value.push(
-          `[${new Date().toLocaleTimeString()}] [FAILED] Step ${stepIdx + 1} execution failed: ${res.output || 'Unknown error'}`,
-        )
+        executionLogs.value.push(`[${new Date().toLocaleTimeString()}] [${step.status.toUpperCase()}] Step ${stepIdx + 1}: ${step.output}`)
       }
     } catch (err: unknown) {
+      step.durationMs = Date.now() - startTime
       step.status = 'failed'
       const msg = err instanceof Error ? err.message : 'Execution error'
-      executionLogs.value.push(
-        `[${new Date().toLocaleTimeString()}] [ERROR] Step ${stepIdx + 1} failed: ${msg}`,
-      )
+      step.error = msg
+      step.output = `Error executing step: ${msg}`
+      executionLogs.value.push(`[${new Date().toLocaleTimeString()}] [ERROR] Step ${stepIdx + 1} failed: ${msg}`)
     }
   }
 
@@ -438,48 +469,15 @@ export function useRunbooks() {
   }
 
   return {
-    runbooks,
-    loading,
-    error,
-    statusMessage,
-    activeCategory,
-    searchQuery,
-    viewMode,
-    selectedRunbook,
-    executingRunbook,
-    activeExecution,
-    executingId,
-    completedSteps,
-    showCreateModal,
-    showEditModal,
-    showExecuteModal,
-    showExecutionDrawer,
-    editingRunbook,
-    executionHistory,
-    executionLogs,
-    tagInput,
-    newRunbook,
-    categoryList,
-    categoriesCount,
-    totalStepsCount,
-    filteredRunbooks,
-    parsedSteps,
-    parameterSchemas,
-    fetchRunbooks,
-    selectCategory,
-    openInspectDrawer,
-    openExecuteModal,
-    openEditModal,
-    toggleStep,
-    markAllStepsComplete,
-    handleExecuteRunbook,
-    executeSingleStep,
-    handleCreateRunbook,
-    handleUpdateRunbook,
-    handleDeleteRunbook,
-    copyCommand,
-    getCategoryIcon,
-    formatDate,
-    dismissStatus,
+    runbooks, loading, error, statusMessage, activeCategory, searchQuery, viewMode,
+    selectedRunbook, executingRunbook, activeExecution, executingId,
+    activeSteps, completedSteps,
+    showCreateModal, showEditModal, showExecuteModal, showExecutionDrawer, editingRunbook,
+    executionHistory, executionLogs, tagInput, newRunbook,
+    categoryList, categoriesCount, totalStepsCount, filteredRunbooks, parsedSteps, parameterSchemas,
+    fetchRunbooks, selectCategory, selectRunbook, openInspectDrawer, openExecuteModal, openEditModal,
+    toggleStep, markAllStepsComplete, handleExecuteRunbook, executeSingleStep,
+    handleCreateRunbook, handleUpdateRunbook, handleDeleteRunbook,
+    copyCommand, getCategoryIcon, formatDate, dismissStatus,
   }
 }
