@@ -221,7 +221,7 @@ export function useCompliance() {
     auditStatus.value = 'running'
     error.value = null
     try {
-      await auditApi.triggerRun()
+      await complianceApi.triggerScan()
       await fetchComplianceData()
       auditStatus.value = 'completed'
     } catch (err: unknown) {
@@ -231,6 +231,9 @@ export function useCompliance() {
       isScanning.value = false
     }
   }
+
+  const triggerComplianceScan = triggerScan
+
 
   function matchesStandard(fwNameOrTag: string, standard: ComplianceStandard): boolean {
     if (standard === 'ALL') return true
@@ -425,6 +428,7 @@ export function useCompliance() {
     filteredViolations,
     fetchComplianceData,
     triggerScan,
+    triggerComplianceScan,
     selectFramework,
     selectStandard,
     getSelectedFrameworkName,

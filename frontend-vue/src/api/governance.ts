@@ -111,22 +111,8 @@ export interface ComplianceViolationsResponse {
   total: number
 }
 
-export const complianceApi = {
-  async getFrameworks(): Promise<ComplianceFramework[]> {
-    const res = await api.get<ApiResponse<ComplianceFramework[]>>('/compliance/frameworks')
-    return res.data || []
-  },
-  async getViolations(severity?: string, limit: number = 50, offset: number = 0): Promise<ComplianceViolationsResponse> {
-    const params: Record<string, string | number> = { limit, offset }
-    if (severity && severity !== 'ALL') params.severity = severity
-    const res = await api.get<ComplianceViolationsResponse>('/compliance/violations', params)
-    return {
-      data: res.data || [],
-      total: res.total ?? (res.data ? res.data.length : 0),
-    }
-  },
-  remediateViolation: (id: string) => api.post<{ success: boolean; message?: string }>(`/compliance/violations/${id}/remediate`, {}),
-}
+export { complianceApi } from './compliance'
+
 
 // 3. GITOPS DRIFT DETECTION & RECONCILIATION
 export interface DriftRecord {

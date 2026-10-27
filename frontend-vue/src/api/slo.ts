@@ -4,47 +4,20 @@ import { api, type ApiResponse } from './client'
 // Observability & SLO Interfaces
 // ==========================================
 
-export interface SLODefinition {
-  id: string
-  service: string
-  target: number
-  indicator_type: 'availability' | 'latency' | 'error_rate' | 'cache_hit_rate' | string
-  window: string
-  query?: string
-  alert_threshold?: number
-  created_at: string
-  updated_at?: string
+import type {
+  SLODefinition,
+  SLOSnapshot,
+  CreateSLOPayload,
+  UpdateSLOPayload,
+} from '../types/slo'
+
+export type {
+  SLODefinition,
+  SLOSnapshot,
+  CreateSLOPayload,
+  UpdateSLOPayload,
 }
 
-export interface SLOSnapshot {
-  id: string
-  slo_id: string
-  service: string
-  target: number
-  actual: number
-  burn_rate: number
-  error_budget: number
-  budget_status: 'healthy' | 'warning' | 'critical' | string
-  recorded_at: string
-}
-
-export interface CreateSLOPayload {
-  service: string
-  target: number
-  indicator_type: string
-  window: string
-  query?: string
-  alert_threshold?: number
-}
-
-export interface UpdateSLOPayload {
-  service?: string
-  target?: number
-  indicator_type?: string
-  window?: string
-  query?: string
-  alert_threshold?: number
-}
 
 // ==========================================
 // API Clients Export

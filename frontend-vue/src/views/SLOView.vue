@@ -8,39 +8,17 @@ import SloMobileCards from '../components/slo/SloMobileCards.vue'
 import SloCreateModal from '../components/slo/SloCreateModal.vue'
 import SloInspectModal from '../components/slo/SloInspectModal.vue'
 import { useSLOMonitor, type TimeWindowFilter } from '../composables/useSLOMonitor'
-import type { SLODefinition, SLOSnapshot } from '../api/compute'
+import type { SLODefinition, SLOSnapshot } from '../types/slo'
 
 const {
-  loading,
-  actionInProgress,
-  error,
-  bannerMessage,
-  definitions,
-  snapshots,
-  selectedWindowFilter,
-  viewMode,
-  showCreateModal,
-  showInspectModal,
-  selectedInspectSLO,
-  realServices,
-  totalSLOs,
-  healthySLOs,
-  activeBurnAlerts,
-  enrichedSortedSLOs,
-  fleetPulse,
-  fetchSLOData,
-  setWindowFilter,
-  formatPercent,
-  getEffectiveBurnRate,
-  getBurnRateColor,
-  getBudgetBarWidth,
-  getSnapshotForDef,
-  openCreateModal,
-  openInspect,
-  handleCreateSLO,
-  handleTriggerAlert,
-  handleDeleteSLO,
+  loading, actionInProgress, error, bannerMessage, definitions, snapshots,
+  selectedWindowFilter, viewMode, showCreateModal, showInspectModal, selectedInspectSLO,
+  realServices, totalSLOs, healthySLOs, activeBurnAlerts, enrichedSortedSLOs,
+  fleetPulse, fetchSLOData, setWindowFilter, formatPercent, getEffectiveBurnRate,
+  getBurnRateColor, getBudgetBarWidth, getSnapshotForDef, openCreateModal,
+  openInspect, handleCreateSLO, handleTriggerAlert, handleDeleteSLO,
 } = useSLOMonitor()
+
 
 // Datadog/Grafana-style Time Range Dropdown State & Options
 const isTimeRangeOpen = ref(false)
@@ -60,88 +38,44 @@ const timeRangeOptions: TimeRangeOption[] = [
   { key: '30d', label: 'Last 30 Days', icon: 'calendar' },
 ]
 
-const activeTimeRangeLabel = computed(() => {
-  const found = timeRangeOptions.find(o => o.key === selectedWindowFilter.value)
-  return found ? found.label : 'Last 30 Days'
-})
-
-function selectTimeRange(key: TimeWindowFilter) {
-  setWindowFilter(key)
-  isTimeRangeOpen.value = false
-}
-
+const activeTimeRangeLabel = computed(() => timeRangeOptions.find(o => o.key === selectedWindowFilter.value)?.label || 'Last 30 Days')
+function selectTimeRange(key: TimeWindowFilter) { setWindowFilter(key); isTimeRangeOpen.value = false }
 function handleTimeDropdownClickOutside(e: MouseEvent) {
-  if (timeDropdownRef.value && !timeDropdownRef.value.contains(e.target as Node)) {
-    isTimeRangeOpen.value = false
-  }
+  if (timeDropdownRef.value && !timeDropdownRef.value.contains(e.target as Node)) isTimeRangeOpen.value = false
 }
-
-onMounted(() => {
-  document.addEventListener('click', handleTimeDropdownClickOutside)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleTimeDropdownClickOutside)
-})
+onMounted(() => document.addEventListener('click', handleTimeDropdownClickOutside))
+onUnmounted(() => document.removeEventListener('click', handleTimeDropdownClickOutside))
 
 const mobileWindowPills = [
-  { key: '1h' as const, short: '1h' },
-  { key: '6h' as const, short: '6h' },
-  { key: '24h' as const, short: '24h' },
-  { key: '7d' as const, short: '7d' },
-  { key: '30d' as const, short: '30d' },
+  { key: '1h' as const, short: '1h' }, { key: '6h' as const, short: '6h' },
+  { key: '24h' as const, short: '24h' }, { key: '7d' as const, short: '7d' }, { key: '30d' as const, short: '30d' },
 ]
 
-// Search and Filter State
 const searchQuery = ref('')
 const showMobileSearch = ref(false)
 
-// Filtered enriched sorted SLOs for board
 const filteredSortedSLOs = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return enrichedSortedSLOs.value
-  return enrichedSortedSLOs.value.filter(s =>
-    s.service.toLowerCase().includes(q) ||
-    (s.indicator_type && s.indicator_type.toLowerCase().includes(q))
-  )
+  return enrichedSortedSLOs.value.filter(s => s.service.toLowerCase().includes(q) || (s.indicator_type && s.indicator_type.toLowerCase().includes(q)))
 })
 
-// Filtered definitions based on search query
 const filteredDefinitions = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return definitions.value
-  return definitions.value.filter(d =>
-    d.service.toLowerCase().includes(q) ||
-    (d.indicator_type && d.indicator_type.toLowerCase().includes(q))
-  )
+  return definitions.value.filter(d => d.service.toLowerCase().includes(q) || (d.indicator_type && d.indicator_type.toLowerCase().includes(q)))
 })
 
-// Filtered snapshots based on search query
 const filteredSnapshots = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return snapshots.value
-  const matchingDefIds = new Set(
-    definitions.value
-      .filter(d => d.service.toLowerCase().includes(q) || (d.indicator_type && d.indicator_type.toLowerCase().includes(q)))
-      .map(d => d.id)
-  )
-  return snapshots.value.filter(s =>
-    s.service.toLowerCase().includes(q) ||
-    matchingDefIds.has(s.slo_id)
-  )
+  const matchingDefIds = new Set(definitions.value.filter(d => d.service.toLowerCase().includes(q) || (d.indicator_type && d.indicator_type.toLowerCase().includes(q))).map(d => d.id))
+  return snapshots.value.filter(s => s.service.toLowerCase().includes(q) || matchingDefIds.has(s.slo_id))
 })
 
-function openInspectFromTable(row: SLODefinition) {
-  openInspect(row, snapshots.value.find(s => s.slo_id === row.id || s.service === row.service))
-}
-
-function handleMobileInspect(def: SLODefinition, snap?: SLOSnapshot) {
-  openInspect(def, snap)
-}
-
-function handleEditSLO(def: SLODefinition) {
-  openCreateModal(def)
-}
+const openInspectFromTable = (row: SLODefinition) => openInspect(row, snapshots.value.find(s => s.slo_id === row.id || s.service === row.service))
+const handleMobileInspect = (def: SLODefinition, snap?: SLOSnapshot) => openInspect(def, snap)
+const handleEditSLO = (def: SLODefinition) => openCreateModal(def)
 </script>
 
 <template>
