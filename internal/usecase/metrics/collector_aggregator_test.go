@@ -1,4 +1,4 @@
-﻿package metrics
+package metrics
 
 import (
 	"context"
@@ -104,5 +104,85 @@ func TestCollector_CollectOnce_StableNodeSorting_MultiNodeDeterminism(t *testing
 					actual.NodeID, actual.NodeName, actual.Status)
 			}
 		}
+	}
+}
+
+func TestDeriveNodeRole(t *testing.T) {
+	tests := []struct {
+		name             string
+		nodeName         string
+		hostID           string
+		detectedServices []string
+		labels           map[string]string
+		expectedRole     string
+	}{
+		{
+			name:         "Explicit label control-plane",
+			nodeName:     "node-1",
+			hostID:       "id-1",
+			labels:       map[string]string{"node-role.kubernetes.io/control-plane": "true"},
+			expectedRole: "control-plane",
+		},
+		{
+			name:         "Explicit label role master",
+			nodeName:     "node-2",
+			hostID:       "id-2",
+			labels:       map[string]string{"role": "master"},
+			expectedRole: "control-plane",
+		},
+		{
+			name:         "Explicit label role worker",
+			nodeName:     "node-3",
+			hostID:       "id-3",
+			labels:       map[string]string{"role": "worker"},
+			expectedRole: "worker",
+		},
+		{
+			name:             "Detected kube-apiserver service",
+			nodeName:         "node-4",
+			hostID:           "id-4",
+			detectedServices: []string{"dockerd", "kube-apiserver", "kubelet"},
+			expectedRole:     "control-plane",
+		},
+		{
+			name:             "Detected etcd service",
+			nodeName:         "node-5",
+			hostID:           "id-5",
+			detectedServices: []string{"etcd"},
+			expectedRole:     "control-plane",
+		},
+		{
+			name:         "Hostname contains master",
+			nodeName:     "k8smaster",
+			hostID:       "id-6",
+			expectedRole: "control-plane",
+		},
+		{
+			name:         "Hostname contains control",
+			nodeName:     "k8s-control-plane-01",
+			hostID:       "id-7",
+			expectedRole: "control-plane",
+		},
+		{
+			name:         "Worker node default",
+			nodeName:     "k8sworker",
+			hostID:       "id-8",
+			expectedRole: "worker",
+		},
+		{
+			name:         "Generic host without control indicators",
+			nodeName:     "host-abc",
+			hostID:       "id-9",
+			expectedRole: "worker",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			role := deriveNodeRole(tc.nodeName, tc.hostID, tc.detectedServices, tc.labels)
+			if role != tc.expectedRole {
+				t.Fatalf("deriveNodeRole(%s) = %s; want %s", tc.nodeName, role, tc.expectedRole)
+			}
+		})
 	}
 }

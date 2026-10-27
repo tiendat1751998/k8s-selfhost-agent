@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -139,14 +140,18 @@ func (c *TPSCollector) collectHTTPTPS(ctx context.Context, now time.Time) HTTPTP
 	return httpTPS
 }
 
-// DeriveTraefikURL parses the Docker host address or returns a default HTTP URL for Traefik API.
+// DeriveTraefikURL parses the Docker host address or returns a configured HTTP URL for Traefik API.
+// When dockerHost is empty (or a local unix socket) and TRAEFIK_API_URL is unset, it returns "" to prevent self-hammering port 8080.
 func DeriveTraefikURL(dockerHost string) string {
+	if envURL := strings.TrimSpace(os.Getenv("TRAEFIK_API_URL")); envURL != "" {
+		return strings.TrimRight(envURL, "/")
+	}
 	dockerHost = strings.TrimSpace(dockerHost)
-	if dockerHost == "" {
-		return "http://localhost:8080"
+	if dockerHost == "" || strings.HasPrefix(dockerHost, "unix://") {
+		return ""
 	}
 	if strings.HasPrefix(dockerHost, "http://") || strings.HasPrefix(dockerHost, "https://") {
-		return dockerHost
+		return strings.TrimRight(dockerHost, "/")
 	}
 	if strings.HasPrefix(dockerHost, "tcp://") {
 		trimmed := strings.TrimPrefix(dockerHost, "tcp://")
@@ -159,5 +164,5 @@ func DeriveTraefikURL(dockerHost string) string {
 		}
 		return "http://" + host + ":8080"
 	}
-	return "http://localhost:8080"
+	return ""
 }

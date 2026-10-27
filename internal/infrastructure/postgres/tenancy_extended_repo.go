@@ -34,7 +34,7 @@ func (r *tenancyRepo) DeleteOrganization(ctx context.Context, id string) error {
 func (r *tenancyRepo) CreateMember(ctx context.Context, member tenancy.Member) error {
 	db := r.getDB(ctx)
 	memberID := member.ID
-	if memberID == "" {
+	if memberID == "" || uuid.Validate(memberID) != nil {
 		memberID = uuid.NewString()
 	}
 	orgID := member.OrgID
@@ -45,6 +45,9 @@ func (r *tenancyRepo) CreateMember(ctx context.Context, member tenancy.Member) e
 	if scope == "" {
 		scope = "project-wide"
 	}
+
+	// Ensure organization exists to prevent foreign key constraint violations
+	_, _ = db.Exec(ctx, "INSERT INTO organizations (id, name, tier) VALUES ($1, $1, 'Standard') ON CONFLICT (id) DO NOTHING", orgID)
 
 	query := `
 		INSERT INTO tenant_members (id, org_id, username, role, scope, tenant_id)
@@ -141,7 +144,8 @@ func (r *tenancyRepo) GetQuota(ctx context.Context, orgID string) (map[string]in
 	db := r.getDB(ctx)
 
 	var rawValue string
-	err := db.QueryRow(ctx, "SELECT value FROM platform_settings WHERE category = 'tenancy' AND key = $1 LIMIT 1", key).Scan(&rawValue)
+	query, args := BuildTenantQuery(ctx, "SELECT value FROM platform_settings WHERE category = 'tenancy' AND key = $1 LIMIT 1", key)
+	err := db.QueryRow(ctx, query, args...).Scan(&rawValue)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return make(map[string]interface{}), nil

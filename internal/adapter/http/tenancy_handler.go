@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/datdt/k8sselfhost/internal/domain/tenancy"
 )
@@ -278,8 +279,8 @@ type createMemberRequest struct {
 
 func (r *createMemberRequest) Validate() error {
 	ve := NewValidationError("validation failed")
-	if strings.TrimSpace(r.ID) == "" {
-		ve.Add("id", "id is required")
+	if strings.TrimSpace(r.ID) == "" || uuid.Validate(r.ID) != nil {
+		r.ID = uuid.NewString()
 	}
 	if strings.TrimSpace(r.User) == "" {
 		ve.Add("user", "user is required")
@@ -297,6 +298,9 @@ func (h *TenancyHandler) CreateMember(w http.ResponseWriter, r *http.Request) {
 	req, ok := decodeJSON[createMemberRequest](w, r)
 	if !ok {
 		return
+	}
+	if req.Member.ID == "" || uuid.Validate(req.Member.ID) != nil {
+		req.Member.ID = uuid.NewString()
 	}
 
 	if h.repo != nil {

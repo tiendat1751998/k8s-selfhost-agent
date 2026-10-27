@@ -48,29 +48,29 @@ func (m *ReleaseManager) lockRelease(clusterID, namespace, releaseName string) (
 
 // InstallRequest represents parameters for installing a Helm chart.
 type InstallRequest struct {
-	ReleaseName     string                 `json:"releaseName"`
-	Chart           string                 `json:"chart"`
-	Repo            string                 `json:"repo"`
-	Version         string                 `json:"version"`
-	Namespace       string                 `json:"namespace"`
-	Values          map[string]interface{} `json:"values"`
-	CreateNamespace bool                   `json:"createNamespace"`
-	Wait            bool                   `json:"wait"`
-	Timeout         time.Duration          `json:"timeout"`
+	ReleaseName     string        `json:"releaseName"`
+	Chart           string        `json:"chart"`
+	Repo            string        `json:"repo"`
+	Version         string        `json:"version"`
+	Namespace       string        `json:"namespace"`
+	Values          ValuesPayload `json:"values"`
+	CreateNamespace bool          `json:"createNamespace"`
+	Wait            bool          `json:"wait"`
+	Timeout         time.Duration `json:"timeout"`
 }
 
 // UpgradeRequest represents parameters for upgrading a Helm release.
 type UpgradeRequest struct {
-	ReleaseName string                 `json:"releaseName"`
-	Chart       string                 `json:"chart"`
-	Repo        string                 `json:"repo"`
-	Version     string                 `json:"version"`
-	Namespace   string                 `json:"namespace"`
-	Values      map[string]interface{} `json:"values"`
-	ResetValues bool                   `json:"resetValues"`
-	ReuseValues bool                   `json:"reuseValues"`
-	Wait        bool                   `json:"wait"`
-	Timeout     time.Duration          `json:"timeout"`
+	ReleaseName string        `json:"releaseName"`
+	Chart       string        `json:"chart"`
+	Repo        string        `json:"repo"`
+	Version     string        `json:"version"`
+	Namespace   string        `json:"namespace"`
+	Values      ValuesPayload `json:"values"`
+	ResetValues bool          `json:"resetValues"`
+	ReuseValues bool          `json:"reuseValues"`
+	Wait        bool          `json:"wait"`
+	Timeout     time.Duration `json:"timeout"`
 }
 
 
@@ -162,10 +162,7 @@ func (m *ReleaseManager) InstallRelease(ctx context.Context, clusterID string, r
 		return nil, fmt.Errorf("%s charts are not installable", chartRequested.Metadata.Type)
 	}
 
-	values := req.Values
-	if values == nil {
-		values = make(map[string]interface{})
-	}
+	values := req.Values.ToMap()
 
 	rel, err := install.RunWithContext(ctx, chartRequested, values)
 	if err != nil {
@@ -256,10 +253,7 @@ func (m *ReleaseManager) UpgradeRelease(ctx context.Context, clusterID string, r
 		chartRequested = existing.Chart
 	}
 
-	values := req.Values
-	if values == nil {
-		values = make(map[string]interface{})
-	}
+	values := req.Values.ToMap()
 
 	rel, err := upgrade.RunWithContext(ctx, req.ReleaseName, chartRequested, values)
 	if err != nil {

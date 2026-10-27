@@ -250,3 +250,43 @@ func TestTenancyHandler_FallbackWhenNilRepo(t *testing.T) {
 		t.Fatalf("expected 200 deleted in fallback, got %d", rr.Code)
 	}
 }
+
+func TestTenancyHandler_CreateMember_AutoAssignsUUID(t *testing.T) {
+	handler := NewTenancyHandler(nil)
+	r := chi.NewRouter()
+	r.Route("/tenancy", handler.RegisterRoutes)
+
+	// 1. Without id -> auto-assigned valid UUID
+	payloadNoID := `{"user":"charlie","role":"Developer","scope":"project-wide"}`
+	req := httptest.NewRequest(http.MethodPost, "/tenancy/members", bytes.NewBufferString(payloadNoID))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for member without id, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var created1 tenancy.Member
+	if err := json.Unmarshal(rr.Body.Bytes(), &created1); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if created1.ID == "" {
+		t.Fatal("expected non-empty ID")
+	}
+
+	// 2. With invalid non-UUID -> replaced with valid UUID
+	payloadNonUUID := `{"id":"legacy-member-string","user":"dave","role":"Viewer","scope":"global"}`
+	req = httptest.NewRequest(http.MethodPost, "/tenancy/members", bytes.NewBufferString(payloadNonUUID))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for non-uuid member, got %d: %s", rr.Code, rr.Body.String())
+	}
+	var created2 tenancy.Member
+	if err := json.Unmarshal(rr.Body.Bytes(), &created2); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if created2.ID == "" || created2.ID == "legacy-member-string" {
+		t.Fatalf("expected non-empty UUID replacing legacy string, got %s", created2.ID)
+	}
+}

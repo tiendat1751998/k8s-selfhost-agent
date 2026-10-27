@@ -5,11 +5,13 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/datdt/k8sselfhost/internal/domain/deployment"
+	domainerrors "github.com/datdt/k8sselfhost/internal/pkg/errors"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 	deploymentUsecase "github.com/datdt/k8sselfhost/internal/usecase/deployment"
 )
@@ -24,6 +26,9 @@ type mockDeploymentRepoForHandler struct {
 	lastUpdateMemoryReservBytes int64
 	lastUpdateNanoCPUs          int64
 	lastUpdateReplicas          int
+	scaleErr                    error
+	restartErr                  error
+	deleteErr                   error
 }
 
 func (m *mockDeploymentRepoForHandler) List(ctx context.Context) ([]deployment.Application, error) {
@@ -31,14 +36,23 @@ func (m *mockDeploymentRepoForHandler) List(ctx context.Context) ([]deployment.A
 }
 
 func (m *mockDeploymentRepoForHandler) Scale(ctx context.Context, targetType, targetCluster, namespace, name string, replicas int) error {
+	if m.scaleErr != nil {
+		return m.scaleErr
+	}
 	return nil
 }
 
 func (m *mockDeploymentRepoForHandler) Restart(ctx context.Context, targetType, targetCluster, namespace, name string) error {
+	if m.restartErr != nil {
+		return m.restartErr
+	}
 	return nil
 }
 
 func (m *mockDeploymentRepoForHandler) Delete(ctx context.Context, targetType, targetCluster, namespace, name string) error {
+	if m.deleteErr != nil {
+		return m.deleteErr
+	}
 	return nil
 }
 
@@ -325,5 +339,63 @@ func TestDeploymentHandler_OtherRoutes(t *testing.T) {
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 for resume, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDeploymentHandler_DaemonActions_HTTP422(t *testing.T) {
+	daemonErr := domainerrors.NewUnprocessable("systemd host daemons cannot be scaled or deleted from Kubernetes/Docker deployment API; manage unit via host systemd")
+	k8sAgentErr := domainerrors.NewUnprocessable("k8s-agent cannot be restarted via HTTP RPC to avoid self-termination; manage unit via systemctl --user restart k8s-agent")
+
+	repo := &mockDeploymentRepoForHandler{
+		scaleErr:   daemonErr,
+		deleteErr:  daemonErr,
+		restartErr: k8sAgentErr,
+	}
+	router := setupDeploymentTestRouter(repo)
+
+	// Scale daemon -> should return 422
+	scaleBody := `{"type":"daemon","namespace":"k8smaster","name":"kubelet","replicas":2}`
+	req := httptest.NewRequest(http.MethodPost, "/deployments/scale", bytes.NewBufferString(scaleBody))
+	req.Header.Set("Content-Type", "application/json")
+	ctx := tenancy.WithUserRole(req.Context(), "platform_admin")
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for daemon scale, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "systemd host daemons cannot be scaled or deleted") {
+		t.Fatalf("unexpected error response body: %s", rec.Body.String())
+	}
+
+	// Delete daemon -> should return 422
+	delBody := `{"type":"daemon","namespace":"k8smaster","name":"containerd"}`
+	req = httptest.NewRequest(http.MethodPost, "/deployments/delete", bytes.NewBufferString(delBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(ctx)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for daemon delete, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "systemd host daemons cannot be scaled or deleted") {
+		t.Fatalf("unexpected error response body: %s", rec.Body.String())
+	}
+
+	// Restart k8s-agent -> should return 422
+	restartBody := `{"type":"daemon","namespace":"k8smaster","name":"k8s-agent"}`
+	req = httptest.NewRequest(http.MethodPost, "/deployments/restart", bytes.NewBufferString(restartBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(ctx)
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 for k8s-agent restart, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "k8s-agent cannot be restarted via HTTP RPC") {
+		t.Fatalf("unexpected error response body: %s", rec.Body.String())
 	}
 }

@@ -426,8 +426,8 @@ func TestCollector_CollectOnce_AgentTopology(t *testing.T) {
 	if overview.Nodes[0].Source != "agent" {
 		t.Errorf("expected node source 'agent', got '%s'", overview.Nodes[0].Source)
 	}
-	if overview.Nodes[0].Role != "agent" {
-		t.Errorf("expected node role 'agent', got '%s'", overview.Nodes[0].Role)
+	if overview.Nodes[0].Role != "worker" {
+		t.Errorf("expected node role 'worker', got '%s'", overview.Nodes[0].Role)
 	}
 
 	var foundNode1 *NodeMetrics
@@ -511,8 +511,8 @@ func TestCollector_CollectOnce_Standalone(t *testing.T) {
 	if overview.Nodes[0].NodeName != "my-agent-host" {
 		t.Errorf("expected NodeName = my-agent-host, got %s", overview.Nodes[0].NodeName)
 	}
-	if overview.Nodes[0].Role != "agent" {
-		t.Errorf("expected Role = agent, got %s", overview.Nodes[0].Role)
+	if overview.Nodes[0].Role != "worker" {
+		t.Errorf("expected Role = worker, got %s", overview.Nodes[0].Role)
 	}
 	if overview.Nodes[0].Source != "agent" {
 		t.Errorf("expected Source = agent, got %s", overview.Nodes[0].Source)
@@ -954,8 +954,8 @@ func TestCollector_AgentNodesAndContainers(t *testing.T) {
 	if n.NodeName != "external-db" {
 		t.Errorf("expected agent node name 'external-db', got '%s'", n.NodeName)
 	}
-	if n.Role != "agent" {
-		t.Errorf("expected agent role 'agent', got '%s'", n.Role)
+	if n.Role != "worker" {
+		t.Errorf("expected agent role 'worker', got '%s'", n.Role)
 	}
 	if n.Status != "ready" {
 		t.Errorf("expected agent status 'ready', got '%s'", n.Status)

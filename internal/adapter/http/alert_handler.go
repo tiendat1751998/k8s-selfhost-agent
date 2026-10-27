@@ -198,6 +198,35 @@ func (h *AlertHandler) ListRules(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": rules})
 }
 
+type updateAlertRuleRequest struct {
+	Name            *string   `json:"name"`
+	Description     *string   `json:"description"`
+	MetricName      *string   `json:"metric_name"`
+	Condition       *string   `json:"condition"`
+	Threshold       *float64  `json:"threshold"`
+	DurationSeconds *int      `json:"duration_seconds"`
+	Severity        *string   `json:"severity"`
+	ChannelIDs      *[]string `json:"channel_ids"`
+	Enabled         *bool     `json:"enabled"`
+}
+
+func (r *updateAlertRuleRequest) Validate() error {
+	ve := NewValidationError("validation failed")
+	if r.Name != nil && strings.TrimSpace(*r.Name) == "" {
+		ve.Add("name", "name cannot be empty")
+	}
+	if r.MetricName != nil && strings.TrimSpace(*r.MetricName) == "" {
+		ve.Add("metric_name", "metric_name cannot be empty")
+	}
+	if r.Condition != nil && strings.TrimSpace(*r.Condition) == "" {
+		ve.Add("condition", "condition cannot be empty")
+	}
+	if ve.HasErrors() {
+		return ve
+	}
+	return nil
+}
+
 func (h *AlertHandler) UpdateRule(w http.ResponseWriter, r *http.Request) {
 	id, err := parseUUIDParam(r, "id")
 	if err != nil {
@@ -205,7 +234,7 @@ func (h *AlertHandler) UpdateRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, ok := decodeJSON[createAlertRuleRequest](w, r)
+	req, ok := decodeJSON[updateAlertRuleRequest](w, r)
 	if !ok {
 		return
 	}
@@ -215,25 +244,57 @@ func (h *AlertHandler) UpdateRule(w http.ResponseWriter, r *http.Request) {
 		tenantID = "default"
 	}
 
-	rule := &alert.AlertRule{
-		ID:              id,
-		TenantID:        tenantID,
-		Name:            req.Name,
-		Description:     req.Description,
-		MetricName:      req.MetricName,
-		Condition:       req.Condition,
-		Threshold:       req.Threshold,
-		DurationSeconds: req.DurationSeconds,
-		Severity:        req.Severity,
-		ChannelIDs:      req.ChannelIDs,
-		Enabled:         req.Enabled,
+	rules, err := h.usecase.ListRules(r.Context(), tenantID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load existing alert rules", err)
+		return
 	}
 
-	if err := h.usecase.UpdateRule(r.Context(), rule); err != nil {
+	var existing *alert.AlertRule
+	for _, rule := range rules {
+		if rule != nil && rule.ID == id {
+			existing = rule
+			break
+		}
+	}
+	if existing == nil {
+		writeError(w, http.StatusNotFound, "alert rule not found", nil)
+		return
+	}
+
+	if req.Name != nil {
+		existing.Name = *req.Name
+	}
+	if req.Description != nil {
+		existing.Description = *req.Description
+	}
+	if req.MetricName != nil {
+		existing.MetricName = *req.MetricName
+	}
+	if req.Condition != nil {
+		existing.Condition = *req.Condition
+	}
+	if req.Threshold != nil {
+		existing.Threshold = *req.Threshold
+	}
+	if req.DurationSeconds != nil {
+		existing.DurationSeconds = *req.DurationSeconds
+	}
+	if req.Severity != nil {
+		existing.Severity = *req.Severity
+	}
+	if req.ChannelIDs != nil {
+		existing.ChannelIDs = *req.ChannelIDs
+	}
+	if req.Enabled != nil {
+		existing.Enabled = *req.Enabled
+	}
+
+	if err := h.usecase.UpdateRule(r.Context(), existing); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update rule", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, rule)
+	writeJSON(w, http.StatusOK, existing)
 }
 
 func (h *AlertHandler) DeleteRule(w http.ResponseWriter, r *http.Request) {

@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -68,13 +69,14 @@ func (m *mockDBPool) QueryRow(ctx context.Context, sql string, args ...any) pgx.
 
 func TestDeriveURLs(t *testing.T) {
 	// Test Traefik URL derivation
+	os.Unsetenv("TRAEFIK_API_URL")
 	traefikTests := []struct {
 		input    string
 		expected string
 	}{
 		{"tcp://10.10.10.133:2375", "http://10.10.10.133:8080"},
-		{"unix:///var/run/docker.sock", "http://localhost:8080"},
-		{"", "http://localhost:8080"},
+		{"unix:///var/run/docker.sock", ""},
+		{"", ""},
 		{"http://10.10.10.133:8080", "http://10.10.10.133:8080"},
 		{"https://proxy.example.com:8443", "https://proxy.example.com:8443"},
 		{"tcp://0.0.0.0:2375", "http://localhost:8080"},

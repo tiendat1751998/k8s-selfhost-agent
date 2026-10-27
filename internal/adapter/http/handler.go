@@ -352,7 +352,7 @@ func writeError(w http.ResponseWriter, status int, message string, err error) {
 		if status == 0 || status == http.StatusInternalServerError {
 			mappedStatus, mappedMsg := mapDomainErrorToHTTP(err)
 			finalStatus = mappedStatus
-			if finalMessage == "" || finalMessage == "Internal server error" {
+			if mappedStatus != http.StatusInternalServerError || finalMessage == "" || finalMessage == "Internal server error" {
 				finalMessage = mappedMsg
 			}
 		}
