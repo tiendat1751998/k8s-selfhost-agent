@@ -14,6 +14,7 @@ import '../assets/styles/components/tenancy-drawers.css'
 
 const {
   loading,
+  error,
   organizations,
   members,
   rbacMatrix,
@@ -53,6 +54,17 @@ const {
 
 <template>
   <div class="tenancy-page">
+    <!-- Error Alert Banner -->
+    <div v-if="error" class="alert-banner-danger glass-panel animate-fade-in" style="margin-bottom: 12px; padding: 10px 14px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; background: rgba(225, 29, 72, 0.12); border: 1px solid rgba(225, 29, 72, 0.35); color: #f43f5e;" role="alert">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+        <BaseIcon name="alert-triangle" size="xs" />
+        <span>{{ error }}</span>
+      </div>
+      <button type="button" class="btn btn-secondary btn-xs" @click="loadData">
+        <BaseIcon name="refresh-cw" size="xs" /> <span>Retry</span>
+      </button>
+    </div>
+
     <!-- Sleek Toolbar (Responsive) -->
     <div class="tenancy-toolbar-sleek glass-panel">
       <div class="toolbar-left">

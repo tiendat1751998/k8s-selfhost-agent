@@ -25,6 +25,7 @@ import type { ResourceKind } from '../api/k8s'
 const route = useRoute()
 const {
   loading, error, toastMessage, clusterOffline, offlineErrorMessage,
+  k8sDegraded, degradedReason,
   selectedCluster, namespaces, selectedNamespace, selectedKind, resources,
   allKindItems, totalInKind, currentKindLabel, columns,
   loadClusters, loadNamespaces, fetchResources, selectKind,
@@ -138,6 +139,30 @@ onMounted(async () => {
         </div>
       </div>
 
+      <!-- Control Plane (:6443) Offline Diagnostic Banner -->
+      <div v-if="k8sDegraded && !clusterOffline" class="control-plane-banner glass-panel animate-fade-in" role="alert">
+        <div class="cp-banner-header">
+          <span class="cp-status-dot"></span>
+          <span class="cp-title font-mono font-bold">CONTROL PLANE (:6443) UNREACHABLE</span>
+          <span class="cp-badge font-mono">K8S DEGRADED</span>
+        </div>
+        <p class="cp-desc font-mono">
+          kube-apiserver (:6443) is offline on cluster '{{ selectedCluster || 'primary-cluster' }}'. Kubernetes resource discovery is unavailable while node daemons stream live telemetry.
+        </p>
+        <span v-if="degradedReason" class="cp-reason font-mono text-muted">{{ degradedReason }}</span>
+        <div class="cp-actions">
+          <router-link to="/deployments" class="btn btn-secondary btn-xs">
+            <BaseIcon name="layers" size="xs" /> <span>Inspect Live Host Daemons</span>
+          </router-link>
+          <router-link to="/slo" class="btn btn-secondary btn-xs">
+            <BaseIcon name="activity" size="xs" /> <span>View Control Plane SLOs</span>
+          </router-link>
+          <button type="button" class="btn btn-secondary btn-xs" :disabled="loading" @click="fetchResources">
+            <BaseIcon name="refresh" size="xs" /> <span>Retry</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Events View or Table / Mobile Cards -->
       <div v-if="selectedKind === 'events'" class="events-main-section animate-fade-in">
         <EventsTimeline :cluster="selectedCluster" :namespace="selectedNamespace" :auto-refresh="true" />
@@ -165,6 +190,8 @@ onMounted(async () => {
               :error="error"
               :selected-kind="selectedKind"
               :operating-node="operatingNode"
+              :k8s-degraded="k8sDegraded"
+              :degraded-reason="degradedReason"
               @detail="openDetailDrawer"
               @logs="openLogsDrawer"
               @terminal="openTerminalDrawer"
@@ -185,6 +212,8 @@ onMounted(async () => {
               :resources="filteredResources"
               :selected-kind="selectedKind"
               :loading="loading"
+              :k8s-degraded="k8sDegraded"
+              :degraded-reason="degradedReason"
               @select="openDetailDrawer"
               @logs="openLogsDrawer"
               @scale="openScaleModal"

@@ -131,15 +131,18 @@ export function normalizeIncident(raw: any): Incident {
   }
 }
 
-export function normalizeReport(raw: any): RCAReport {
-  if (!raw) return raw
+export function normalizeReport(raw: any): RCAReport | null {
+  if (!raw || raw.available === false) return null
+  const id = raw.id || raw.ID || ''
+  const rootCause = raw.root_cause || raw.RootCause || ''
+  if (!id && !rootCause && !raw.available) return null
   const conf = typeof raw.confidence === 'number'
     ? raw.confidence
     : (typeof raw.Confidence === 'number' ? raw.Confidence : undefined)
   return {
-    id: raw.id || raw.ID || '',
+    id,
     incident_id: raw.incident_id || raw.IncidentID || '',
-    root_cause: raw.root_cause || raw.RootCause || '',
+    root_cause: rootCause,
     evidence: raw.evidence || raw.Evidence || [],
     confidence: conf,
     risk_level: ((raw.risk_level || raw.RiskLevel || 'medium').toLowerCase()) as RCAReport['risk_level'],
@@ -152,19 +155,23 @@ export function normalizeReport(raw: any): RCAReport {
   }
 }
 
-export function normalizePR(raw: any): PullRequest {
-  if (!raw) return raw
+export function normalizePR(raw: any): PullRequest | null {
+  if (!raw || raw.available === false || raw.gitops_configured === false) return null
+  const id = raw.id || raw.ID || ''
+  const title = raw.title || raw.Title || ''
+  const prNumber = raw.pr_number ?? raw.PRNumber ?? 0
+  if (!id && !title && !prNumber && !raw.available) return null
   return {
-    id: raw.id || raw.ID || '',
+    id,
     incident_id: raw.incident_id || raw.IncidentID || '',
     provider: raw.provider || raw.Provider || 'github',
     repo_url: raw.repo_url || raw.RepoURL || '',
     branch: raw.branch || raw.Branch || '',
     base_branch: raw.base_branch || raw.BaseBranch || 'main',
-    title: raw.title || raw.Title || '',
+    title,
     description: raw.description || raw.Description || '',
     pr_url: raw.pr_url || raw.PRURL || '',
-    pr_number: raw.pr_number ?? raw.PRNumber ?? 0,
+    pr_number: prNumber,
     status: ((raw.status || raw.Status || 'open').toLowerCase()) as PRStatus,
     files_changed: raw.files_changed || raw.FilesChanged,
     created_at: raw.created_at || raw.CreatedAt || new Date().toISOString(),
@@ -255,7 +262,7 @@ export const reportsApi = {
   async list(params?: { limit?: number; offset?: number }): Promise<ReportListResponse> {
     const res = await api.get<ReportListResponse | { data: any[]; total: number }>('/reports', params)
     const rawList = res.data || []
-    const normalized = rawList.map(normalizeReport)
+    const normalized = rawList.map(normalizeReport).filter((r): r is RCAReport => r !== null)
     return {
       data: normalized,
       total: res.total ?? normalized.length,
@@ -266,7 +273,9 @@ export const reportsApi = {
 
   async get(id: string): Promise<RCAReport> {
     const raw = await api.get<any>(`/reports/${id}`)
-    return normalizeReport(raw)
+    const norm = normalizeReport(raw)
+    if (!norm) throw new Error(`RCAReport ${id} not found`)
+    return norm
   },
 }
 
@@ -274,7 +283,7 @@ export const prsApi = {
   async list(params?: { status?: string; limit?: number; offset?: number }): Promise<PRListResponse> {
     const res = await api.get<PRListResponse | { data: any[]; total: number }>('/prs', params)
     const rawList = res.data || []
-    const normalized = rawList.map(normalizePR)
+    const normalized = rawList.map(normalizePR).filter((p): p is PullRequest => p !== null)
     return {
       data: normalized,
       total: res.total ?? normalized.length,
@@ -285,21 +294,29 @@ export const prsApi = {
 
   async get(id: string): Promise<PullRequest> {
     const raw = await api.get<any>(`/prs/${id}`)
-    return normalizePR(raw)
+    const norm = normalizePR(raw)
+    if (!norm) throw new Error(`PR ${id} not found`)
+    return norm
   },
 
   async create(payload: CreatePRPayload): Promise<PullRequest> {
     const raw = await api.post<any>('/prs', payload)
-    return normalizePR(raw)
+    const norm = normalizePR(raw)
+    if (!norm) throw new Error('Failed to generate PR: invalid response')
+    return norm
   },
 
   async merge(id: string): Promise<PullRequest> {
     const raw = await api.post<any>(`/prs/${id}/merge`)
-    return normalizePR(raw)
+    const norm = normalizePR(raw)
+    if (!norm) throw new Error('Failed to merge PR: invalid response')
+    return norm
   },
 
   async close(id: string): Promise<PullRequest> {
     const raw = await api.post<any>(`/prs/${id}/close`)
-    return normalizePR(raw)
+    const norm = normalizePR(raw)
+    if (!norm) throw new Error('Failed to close PR: invalid response')
+    return norm
   },
 }

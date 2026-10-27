@@ -76,6 +76,8 @@ const props = defineProps<{
   error: string | null
   selectedKind: ResourceKind
   operatingNode: boolean
+  k8sDegraded?: boolean
+  degradedReason?: string | null
 }>()
 
 const cappedResources = computed(() => props.resources && props.resources.length > 100 ? props.resources.slice(0, 100) : props.resources)
@@ -149,7 +151,7 @@ function handleRowAction(actionId: string, res: K8sResource) {
       :data="cappedResources"
       :loading="loading"
       :error="error"
-      empty-message="No Kubernetes resources discovered matching current filters."
+      :empty-message="k8sDegraded ? 'Kubernetes Control Plane (:6443) unreachable. No resources discovered.' : 'No Kubernetes resources discovered matching current filters.'"
     >
       <template #cell-name="{ row }">
         <div class="resource-name-cell">

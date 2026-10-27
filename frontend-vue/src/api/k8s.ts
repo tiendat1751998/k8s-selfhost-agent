@@ -43,16 +43,8 @@ export interface K8sEventObjectReference {
   fieldPath?: string
 }
 
-export interface K8sEventSource {
-  component?: string
-  host?: string
-}
-
-export interface K8sEventSeries {
-  count?: number
-  lastObservedTime?: string
-  state?: string
-}
+export interface K8sEventSource { component?: string; host?: string }
+export interface K8sEventSeries { count?: number; lastObservedTime?: string; state?: string }
 
 export interface K8sEvent {
   apiVersion?: string
@@ -208,7 +200,14 @@ export const k8sApi = {
     const query = ns && ns !== 'all' && ns !== '_all' ? `?ns=${encodeURIComponent(ns)}` : ''
     const path = `/k8s/${encodeURIComponent(cluster)}/resources/${encodeURIComponent(kind)}${query}`
     const res = await api.get<ApiResponse<K8sResource[]> | K8sResource[]>(path)
-    return unwrapResourceList(res)
+    const list = unwrapResourceList(res)
+    if (res && typeof res === 'object' && !Array.isArray(res) && (res as ApiResponse<K8sResource[]>).k8s_degraded) {
+      Object.assign(list, {
+        k8s_degraded: true,
+        degraded_reason: (res as ApiResponse<K8sResource[]>).degraded_reason || 'kube-apiserver (:6443) connection refused'
+      })
+    }
+    return list
   },
 
   async getResource(

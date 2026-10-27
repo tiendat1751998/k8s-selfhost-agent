@@ -272,11 +272,13 @@ export const hostsApi = {
 }
 
 export const explorerApi = {
-  async search(params?: { kind?: string; cluster?: string; namespace?: string; q?: string; limit?: number; offset?: number }): Promise<{ data: K8sResource[]; total: number }> {
-    const res = await api.get<{ data: K8sResource[]; total: number }>('/explorer', params)
+  async search(params?: { kind?: string; cluster?: string; namespace?: string; q?: string; limit?: number; offset?: number }): Promise<{ data: K8sResource[]; total: number; k8s_degraded?: boolean; degraded_reason?: string }> {
+    const res = await api.get<{ data: K8sResource[]; total: number; k8s_degraded?: boolean; degraded_reason?: string }>('/explorer', params)
     return {
       data: res.data || [],
       total: res.total ?? (res.data ? res.data.length : 0),
+      k8s_degraded: res.k8s_degraded,
+      degraded_reason: res.degraded_reason,
     }
   },
 

@@ -191,6 +191,9 @@
 }
 
 .trend-expand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
   color: var(--text-secondary);

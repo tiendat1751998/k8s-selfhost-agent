@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import ModalDrawer from '../components/ui/ModalDrawer.vue'
@@ -7,8 +8,11 @@ import IncidentDetailPane from '../components/incidents/IncidentDetailPane.vue'
 import IncidentSimulationModal from '../components/incidents/IncidentSimulationModal.vue'
 import IncidentCreatePrModal from '../components/incidents/IncidentCreatePrModal.vue'
 import IncidentsHeaderBar from '../components/incidents/IncidentsHeaderBar.vue'
-import { useIncidents } from '../composables/useIncidents'
+import { useIncidents, isSimulationAllowed } from '../composables/useIncidents'
 import type { Incident } from '../api/compute'
+
+const route = useRoute()
+const allowSimulate = computed(() => isSimulationAllowed(route.query as Record<string, unknown>))
 
 const {
   loading,
@@ -121,6 +125,7 @@ function formatRelativeTime(dateStr?: string): string {
       :resolved-count="resolvedCount"
       :filtered-count="filteredIncidents.length"
       :loading="loading"
+      :allow-simulate="allowSimulate"
       @declare-incident="openDeclareModal"
       @simulate-incident="showSimulateModal = true"
       @refresh="fetchIncidents"
@@ -155,10 +160,10 @@ function formatRelativeTime(dateStr?: string): string {
             <div class="empty-icon"><BaseIcon name="shield" size="lg" /></div>
             <div class="empty-title">No Incidents Detected</div>
             <p class="empty-desc">
-              Cluster telemetry is nominal. Inject a test anomaly scenario to evaluate autonomous AI diagnostics and GitOps remediation.
+              All cluster workloads and node telemetry are currently nominal. Real incidents detected by log & metrics daemons will stream here in real time.
             </p>
-            <button class="btn-slate-primary empty-simulate-btn" @click="showSimulateModal = true">
-              <BaseIcon name="zap" size="xs" /> <span>Inject Test Incident (Demo Mode)</span>
+            <button v-if="allowSimulate" class="btn-slate-primary empty-simulate-btn" @click="showSimulateModal = true">
+              <BaseIcon name="zap" size="xs" /> <span>Inject Test Incident (Debug Mode)</span>
             </button>
           </div>
 

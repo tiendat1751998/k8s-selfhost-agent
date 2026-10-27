@@ -16,6 +16,7 @@ defineProps<{
   filteredCount: number
   loading: boolean
   showMobileSearch: boolean
+  allowSimulate?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -135,8 +136,9 @@ const emit = defineEmits<{
           <BaseIcon name="plus" size="xs" />
         </button>
         <button
+          v-if="allowSimulate"
           class="mobile-action-btn"
-          title="Simulate Test Incident (Demo Mode)"
+          title="Simulate Test Incident (Debug Mode)"
           aria-label="Simulate Test Incident"
           @click="emit('simulateIncident')"
         >
