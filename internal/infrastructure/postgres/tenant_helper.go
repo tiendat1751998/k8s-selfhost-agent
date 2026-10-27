@@ -23,6 +23,11 @@ func EnsureTenantContext(ctx context.Context) context.Context {
 	return ctx
 }
 
+// EnsurePlatformAdminContext returns a context enriched with platform_admin role and DefaultTenantID if empty.
+func EnsurePlatformAdminContext(ctx context.Context) context.Context {
+	return tenancy.WithPlatformAdminContext(ctx)
+}
+
 // TenantIDOrDefault returns the tenant ID from context, or DefaultTenantID ("default-tenant") if empty.
 func TenantIDOrDefault(ctx context.Context) string {
 	if tid := tenancy.TenantIDFromContext(ctx); tid != "" {

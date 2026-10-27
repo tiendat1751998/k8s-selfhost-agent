@@ -13,6 +13,7 @@ import (
 	"github.com/datdt/k8sselfhost/internal/domain/fleet"
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 	"github.com/datdt/k8sselfhost/internal/pkg/crypto"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 	"go.uber.org/zap"
 )
 
@@ -88,7 +89,13 @@ func (h *HealthChecker) Start(ctx context.Context, interval time.Duration) {
 	}
 }
 
+// CheckAll performs an immediate synchronous health check across all fleet clusters.
+func (h *HealthChecker) CheckAll(ctx context.Context) {
+	h.checkAll(ctx)
+}
+
 func (h *HealthChecker) checkAll(ctx context.Context) {
+	ctx = tenancy.WithPlatformAdminContext(ctx)
 	clusters, err := h.fleetRepo.ListClusters(ctx)
 	if err != nil {
 		h.logger.Error("failed to list clusters for health check", zap.Error(err))
@@ -107,6 +114,7 @@ func (h *HealthChecker) checkAll(ctx context.Context) {
 }
 
 func (h *HealthChecker) checkCluster(ctx context.Context, c fleet.Cluster) {
+	ctx = tenancy.WithPlatformAdminContext(ctx)
 	now := time.Now().UTC()
 
 	// 1. Check K8s API connectivity
@@ -124,7 +132,7 @@ func (h *HealthChecker) checkCluster(ctx context.Context, c fleet.Cluster) {
 	} else {
 		// Non-kubeconfig cluster (e.g. k8snode or direct node agent imports):
 		// Probe :6443 on candidate addresses
-		candidates := h.resolveAPIServerCandidates(c)
+		candidates := h.resolveAPIServerCandidates(ctx, c)
 		for _, addr := range candidates {
 			if h.probeTCP(ctx, addr) {
 				k8sAPIReachable = true
@@ -254,7 +262,7 @@ func (h *HealthChecker) probeTCP(ctx context.Context, addr string) bool {
 	return true
 }
 
-func (h *HealthChecker) resolveAPIServerCandidates(c fleet.Cluster) []string {
+func (h *HealthChecker) resolveAPIServerCandidates(ctx context.Context, c fleet.Cluster) []string {
 	var candidates []string
 	seen := make(map[string]bool)
 
@@ -297,7 +305,7 @@ func (h *HealthChecker) resolveAPIServerCandidates(c fleet.Cluster) []string {
 	}
 
 	if h.computeHostRepo != nil {
-		hosts, err := h.computeHostRepo.ListAll(context.Background())
+		hosts, err := h.computeHostRepo.ListAll(ctx)
 		if err == nil {
 			for _, host := range hosts {
 				ip := extractHostIP(host.Endpoint)

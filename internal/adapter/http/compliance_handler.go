@@ -67,6 +67,7 @@ func NewComplianceHandler(repo compliance.Repository, opts ...ComplianceOption) 
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
+			ctx = postgres.EnsurePlatformAdminContext(ctx)
 			_, _ = h.scanner.Scan(ctx)
 		}()
 	}

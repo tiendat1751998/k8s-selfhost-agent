@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 	usecaseCompliance "github.com/datdt/k8sselfhost/internal/usecase/compliance"
 )
 
@@ -30,7 +29,8 @@ func (s *complianceScannerStore) getDB(ctx context.Context) DBTX {
 
 func (s *complianceScannerStore) ListHosts(ctx context.Context) ([]usecaseCompliance.ComputeHostRow, error) {
 	query := `SELECT id, name, endpoint, status, labels FROM compute_hosts ORDER BY name ASC`
-	rows, err := s.getDB(ctx).Query(ctx, query)
+	query, args := BuildTenantQuery(ctx, query)
+	rows, err := s.getDB(ctx).Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing compute hosts: %w", err)
 	}
@@ -79,8 +79,9 @@ func (s *complianceScannerStore) ListHosts(ctx context.Context) ([]usecaseCompli
 
 func (s *complianceScannerStore) CountActiveAutomationRules(ctx context.Context) (int, error) {
 	query := `SELECT COUNT(*) FROM automation_rules WHERE enabled = true`
+	query, args := BuildTenantQuery(ctx, query)
 	var count int
-	if err := s.getDB(ctx).QueryRow(ctx, query).Scan(&count); err != nil {
+	if err := s.getDB(ctx).QueryRow(ctx, query, args...).Scan(&count); err != nil {
 		return 0, fmt.Errorf("counting active automation rules: %w", err)
 	}
 	return count, nil
@@ -88,17 +89,19 @@ func (s *complianceScannerStore) CountActiveAutomationRules(ctx context.Context)
 
 func (s *complianceScannerStore) CountAuditLogs(ctx context.Context) (int, error) {
 	query := `SELECT COUNT(*) FROM audit_logs`
+	query, args := BuildTenantQuery(ctx, query)
 	var count int
-	if err := s.getDB(ctx).QueryRow(ctx, query).Scan(&count); err != nil {
+	if err := s.getDB(ctx).QueryRow(ctx, query, args...).Scan(&count); err != nil {
 		return 0, fmt.Errorf("counting audit logs: %w", err)
 	}
 	return count, nil
 }
 
 func (s *complianceScannerStore) UpsertFramework(ctx context.Context, fw *usecaseCompliance.FrameworkRecord) error {
+	tenantID := TenantIDOrDefault(ctx)
 	query := `
-		INSERT INTO compliance_frameworks (id, name, icon, total_checks, passed_checks, failed_checks, score, last_scan_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+		INSERT INTO compliance_frameworks (id, name, icon, total_checks, passed_checks, failed_checks, score, last_scan_at, tenant_id, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
 		ON CONFLICT (name) DO UPDATE SET
 			icon = EXCLUDED.icon,
 			total_checks = EXCLUDED.total_checks,
@@ -106,10 +109,11 @@ func (s *complianceScannerStore) UpsertFramework(ctx context.Context, fw *usecas
 			failed_checks = EXCLUDED.failed_checks,
 			score = EXCLUDED.score,
 			last_scan_at = EXCLUDED.last_scan_at,
+			tenant_id = EXCLUDED.tenant_id,
 			updated_at = NOW()
 	`
 	_, err := s.getDB(ctx).Exec(ctx, query,
-		fw.ID, fw.Name, fw.Icon, fw.TotalChecks, fw.PassedChecks, fw.FailedChecks, fw.Score, fw.LastScanAt,
+		fw.ID, fw.Name, fw.Icon, fw.TotalChecks, fw.PassedChecks, fw.FailedChecks, fw.Score, fw.LastScanAt, tenantID,
 	)
 	if err != nil {
 		return fmt.Errorf("upserting compliance framework %s: %w", fw.Name, err)
@@ -118,23 +122,26 @@ func (s *complianceScannerStore) UpsertFramework(ctx context.Context, fw *usecas
 }
 
 func (s *complianceScannerStore) ReplaceViolations(ctx context.Context, violations []usecaseCompliance.ViolationRecord) error {
-	// Clean out stale seed violations from migration 062 and older scan detections
+	tenantID := TenantIDOrDefault(ctx)
+
+	// Clean out stale seed violations from migration 062 and older scan detections scoped by tenant
 	delQuery := `
 		DELETE FROM compliance_violations 
-		WHERE id::text LIKE 'd1000001%' 
+		WHERE (id::text LIKE 'd1000001%' 
 		   OR message LIKE '%AlwaysPullImages%' 
 		   OR message LIKE '%default-deny%' 
 		   OR message LIKE '%NetworkPolicy%' 
 		   OR message LIKE '%HostPID%'
-		   OR detected_at < NOW() - INTERVAL '1 hour'
+		   OR detected_at < NOW() - INTERVAL '1 hour')
 	`
-	if _, err := s.getDB(ctx).Exec(ctx, delQuery); err != nil {
+	delQuery, delArgs := BuildTenantQuery(ctx, delQuery)
+	if _, err := s.getDB(ctx).Exec(ctx, delQuery, delArgs...); err != nil {
 		return fmt.Errorf("deleting stale violations: %w", err)
 	}
 
 	insertQuery := `
 		INSERT INTO compliance_violations (id, framework_id, severity, policy, resource, namespace, cluster, message, resolved, detected_at, tenant_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 	for _, v := range violations {
 		violID := v.ID
@@ -142,7 +149,7 @@ func (s *complianceScannerStore) ReplaceViolations(ctx context.Context, violatio
 			violID = uuid.NewString()
 		}
 		_, err := s.getDB(ctx).Exec(ctx, insertQuery,
-			violID, v.FrameworkID, v.Severity, v.Policy, v.Resource, v.Namespace, v.Cluster, v.Message, v.Resolved, v.DetectedAt,
+			violID, v.FrameworkID, v.Severity, v.Policy, v.Resource, v.Namespace, v.Cluster, v.Message, v.Resolved, v.DetectedAt, tenantID,
 		)
 		if err != nil {
 			return fmt.Errorf("inserting compliance violation: %w", err)
@@ -160,7 +167,7 @@ func (s *complianceScannerStore) InsertAuditLog(ctx context.Context, log *usecas
 
 	tenantID := log.TenantID
 	if tenantID == "" {
-		tenantID = "default-tenant"
+		tenantID = TenantIDOrDefault(ctx)
 	}
 
 	logID := uuid.NewString()
@@ -179,10 +186,7 @@ func (s *complianceScannerStore) InsertAuditLog(ctx context.Context, log *usecas
 }
 
 func (s *complianceScannerStore) ReplaceAuditFindings(ctx context.Context, findings []usecaseCompliance.AuditFindingRecord) error {
-	tenantID := tenancy.TenantIDFromContext(ctx)
-	if tenantID == "" {
-		tenantID = "default-tenant"
-	}
+	tenantID := TenantIDOrDefault(ctx)
 
 	delQuery := `
 		DELETE FROM audit_findings 

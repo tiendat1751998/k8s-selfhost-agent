@@ -13,18 +13,21 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/domain/fleet"
 	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
 type mockFleetHealthRepo struct {
-	mu           sync.Mutex
-	clusters     []fleet.Cluster
-	healthCalls  map[string]string // clusterID -> healthStatus
-	statusCalls  map[string]string // clusterID -> status
-	nodeCalls    map[string]int    // clusterID -> nodes
-	lastCheckMap map[string]time.Time
+	mu            sync.Mutex
+	clusters      []fleet.Cluster
+	healthCalls   map[string]string // clusterID -> healthStatus
+	statusCalls   map[string]string // clusterID -> status
+	nodeCalls     map[string]int    // clusterID -> nodes
+	lastCheckMap  map[string]time.Time
+	lastListCtx   context.Context
+	lastHealthCtx context.Context
 }
 
 func newMockFleetHealthRepo(clusters []fleet.Cluster) *mockFleetHealthRepo {
@@ -40,6 +43,7 @@ func newMockFleetHealthRepo(clusters []fleet.Cluster) *mockFleetHealthRepo {
 func (m *mockFleetHealthRepo) ListClusters(ctx context.Context) ([]fleet.Cluster, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.lastListCtx = ctx
 	return m.clusters, nil
 }
 
@@ -71,6 +75,7 @@ func (m *mockFleetHealthRepo) UpdateHealth(ctx context.Context, id, healthStatus
 	defer m.mu.Unlock()
 	m.healthCalls[id] = healthStatus
 	m.lastCheckMap[id] = lastCheck
+	m.lastHealthCtx = ctx
 	return nil
 }
 
@@ -336,4 +341,34 @@ func TestHealthChecker_ImmediateCheckOnStart(t *testing.T) {
 		_, checked := fleetRepo.healthCalls["cluster-imm-1"]
 		return checked
 	}, 2*time.Second, 50*time.Millisecond, "expected health check to run immediately on Start")
+}
+
+func TestHealthChecker_BackgroundContext_EnrichedWithPlatformAdminAndDefaultTenant(t *testing.T) {
+	c := fleet.Cluster{
+		ID:           "cluster-k8snode",
+		Name:         "k8snode",
+		TenantID:     "default-tenant",
+		ImportMethod: "agent",
+	}
+
+	fleetRepo := newMockFleetHealthRepo([]fleet.Cluster{c})
+	discovery := &mockDiscoveryPort{}
+
+	checker := NewHealthChecker(fleetRepo, discovery, zap.NewNop())
+
+	// Call checkAll with a bare context.Background() - simulating background daemon!
+	checker.checkAll(context.Background())
+
+	fleetRepo.mu.Lock()
+	defer fleetRepo.mu.Unlock()
+
+	// Verify ListClusters received platform_admin context
+	require.NotNil(t, fleetRepo.lastListCtx, "ListClusters should have been called")
+	assert.Equal(t, "platform_admin", tenancy.UserRoleFromContext(fleetRepo.lastListCtx), "ListClusters should receive platform_admin role")
+	assert.Equal(t, "default-tenant", tenancy.TenantIDFromContext(fleetRepo.lastListCtx), "ListClusters should receive default-tenant")
+
+	// Verify UpdateHealth received platform_admin context
+	require.NotNil(t, fleetRepo.lastHealthCtx, "UpdateHealth should have been called")
+	assert.Equal(t, "platform_admin", tenancy.UserRoleFromContext(fleetRepo.lastHealthCtx), "UpdateHealth should receive platform_admin role")
+	assert.Equal(t, "default-tenant", tenancy.TenantIDFromContext(fleetRepo.lastHealthCtx), "UpdateHealth should receive default-tenant")
 }

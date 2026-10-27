@@ -48,3 +48,19 @@ func WithUserID(ctx context.Context, userID string) context.Context {
 func WithUserRole(ctx context.Context, role string) context.Context {
 	return context.WithValue(ctx, UserRoleKey, role)
 }
+
+// PlatformAdminRole is the canonical role name for platform administrators.
+const PlatformAdminRole = "platform_admin"
+
+// DefaultTenantID is the canonical fallback tenant identifier.
+const DefaultTenantID = "default-tenant"
+
+// WithPlatformAdminContext returns a copy of parent context enriched with the platform_admin role
+// and default-tenant ID if no tenant is already set.
+func WithPlatformAdminContext(ctx context.Context) context.Context {
+	ctx = WithUserRole(ctx, PlatformAdminRole)
+	if TenantIDFromContext(ctx) == "" {
+		ctx = WithTenantID(ctx, DefaultTenantID)
+	}
+	return ctx
+}
