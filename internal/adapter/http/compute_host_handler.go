@@ -107,7 +107,7 @@ func (h *DockerHandler) ListHosts(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list compute hosts", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"data": redactComputeHosts(hosts)})
+	writeJSON(w, http.StatusOK, map[string]interface{}{"data": SanitizeComputeHosts(hosts)})
 }
 
 // CreateHost handles POST /api/v1/docker/hosts
@@ -157,8 +157,7 @@ func (h *DockerHandler) CreateHost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Never leak private key in API response
-	host.TLSKey = ""
-	writeJSON(w, http.StatusCreated, redactComputeHost(host))
+	writeJSON(w, http.StatusCreated, SanitizeComputeHost(host))
 }
 
 // GetHost handles GET /api/v1/docker/hosts/{id} or /api/v1/hosts/{id}
@@ -197,8 +196,7 @@ func (h *DockerHandler) GetHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	host.TLSKey = ""
-	writeJSON(w, http.StatusOK, redactComputeHost(host))
+	writeJSON(w, http.StatusOK, SanitizeComputeHost(host))
 }
 
 // UpdateHost handles PUT /api/v1/docker/hosts/{id}
@@ -268,7 +266,7 @@ func (h *DockerHandler) UpdateHost(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Labels != nil {
 		for k, v := range req.Labels {
-			if isTokenLabelKey(k) && v == "***" {
+			if IsSensitiveHostLabelKey(k) && (v == "***" || v == "***REDACTED***") {
 				if existingVal, ok := existing.Labels[k]; ok {
 					req.Labels[k] = existingVal
 				}
@@ -283,8 +281,7 @@ func (h *DockerHandler) UpdateHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing.TLSKey = ""
-	writeJSON(w, http.StatusOK, redactComputeHost(existing))
+	writeJSON(w, http.StatusOK, SanitizeComputeHost(existing))
 }
 
 // DeleteHost handles DELETE /api/v1/docker/hosts/{id}
@@ -334,40 +331,4 @@ func (h *DockerHandler) DeleteHost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
-}
-
-func isTokenLabelKey(key string) bool {
-	lk := strings.ToLower(strings.TrimSpace(key))
-	return lk == "auth_token" || lk == "token" || lk == "agent_token" || lk == "bearer_token" || lk == "access_token"
-}
-
-func redactComputeHost(h *docker.ComputeHost) *docker.ComputeHost {
-	if h == nil {
-		return nil
-	}
-	clone := *h
-	if clone.Labels != nil {
-		newLabels := make(map[string]string, len(clone.Labels))
-		for k, v := range clone.Labels {
-			if isTokenLabelKey(k) && strings.TrimSpace(v) != "" {
-				newLabels[k] = "***"
-			} else {
-				newLabels[k] = v
-			}
-		}
-		clone.Labels = newLabels
-	}
-	return &clone
-}
-
-func redactComputeHosts(hosts []docker.ComputeHost) []docker.ComputeHost {
-	if hosts == nil {
-		return nil
-	}
-	result := make([]docker.ComputeHost, len(hosts))
-	for i := range hosts {
-		redacted := redactComputeHost(&hosts[i])
-		result[i] = *redacted
-	}
-	return result
 }

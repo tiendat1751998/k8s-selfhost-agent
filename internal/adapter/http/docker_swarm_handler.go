@@ -109,15 +109,37 @@ func maskToken(token string) string {
 	return "SWMTKN-1-***..." + last8
 }
 
-// GetSwarmInfo handles GET /api/v1/docker/swarm
+// InactiveSwarmResponse defines the payload returned when Docker Swarm is not initialized or unavailable.
+type InactiveSwarmResponse struct {
+	Active   bool   `json:"active"`
+	Status   string `json:"status"`
+	Nodes    int    `json:"nodes"`
+	Managers int    `json:"managers"`
+	Message  string `json:"message"`
+}
+
+// GetSwarmInfo handles GET /api/v1/docker/swarm.
+// Returns HTTP 200 with inactive status if Swarm is not initialized or unavailable.
 func (h *DockerHandler) GetSwarmInfo(w http.ResponseWriter, r *http.Request) {
 	if h.repo == nil {
-		writeError(w, http.StatusServiceUnavailable, "docker service unavailable", nil)
+		writeJSON(w, http.StatusOK, InactiveSwarmResponse{
+			Active:   false,
+			Status:   "inactive",
+			Nodes:    0,
+			Managers: 0,
+			Message:  "Docker Swarm inactive or unavailable on host",
+		})
 		return
 	}
 	info, err := h.repo.GetSwarmInfo(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to get swarm info", err)
+		writeJSON(w, http.StatusOK, InactiveSwarmResponse{
+			Active:   false,
+			Status:   "inactive",
+			Nodes:    0,
+			Managers: 0,
+			Message:  "Docker Swarm inactive or unavailable on host",
+		})
 		return
 	}
 	writeJSON(w, http.StatusOK, info)

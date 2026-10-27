@@ -71,6 +71,7 @@ func (s *appServices) stop() {
 
 func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, infra *infrastructure, log *zap.Logger) (*appServices, error) {
 	var stopFns []func()
+	stopFns = append(stopFns, mw.CloseDefaultTokenDenylist)
 
 	// 1. Initialize WebSocket Hub
 	wsHub := adapthttp.NewWSHub()
@@ -249,7 +250,9 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 		return nil, fmt.Errorf("cluster encryption key validation failed: %w", err)
 	}
 	importUsecase := usecaseCluster.NewImportUsecase(fleetRepo, discoveryAdapter, log)
-	healthChecker := usecaseCluster.NewHealthChecker(fleetRepo, discoveryAdapter, log)
+	healthChecker := usecaseCluster.NewHealthChecker(fleetRepo, discoveryAdapter, log,
+		usecaseCluster.WithComputeHostRepo(computeHostRepo),
+	)
 	eg.Go(func() error {
 		healthChecker.Start(ctx, 1*time.Minute)
 		return nil

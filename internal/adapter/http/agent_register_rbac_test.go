@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
+	mw "github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 )
 
 func TestAgentRegister_RBACAndTokenValidation(t *testing.T) {
@@ -149,5 +150,89 @@ func TestAgentRegister_RBACAndTokenValidation(t *testing.T) {
 		rec = httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+}
+
+func TestAgentRegister_ThroughJWTAuthMiddleware(t *testing.T) {
+	_ = mw.SetJWTSecret("supersecret-must-be-at-least-32-characters-long")
+	origEnv := os.Getenv("AGENT_AUTH_TOKEN")
+	os.Setenv("AGENT_AUTH_TOKEN", "shared-edge-agent-token-12345")
+	defer os.Setenv("AGENT_AUTH_TOKEN", origEnv)
+
+	repo := newMockComputeHostRepo()
+	handler := NewDockerHandler(nil, repo)
+
+	r := chi.NewRouter()
+	r.Use(mw.JWTAuthMiddleware)
+	r.Post("/api/v1/agents/register", handler.RegisterAgent)
+
+	validPayload := map[string]interface{}{
+		"hostname":   "edge-node-01",
+		"ip_address": "10.10.10.60",
+		"port":       9100,
+	}
+	body, _ := json.Marshal(validPayload)
+
+	// (i) valid AGENT_AUTH_TOKEN -> 200/201 (via Bearer token or X-Agent-Token)
+	t.Run("valid AGENT_AUTH_TOKEN via Authorization Bearer returns 200 or 201", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/register", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer shared-edge-agent-token-12345")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		assert.Contains(t, []int{http.StatusOK, http.StatusCreated}, rec.Code)
+	})
+
+	t.Run("valid AGENT_AUTH_TOKEN via X-Agent-Token returns 200 or 201", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/register", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Agent-Token", "shared-edge-agent-token-12345")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		assert.Contains(t, []int{http.StatusOK, http.StatusCreated}, rec.Code)
+	})
+
+	// (ii) valid platform_admin JWT -> 200/201
+	t.Run("valid platform_admin JWT returns 200 or 201", func(t *testing.T) {
+		adminJWT, err := mw.GenerateAccessToken("admin-1", "platform_admin", "default-tenant")
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/register", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+adminJWT)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		assert.Contains(t, []int{http.StatusOK, http.StatusCreated}, rec.Code)
+	})
+
+	// (iii) viewer JWT -> 403
+	t.Run("viewer JWT returns 403", func(t *testing.T) {
+		viewerJWT, err := mw.GenerateAccessToken("viewer-1", "viewer", "default-tenant")
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/register", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+viewerJWT)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+	})
+
+	// (iv) invalid/missing token -> 401
+	t.Run("missing token returns 401", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/register", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	})
+
+	t.Run("invalid token returns 401", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/register", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer invalid-garbage-token")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	})
 }
