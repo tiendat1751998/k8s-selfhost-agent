@@ -106,6 +106,20 @@ export function formatIncidentTime(d?: string): string {
 
 export function calculateBlastRadius(inc: Incident | null): BlastRadiusInfo | null {
   if (!inc) return null
+  const isResolved = (inc.status || '').toLowerCase() === 'resolved' || (inc.status || '').toLowerCase() === 'mitigated'
+  if (isResolved) {
+    return {
+      affectedNamespace: inc.namespace || 'default',
+      affectedPod: inc.pod_name || '--',
+      cluster: inc.cluster_name || '--',
+      impactScore: 0,
+      riskLevel: 'Contained (0 Active)',
+      affectedServices: [],
+      dependentWorkloads: [],
+      nodeHealth: 'Nominal (Resolved)'
+    }
+  }
+
   const isCritical = inc.severity === 'critical'
   const isHigh = inc.severity === 'high'
   const score = isCritical ? 92 : (isHigh ? 68 : 34)

@@ -146,7 +146,7 @@ const historyColumns: Column<AlertHistory>[] = [
 
     <!-- Tab Content 2: Alert Rules Table -->
     <div v-else-if="activeTab === 'rules'" class="tab-content animate-fade-in">
-      <div class="desktop-table-view desktop-only">
+      <div class="desktop-table-view rules-table-desktop">
         <AlertRulesTable 
           :rules="filteredRules" 
           :loading="loading" 

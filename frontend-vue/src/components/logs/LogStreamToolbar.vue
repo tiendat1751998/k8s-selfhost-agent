@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import BaseIcon from '../ui/BaseIcon.vue'
+import ClickHouseEngineBadge from './ClickHouseEngineBadge.vue'
 import type { LogTarget } from './LogTargetTree.vue'
 import type { TimeRangeConfig } from '../../composables/useHistoricalLogSearch'
 
@@ -182,6 +183,9 @@ function setLevel(val: string) {
           </button>
         </div>
       </div>
+
+      <!-- ClickHouse Log Engine Architecture Badge -->
+      <ClickHouseEngineBadge />
 
       <!-- Zone 4 (Right - Stream Actions Group: Error Radar, Volume, Wrap, Hover, Clear, Export) -->
       <div class="toolbar-actions-group">

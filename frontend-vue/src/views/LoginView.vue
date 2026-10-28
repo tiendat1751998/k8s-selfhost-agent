@@ -32,7 +32,7 @@
         <!-- Status Pill -->
         <div class="env-pill">
           <span class="pulse-dot pulse-dot-emerald"></span>
-          <span class="env-text">Authenticated Control Session</span>
+          <span class="env-text">Zero-Trust Control Plane</span>
         </div>
 
         <!-- Error Box -->

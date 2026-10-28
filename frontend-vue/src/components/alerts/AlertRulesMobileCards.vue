@@ -63,6 +63,6 @@ const emit = defineEmits<{
 .btn-card-action { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; font-size: 11px; font-weight: 600; border-radius: 6px; background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle); color: var(--text-secondary); cursor: pointer; }
 .btn-card-action:hover { background: var(--bg-card-hover); color: var(--text-primary); }
 .btn-card-delete { color: var(--color-status-offline, #fb7185); border-color: var(--color-status-offline-border, rgba(244, 63, 94, 0.25)); background: var(--color-status-offline-bg, rgba(244, 63, 94, 0.08)); }
-.btn-card-delete:hover { background: var(--color-status-offline-bg, rgba(244, 63, 94, 0.2)); color: var(--color-status-offline, #fb7185); }
-@media (min-width: 768px) { .mobile-only { display: none !important; } }
+@media (min-width: 1024px) { .mobile-only, .alert-rules-mobile-stream { display: none !important; } }
+@media (max-width: 1023.98px) { .alert-rules-mobile-stream { display: flex !important; } }
 </style>
