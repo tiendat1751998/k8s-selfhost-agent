@@ -18,6 +18,10 @@ body:has([role="dialog"], [aria-modal="true"], .modal-overlay, .modal-backdrop, 
   display: none !important;
 }
 
+body:has(.pwa-install-banner) .main-content {
+  padding-bottom: 104px;
+}
+
 .banner-content {
   padding: 12px 14px;
   display: flex;

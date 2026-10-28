@@ -21,10 +21,12 @@ interface Props {
   loading: boolean
   segmentCounts: Record<WorkloadSegmentTab, number>
   viewMode?: 'topology' | 'table'
+  hasDaemons?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  viewMode: 'topology'
+  viewMode: 'topology',
+  hasDaemons: false
 })
 
 const emit = defineEmits<{
@@ -58,13 +60,8 @@ function onMoreDocClick(e: MouseEvent) {
   }
 }
 
-onMounted(() => {
-  document.addEventListener('click', onMoreDocClick)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', onMoreDocClick)
-})
+onMounted(() => { document.addEventListener('click', onMoreDocClick) })
+onUnmounted(() => { document.removeEventListener('click', onMoreDocClick) })
 </script>
 
 <template>
@@ -85,8 +82,8 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <div class="mobile-telemetry-pill font-mono" :title="`${totalWorkloads} workloads · ${readyReplicas}/${totalReplicas} pods · ${healthyCount} healthy`">
-        <span class="pill-pods">{{ readyReplicas }}/{{ totalReplicas }} pods</span>
+      <div class="mobile-telemetry-pill font-mono" :title="`${totalWorkloads} workloads · ${readyReplicas}/${totalReplicas} ${hasDaemons ? 'units' : 'pods'} · ${healthyCount} healthy`">
+        <span class="pill-pods">{{ readyReplicas }}/{{ totalReplicas }} {{ hasDaemons ? 'units' : 'pods' }}</span>
         <span class="pill-sep">·</span>
         <span class="pill-ok">{{ healthyCount }} ok</span>
       </div>
@@ -111,18 +108,12 @@ onUnmounted(() => {
         <BaseIcon name="sliders" size="xs" /> <span class="filter-btn-text">Filters</span>
       </button>
 
-      <button
-        type="button"
-        class="btn-mobile-deploy"
-        title="Deploy Workload"
-        @click="emit('deploy')"
-      >+
-      </button>
+      <button type="button" class="btn-mobile-deploy" title="Deploy Workload" @click="emit('deploy')">+</button>
     </div>
 
     <!-- Mobile Expandable Filter Strip Accordion (<768px) -->
     <Transition name="filter-slide">
-      <div v-if="showMobileFilters" class="mobile-filter-strip glass-panel">
+      <div v-if="showMobileFilters" class="mobile-filter-strip">
         <div class="mobile-filter-row">
           <label class="mobile-filter-label">Namespace:</label>
           <select
@@ -138,28 +129,13 @@ onUnmounted(() => {
         <div class="mobile-filter-row">
           <label class="mobile-filter-label">Status:</label>
           <div class="mobile-pills-group">
-            <button
-              type="button"
-              class="pill-btn pill-xs"
-              :class="{ 'pill-active': statusFilter === 'all' }"
-              @click="emit('update:statusFilter', 'all')"
-            >
+            <button type="button" class="pill-btn pill-xs" :class="{ 'pill-active': statusFilter === 'all' }" @click="emit('update:statusFilter', 'all')">
               All ({{ totalWorkloads }})
             </button>
-            <button
-              type="button"
-              class="pill-btn pill-xs pill-healthy"
-              :class="{ 'pill-active': statusFilter === 'healthy' }"
-              @click="emit('update:statusFilter', 'healthy')"
-            >
+            <button type="button" class="pill-btn pill-xs pill-healthy" :class="{ 'pill-active': statusFilter === 'healthy' }" @click="emit('update:statusFilter', 'healthy')">
               <BaseIcon name="shield" size="xs" /> Healthy ({{ healthyCount }})
             </button>
-            <button
-              type="button"
-              class="pill-btn pill-xs pill-degraded"
-              :class="{ 'pill-active': statusFilter === 'degraded' }"
-              @click="emit('update:statusFilter', 'degraded')"
-            >
+            <button type="button" class="pill-btn pill-xs pill-degraded" :class="{ 'pill-active': statusFilter === 'degraded' }" @click="emit('update:statusFilter', 'degraded')">
               <BaseIcon name="alert-triangle" size="xs" /> Degraded ({{ degradedCount }})
             </button>
           </div>
@@ -168,28 +144,13 @@ onUnmounted(() => {
         <div class="mobile-filter-row">
           <label class="mobile-filter-label">Type:</label>
           <div class="mobile-pills-group">
-            <button
-              type="button"
-              class="pill-btn pill-xs"
-              :class="{ 'pill-active': activeFilterTab === 'all' }"
-              @click="emit('update:activeFilterTab', 'all')"
-            >
+            <button type="button" class="pill-btn pill-xs" :class="{ 'pill-active': activeFilterTab === 'all' }" @click="emit('update:activeFilterTab', 'all')">
               All
             </button>
-            <button
-              type="button"
-              class="pill-btn pill-xs"
-              :class="{ 'pill-active': activeFilterTab === 'k8s' }"
-              @click="emit('update:activeFilterTab', 'k8s')"
-            >
+            <button type="button" class="pill-btn pill-xs" :class="{ 'pill-active': activeFilterTab === 'k8s' }" @click="emit('update:activeFilterTab', 'k8s')">
               <BaseIcon name="anchor" size="xs" /> K8s ({{ k8sCount }})
             </button>
-            <button
-              type="button"
-              class="pill-btn pill-xs"
-              :class="{ 'pill-active': activeFilterTab === 'swarm' }"
-              @click="emit('update:activeFilterTab', 'swarm')"
-            >
+            <button type="button" class="pill-btn pill-xs" :class="{ 'pill-active': activeFilterTab === 'swarm' }" @click="emit('update:activeFilterTab', 'swarm')">
               <BaseIcon name="box" size="xs" /> Docker ({{ swarmCount }})
             </button>
           </div>
@@ -198,7 +159,7 @@ onUnmounted(() => {
     </Transition>
 
     <!-- Sleek Unified Enterprise Toolbar -->
-    <div class="deployments-toolbar-sleek glass-panel desktop-only" role="toolbar" aria-label="Deployments Fleet Toolbar">
+    <div class="deployments-toolbar-sleek desktop-only" role="toolbar" aria-label="Deployments Fleet Toolbar">
       <!-- Search input with search icon and clear button -->
       <div class="toolbar-search-wrap">
         <BaseIcon name="search" size="xs" class="search-icon" />
@@ -210,13 +171,7 @@ onUnmounted(() => {
           aria-label="Filter workloads by name, image, namespace"
           @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
         />
-        <button
-          v-if="searchQuery"
-          type="button"
-          class="clear-input-btn"
-          aria-label="Clear search"
-          @click="emit('update:searchQuery', '')"
-        >
+        <button v-if="searchQuery" type="button" class="clear-input-btn" aria-label="Clear search" @click="emit('update:searchQuery', '')">
           <BaseIcon name="x" size="xs" />
         </button>
       </div>
@@ -238,7 +193,7 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- Status filter dropdown -->
+      <!-- Status filter dropdown (min-width: 160px; never clipped) -->
       <select
         :value="statusFilter"
         class="toolbar-select font-mono"
@@ -278,12 +233,7 @@ onUnmounted(() => {
 
       <!-- Action buttons -->
       <div class="toolbar-actions-group">
-        <button
-          type="button"
-          class="toolbar-btn btn-primary toolbar-btn-deploy"
-          title="Deploy Workload"
-          @click="emit('deploy')"
-        >
+        <button type="button" class="toolbar-btn btn-primary toolbar-btn-deploy" title="Deploy Workload" @click="emit('deploy')">
           <span>+ Deploy</span>
         </button>
 
@@ -301,22 +251,12 @@ onUnmounted(() => {
             <span>More</span>
             <BaseIcon name="chevron-down" size="xs" class="more-chevron" />
           </button>
-          <div v-if="showMoreActions" class="toolbar-more-menu glass-panel" role="menu">
-            <button
-              type="button"
-              class="more-menu-item"
-              role="menuitem"
-              @click="emit('openYaml'); showMoreActions = false"
-            >
+          <div v-if="showMoreActions" class="toolbar-more-menu" role="menu">
+            <button type="button" class="more-menu-item" role="menuitem" @click="emit('openYaml'); showMoreActions = false">
               <BaseIcon name="file-text" size="xs" />
               <span>YAML Manifest</span>
             </button>
-            <button
-              type="button"
-              class="more-menu-item"
-              role="menuitem"
-              @click="emit('openBlueprints'); showMoreActions = false"
-            >
+            <button type="button" class="more-menu-item" role="menuitem" @click="emit('openBlueprints'); showMoreActions = false">
               <BaseIcon name="box" size="xs" />
               <span>Blueprint Catalog</span>
             </button>

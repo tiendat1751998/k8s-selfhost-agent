@@ -68,9 +68,21 @@ export function groupDeploymentsByNamespace(apps: DeploymentApp[]): NamespaceGro
   })
 }
 
-export function computeReplicaCells(app: { replicas?: number; readyReplicas?: number; status?: string }): ReplicaCellsInfo {
-  const replicas = app.replicas ?? 0
+export function computeReplicaCells(app: { replicas?: number; readyReplicas?: number; status?: string; type?: string }): ReplicaCellsInfo {
+  const isDaemon = app.type === 'daemon' || app.type === 'host-daemon'
   const status = app.status ?? 'healthy'
+  if (isDaemon) {
+    const isUp = status === 'healthy' || status === 'running' || status === 'active'
+    return {
+      blocks: [{ index: 0, state: isUp ? 'online' : 'offline', isZero: false }],
+      overflowCount: 0,
+      readyCount: isUp ? 1 : 0,
+      desiredCount: 1,
+      label: isUp ? '1 / 1 Unit Up' : '0 / 1 Unit Down'
+    }
+  }
+
+  const replicas = app.replicas ?? 0
   const ready = app.readyReplicas !== undefined ? app.readyReplicas : (status === 'healthy' ? replicas : 0)
 
   if (replicas <= 0) {
@@ -206,24 +218,12 @@ export function useDeployments() {
   const readyReplicas = computed(() => deployments.value.reduce((acc, d) => acc + (d.readyReplicas || d.replicas || 0), 0))
   const healthyCount = computed(() => deployments.value.filter(d => d.status === 'healthy').length)
   const degradedCount = computed(() => deployments.value.filter(d => d.status !== 'healthy').length)
-
   const canaryCount = computed(() => deployments.value.filter(d => d.strategy === 'Canary' || (d.canaryWeight !== undefined && d.canaryWeight > 0)).length)
   const blueGreenCount = computed(() => deployments.value.filter(d => d.strategy === 'BlueGreen').length)
   const k8sCount = computed(() => deployments.value.filter(d => d.type === 'kubernetes' || d.type === 'k8s').length)
   const swarmCount = computed(() => deployments.value.filter(d => d.type === 'swarm' || d.type === 'docker' || d.type === 'container').length)
-
-  const namespaces = computed(() => {
-    const set = new Set<string>()
-    for (const d of deployments.value) {
-      if (d.namespace) set.add(d.namespace)
-    }
-    return Array.from(set).sort()
-  })
-
-  const filteredDeployments = computed(() =>
-    filterDeploymentsList(deployments.value, activeFilterTab.value, selectedNamespaceFilter.value, searchQuery.value, statusFilter.value)
-  )
-
+  const namespaces = computed(() => Array.from(new Set(deployments.value.map(d => d.namespace).filter(Boolean) as string[])).sort())
+  const filteredDeployments = computed(() => filterDeploymentsList(deployments.value, activeFilterTab.value, selectedNamespaceFilter.value, searchQuery.value, statusFilter.value))
   const totalPodReplicas = computed(() => totalReplicas.value)
   const attentionCount = computed(() => degradedCount.value)
   const namespaceCount = computed(() => namespaces.value.length)

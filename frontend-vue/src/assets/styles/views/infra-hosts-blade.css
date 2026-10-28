@@ -140,7 +140,7 @@
   border: 1px solid var(--color-status-offline-border);
 }
 
-.status-dot {
+.blade-status-pill .status-dot {
   width: 5px;
   height: 5px;
   border-radius: 50%;
@@ -192,7 +192,7 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   background: var(--color-surface-inset);
-  border: 1px solid var(--color-hairline);
+  border: 1px solid var(--color-border-subtle);
   border-radius: var(--rounded-md, 6px);
   padding: 8px 12px;
 }
@@ -327,4 +327,31 @@
     grid-template-columns: 1fr;
     gap: 8px;
   }
+}
+
+/* High-Contrast Light Mode Overrides */
+[data-theme="light"] .blade-card {
+  border: 1px solid #cbd5e1;
+  background: var(--bg-card, #ffffff);
+}
+[data-theme="light"] .blade-card:hover {
+  background: var(--bg-card-hover, #f1f5f9);
+  border-color: #94a3b8;
+}
+[data-theme="light"] .blade-hostname {
+  color: #0f172a;
+}
+[data-theme="light"] .blade-spec-line,
+[data-theme="light"] .footer-workload-info,
+[data-theme="light"] .meter-extra,
+[data-theme="light"] .meter-name {
+  color: #334155;
+}
+[data-theme="light"] .meter-track {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+}
+[data-theme="light"] .blade-telemetry-meters {
+  background: var(--color-surface-inset, #f1f5f9);
+  border-color: var(--color-border-subtle, #e2e8f0);
 }

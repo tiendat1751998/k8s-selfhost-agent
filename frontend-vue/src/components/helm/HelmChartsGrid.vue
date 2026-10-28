@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import BaseIcon from '../ui/BaseIcon.vue'
 import type { HelmChart, HelmRepo } from '../../api/helm'
 
 const props = defineProps<{
@@ -67,7 +68,7 @@ function getChartIcon(chart: HelmChart): string {
           :class="{ active: selectedCategory === cat.key }"
           @click="emit('update:selectedCategory', cat.key)"
         >
-          <span class="chip-icon">{{ cat.icon }}</span>
+          <span class="chip-icon"><BaseIcon :name="cat.icon" size="xs" /></span>
           <span class="chip-label">{{ cat.label }}</span>
         </button>
       </div>

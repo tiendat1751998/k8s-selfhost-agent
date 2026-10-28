@@ -32,6 +32,19 @@ import {
 } from './helmCatalogConstants'
 import { sanitizeHelmRelease, normalizeHelmChart } from './useHelm'
 
+export function deduplicateCharts(chartList: HelmChart[]): HelmChart[] {
+  const seen = new Set<string>()
+  const result: HelmChart[] = []
+  for (const c of chartList) {
+    const key = `${c.repo || 'default'}:${c.name}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      result.push(c)
+    }
+  }
+  return result
+}
+
 export { REPO_PRESETS, CATEGORY_TAGS, type ActiveTab, type ActiveDrawerTab }
 
 export function useHelmCatalog() {
@@ -111,7 +124,8 @@ export function useHelmCatalog() {
     loadingCharts.value = true
     try {
       const raw = (await helmApi.searchCharts(keyword)) || []
-      charts.value = raw.map(c => normalizeHelmChart(c))
+      const normalized = raw.map(c => normalizeHelmChart(c))
+      charts.value = deduplicateCharts(normalized)
     }
     catch (err: unknown) { showToast(getErrorMessage(err, 'Failed to search Helm charts'), 'error'); charts.value = [] }
     finally { loadingCharts.value = false }

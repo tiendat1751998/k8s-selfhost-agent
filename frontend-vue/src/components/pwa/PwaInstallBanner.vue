@@ -49,12 +49,9 @@ onMounted(() => {
 })
 
 const shouldShow = computed(() => {
-  if (typeof window !== 'undefined' && localStorage.getItem('force_pwa_banner') === 'true') {
-    return true
-  }
   if (isDismissed.value) return false
   if (isInstalled.value || isIosStandalone.value) return false
-  // Do NOT show unless a real browser beforeinstallprompt event occurred
+  // ONLY render when a genuine browser beforeinstallprompt event has fired
   return deferredPrompt.value !== null
 })
 

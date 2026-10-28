@@ -79,7 +79,7 @@ function handleDropdownAction(action: string, host: ComputeHost) {
 <template>
   <div class="blade-rack-container font-mono">
     <!-- Optional Pagination for ultra-dense fleets -->
-    <div v-if="hosts.length > pageSize" class="blade-pagination glass-panel">
+    <div v-if="hosts.length > pageSize" class="blade-pagination">
       <span class="text-xs text-muted">Showing {{ startIndex + 1 }}–{{ endIndex }} of {{ hosts.length }} blades</span>
       <div class="pagination-controls">
         <button type="button" class="btn btn-secondary btn-xs" :disabled="currentPage <= 1" @click="prevPage">Prev</button>
@@ -93,7 +93,7 @@ function handleDropdownAction(action: string, host: ComputeHost) {
       <div
         v-for="host in paginatedHosts"
         :key="host.id"
-        class="blade-card glass-panel"
+        class="blade-card"
         :class="[
           `blade-rail-${host.status === 'connected' || host.status === 'ok' ? 'online' : 'offline'}`,
           { 'blade-card-testing': testingHostId === host.id }

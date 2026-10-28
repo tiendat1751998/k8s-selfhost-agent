@@ -30,23 +30,23 @@ export interface InstallFormData {
 }
 
 export const REPO_PRESETS: RepoPreset[] = [
-  { name: 'bitnami', url: 'https://charts.bitnami.com/bitnami', icon: '🍱' },
-  { name: 'ingress-nginx', url: 'https://kubernetes.github.io/ingress-nginx', icon: '🌐' },
-  { name: 'prometheus-community', url: 'https://prometheus-community.github.io/helm-charts', icon: '📊' },
-  { name: 'grafana', url: 'https://grafana.github.io/helm-charts', icon: '📈' },
-  { name: 'jetstack', url: 'https://charts.jetstack.io', icon: '🔒' },
-  { name: 'traefik', url: 'https://traefik.github.io/charts', icon: '🚦' },
-  { name: 'hashicorp', url: 'https://helm.releases.hashicorp.com', icon: '🔷' },
+  { name: 'bitnami', url: 'https://charts.bitnami.com/bitnami', icon: 'box' },
+  { name: 'ingress-nginx', url: 'https://kubernetes.github.io/ingress-nginx', icon: 'globe' },
+  { name: 'prometheus-community', url: 'https://prometheus-community.github.io/helm-charts', icon: 'activity' },
+  { name: 'grafana', url: 'https://grafana.github.io/helm-charts', icon: 'activity' },
+  { name: 'jetstack', url: 'https://charts.jetstack.io', icon: 'shield' },
+  { name: 'traefik', url: 'https://traefik.github.io/charts', icon: 'layers' },
+  { name: 'hashicorp', url: 'https://helm.releases.hashicorp.com', icon: 'server' },
 ]
 
 export const CATEGORY_TAGS: CategoryTag[] = [
-  { key: 'all', label: 'All Categories', icon: '✨' },
-  { key: 'database', label: 'Databases', icon: '🗄️' },
-  { key: 'networking', label: 'Ingress & Mesh', icon: '🌐' },
-  { key: 'monitoring', label: 'Observability', icon: '📊' },
-  { key: 'security', label: 'Security & Auth', icon: '🛡️' },
-  { key: 'storage', label: 'Storage & Backup', icon: '📦' },
-  { key: 'web', label: 'Web & APIs', icon: '⚡' },
+  { key: 'all', label: 'All Categories', icon: 'sparkles' },
+  { key: 'database', label: 'Databases', icon: 'database' },
+  { key: 'networking', label: 'Ingress & Mesh', icon: 'globe' },
+  { key: 'monitoring', label: 'Observability', icon: 'activity' },
+  { key: 'security', label: 'Security & Auth', icon: 'shield' },
+  { key: 'storage', label: 'Storage & Backup', icon: 'package' },
+  { key: 'web', label: 'Web & APIs', icon: 'zap' },
 ]
 
 export function sanitizeReleaseName(name: string): string {
@@ -85,14 +85,14 @@ export function formatReleaseDate(dateStr?: string): string {
 
 export function getChartIcon(chart: HelmChart): string {
   const name = (chart.name || '').toLowerCase()
-  if (name.includes('nginx') || name.includes('ingress') || name.includes('traefik')) return '🌐'
-  if (name.includes('postgres') || name.includes('mysql') || name.includes('mariadb') || name.includes('redis') || name.includes('mongo')) return '🗄️'
-  if (name.includes('prom') || name.includes('grafana') || name.includes('loki') || name.includes('metric')) return '📊'
-  if (name.includes('cert') || name.includes('vault') || name.includes('auth') || name.includes('keycloak')) return '🛡️'
-  if (name.includes('kafka') || name.includes('rabbit') || name.includes('queue') || name.includes('nats')) return '⚡'
-  if (name.includes('elastic') || name.includes('search') || name.includes('opensearch')) return '🔍'
-  if (name.includes('ai') || name.includes('ollama') || name.includes('vllm') || name.includes('llm')) return '🤖'
-  return '📦'
+  if (name.includes('nginx') || name.includes('ingress') || name.includes('traefik')) return 'globe'
+  if (name.includes('postgres') || name.includes('mysql') || name.includes('mariadb') || name.includes('redis') || name.includes('mongo')) return 'database'
+  if (name.includes('prom') || name.includes('grafana') || name.includes('loki') || name.includes('metric')) return 'activity'
+  if (name.includes('cert') || name.includes('vault') || name.includes('auth') || name.includes('keycloak')) return 'shield'
+  if (name.includes('kafka') || name.includes('rabbit') || name.includes('queue') || name.includes('nats')) return 'zap'
+  if (name.includes('elastic') || name.includes('search') || name.includes('opensearch')) return 'search'
+  if (name.includes('ai') || name.includes('ollama') || name.includes('vllm') || name.includes('llm')) return 'bot'
+  return 'package'
 }
 
 export function getStatusType(status: string): string {
