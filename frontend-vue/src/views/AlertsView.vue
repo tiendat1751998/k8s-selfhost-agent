@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import '../assets/styles/components/alerts-drawers.css'
 import '../assets/styles/views/alerts.css'
-import { useAlertManager } from '../composables/useAlertManager'
+import { useAlerts } from '../composables/useAlerts'
 import ActiveAlertsStream from '../components/alerts/ActiveAlertsStream.vue'
 import AlertRulesTable from '../components/alerts/AlertRulesTable.vue'
 import AlertRulesMobileCards from '../components/alerts/AlertRulesMobileCards.vue'
@@ -43,8 +43,9 @@ const {
   openCreateRule,
   openEditRule,
   handleCreateChannel,
-  triggerChannelTest
-} = useAlertManager()
+  triggerChannelTest,
+  deleteChannel
+} = useAlerts()
 
 // Active Tab navigation
 const activeTab = ref<'firing' | 'rules' | 'channels' | 'history'>('firing')
@@ -169,6 +170,7 @@ const historyColumns: Column<AlertHistory>[] = [
       <AlertChannelsGrid 
         :channels="filteredChannels" 
         @test="triggerChannelTest" 
+        @delete="deleteChannel"
       />
     </div>
 

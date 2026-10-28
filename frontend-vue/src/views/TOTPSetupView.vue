@@ -115,7 +115,7 @@
             :qr-image-src="setup.qrImageSrc.value"
             :secret-key="setup.secretKey.value"
             :secret-copied="setup.secretCopied.value"
-            :account-email="authStore.user?.email"
+            :account-email="authStore.user?.email || (authStore.user as { username?: string })?.username || 'platform_admin'"
             @copy-secret="setup.copySecretToClipboard()"
           />
           <div class="step-actions">

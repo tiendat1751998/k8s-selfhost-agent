@@ -18,17 +18,17 @@ const props = withDefaults(defineProps<Props>(), {
 
 const EMERALD_STATUSES = new Set([
   'ready', 'healthy', 'active', 'online', 'connected', 'ok', 'live', 'running', 'deployed', 'success',
-  'pass', 'resolved', 'mitigated', 'completed', 'verified', 'armed'
+  'pass', 'resolved', 'mitigated', 'completed', 'verified', 'armed', 'isolated'
 ])
 
 const AMBER_STATUSES = new Set([
   'warning', 'pending', 'degraded', 'elevated', 'in_progress', 'inprogress', 'standby', 'polling',
-  'open', 'promoting', 'mitigating'
+  'open', 'promoting', 'mitigating', 'medium'
 ])
 
 const ROSE_STATUSES = new Set([
   'failed', 'critical', 'error', 'offline', 'unhealthy', 'disconnected', 'down', 'danger',
-  'rejected', 'blocked', 'mismatch'
+  'rejected', 'blocked', 'mismatch', 'high'
 ])
 
 const SLATE_STATUSES = new Set([

@@ -75,7 +75,7 @@
 }
 
 /* 3. Page Layout */
-.alerts-page { display: flex; flex-direction: column; gap: 16px; width: 100%; padding: 0; margin: 0; }
+.alerts-page { display: flex; flex-direction: column; gap: 16px; width: 100%; padding: 20px 24px; margin: 0; }
 
 /* Feedback Banner */
 .feedback-banner {
@@ -106,7 +106,7 @@
 }
 .alerts-toolbar-sleek .toolbar-search-wrap {
   position: relative; display: flex; align-items: center;
-  width: 200px; min-width: 140px; max-width: 240px; height: 32px; flex: 0 1 200px; flex-shrink: 0;
+  width: 320px; min-width: 280px; max-width: 400px; height: 32px; flex: 0 1 320px; flex-shrink: 0;
 }
 .alerts-toolbar-sleek .search-icon {
   position: absolute; left: 10px; font-size: 12px;

@@ -24,7 +24,7 @@
         </button>
       </div>
       <p class="secret-hint">
-        Account: <strong>{{ accountEmail || 'Operator' }}</strong> | Type: <strong>Time-based (30s)</strong>
+        Account: <strong>{{ accountEmail || 'platform_admin' }}</strong> | Type: <strong>Time-based (30s)</strong>
       </p>
     </div>
   </div>

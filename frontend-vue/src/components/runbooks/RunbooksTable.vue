@@ -88,14 +88,6 @@
                 >
                   <BaseIcon :name="executingId === rb.id ? 'clock' : 'zap'" size="xs" />
                 </button>
-                <button 
-                  class="table-action-btn btn-steps-action"
-                  title="Inspect Procedure Steps"
-                  aria-label="Inspect Procedure Steps"
-                  @click="emit('inspect', rb)"
-                >
-                  <BaseIcon name="eye" size="xs" />
-                </button>
                 <ActionDropdown
                   :items="getRunbookActions(rb)"
                   align="right"
@@ -138,13 +130,16 @@ const emit = defineEmits<{
 
 function getRunbookActions(_rb: Runbook): ActionItem[] {
   return [
+    { id: 'inspect', label: 'Inspect Steps', icon: 'eye' },
     { id: 'edit', label: 'Edit Runbook', icon: 'sliders' },
     { id: 'delete', label: 'Delete Runbook', icon: 'trash', variant: 'danger' },
   ]
 }
 
 function handleDropdownAction(actionId: string, rb: Runbook) {
-  if (actionId === 'edit') {
+  if (actionId === 'inspect') {
+    emit('inspect', rb)
+  } else if (actionId === 'edit') {
     emit('edit', rb)
   } else if (actionId === 'delete') {
     emit('delete', rb.id)
