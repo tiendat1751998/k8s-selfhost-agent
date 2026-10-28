@@ -180,11 +180,6 @@ func (w *NodeHistoryWorker) RecordRollupOnce(ctx context.Context) error {
 }
 
 func (w *NodeHistoryWorker) isHostActive(ctx context.Context, nodeName, nodeID string) bool {
-	lower := strings.ToLower(strings.TrimSpace(nodeName))
-	if lower == "masterdb" || lower == "k8sworker3" || lower == "worker2" || lower == "worker1" || lower == "workerdb1" || lower == "test-qa-incident" {
-		return false
-	}
-
 	if w.computeHostRepo == nil {
 		return true
 	}
