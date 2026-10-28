@@ -6,10 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/domain/nodemetrics"
+	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 	"github.com/datdt/k8sselfhost/internal/usecase/metrics"
 )
 
@@ -53,13 +57,23 @@ func (m *mockNodeMetricsRepo) DownsampleAndPrune(ctx context.Context, olderThan7
 type mockIncidentRepo struct {
 	mu        sync.Mutex
 	incidents []*incident.Incident
+	lastCtx   context.Context
 }
 
 func (m *mockIncidentRepo) Create(ctx context.Context, inc *incident.Incident) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.lastCtx = ctx
 	m.incidents = append(m.incidents, inc)
 	return nil
+}
+
+type mockComputeHostLister struct {
+	hosts []docker.ComputeHost
+}
+
+func (m *mockComputeHostLister) ListAll(ctx context.Context) ([]docker.ComputeHost, error) {
+	return m.hosts, nil
 }
 
 func (m *mockIncidentRepo) GetByID(ctx context.Context, id string) (*incident.Incident, error) {
@@ -245,3 +259,83 @@ func TestNodeHistoryWorker_SkipSyntheticNodeAnomaly(t *testing.T) {
 		})
 	}
 }
+
+func TestNodeHistoryWorker_ActiveComputeHost_GeneratesIncidentWithPlatformAdmin(t *testing.T) {
+	sp := &mockSnapshotProvider{}
+	nmRepo := &mockNodeMetricsRepo{}
+	incRepo := &mockIncidentRepo{}
+	hostLister := &mockComputeHostLister{
+		hosts: []docker.ComputeHost{
+			{ID: "node-1", Name: "k8smasterdeb", Status: "connected"},
+		},
+	}
+
+	w := metrics.NewNodeHistoryWorker(sp, nmRepo, incRepo, zap.NewNop(),
+		metrics.WithComputeHostLister(hostLister),
+	)
+
+	// Cycle 1: Host is online
+	sp.snapshot = &metrics.SystemOverview{
+		Nodes: []metrics.NodeMetrics{
+			{NodeID: "node-1", NodeName: "k8smasterdeb", Status: "ready", CPUPercent: 40.0, MemoryPercent: 50.0},
+		},
+	}
+	err := w.RecordRollupOnce(context.Background())
+	require.NoError(t, err)
+	assert.Empty(t, incRepo.incidents)
+
+	// Cycle 2: Host transitions to offline
+	sp.snapshot = &metrics.SystemOverview{
+		Nodes: []metrics.NodeMetrics{
+			{NodeID: "node-1", NodeName: "k8smasterdeb", Status: "offline", CPUPercent: 0.0, MemoryPercent: 0.0},
+		},
+	}
+	err = w.RecordRollupOnce(context.Background())
+	require.NoError(t, err)
+
+	require.Len(t, incRepo.incidents, 1)
+	assert.Equal(t, "k8smasterdeb", incRepo.incidents[0].PodName)
+	assert.Equal(t, incident.SeverityCritical, incRepo.incidents[0].Severity)
+
+	// Verify tenancy context in incident creation
+	assert.Equal(t, "platform_admin", tenancy.UserRoleFromContext(incRepo.lastCtx))
+	assert.Equal(t, tenancy.DefaultTenantID, tenancy.TenantIDFromContext(incRepo.lastCtx))
+}
+
+func TestNodeHistoryWorker_UnregisteredHost_BlockedFromIncidentGeneration(t *testing.T) {
+	sp := &mockSnapshotProvider{}
+	nmRepo := &mockNodeMetricsRepo{}
+	incRepo := &mockIncidentRepo{}
+	hostLister := &mockComputeHostLister{
+		hosts: []docker.ComputeHost{
+			{ID: "node-real", Name: "real-server", Status: "connected"},
+		},
+	}
+
+	w := metrics.NewNodeHistoryWorker(sp, nmRepo, incRepo, zap.NewNop(),
+		metrics.WithComputeHostLister(hostLister),
+	)
+
+	// Test multiple unregistered hosts (including legacy names like masterdb, k8sworker3, worker2)
+	unregistered := []string{"masterdb", "k8sworker3", "worker2", "unknown-node", "test-qa-incident"}
+	for _, nodeName := range unregistered {
+		// Cycle 1: Host online
+		sp.snapshot = &metrics.SystemOverview{
+			Nodes: []metrics.NodeMetrics{
+				{NodeID: nodeName, NodeName: nodeName, Status: "ready", CPUPercent: 30.0},
+			},
+		}
+		_ = w.RecordRollupOnce(context.Background())
+
+		// Cycle 2: Host degraded/offline
+		sp.snapshot = &metrics.SystemOverview{
+			Nodes: []metrics.NodeMetrics{
+				{NodeID: nodeName, NodeName: nodeName, Status: "degraded", CPUPercent: 95.0},
+			},
+		}
+		_ = w.RecordRollupOnce(context.Background())
+	}
+
+	assert.Empty(t, incRepo.incidents, "unregistered compute host must not trigger anomaly incident")
+}
+

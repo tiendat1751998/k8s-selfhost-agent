@@ -127,12 +127,23 @@ func (sc *FleetComplianceScanner) Scan(ctx context.Context) (*ScanResult, error)
 	var violations []ViolationRecord
 	var mu sync.Mutex
 
+	cisFrameworkID := "c1000001-0000-0000-0000-000000000001"
+	nsaFrameworkID := "c1000001-0000-0000-0000-000000000002"
+	socFrameworkID := "c1000001-0000-0000-0000-000000000003"
+
 	addViolation := func(frameworkID, severity, policy, resource, namespace, cluster, msg string) {
 		mu.Lock()
 		defer mu.Unlock()
+		framework := "CIS"
+		if frameworkID == nsaFrameworkID || strings.HasPrefix(policy, "NSA") {
+			framework, frameworkID = "NSA-CISA", nsaFrameworkID
+		} else if frameworkID == socFrameworkID || strings.HasPrefix(policy, "SOC 2") {
+			framework, frameworkID = "SOC 2", socFrameworkID
+		}
 		violations = append(violations, ViolationRecord{
 			ID:          uuid.NewString(),
 			FrameworkID: frameworkID,
+			Framework:   framework,
 			Severity:    severity,
 			Policy:      policy,
 			Resource:    resource,
@@ -143,10 +154,6 @@ func (sc *FleetComplianceScanner) Scan(ctx context.Context) (*ScanResult, error)
 			DetectedAt:  now,
 		})
 	}
-
-	cisFrameworkID := "c1000001-0000-0000-0000-000000000001"
-	nsaFrameworkID := "c1000001-0000-0000-0000-000000000002"
-	socFrameworkID := "c1000001-0000-0000-0000-000000000003"
 
 	cisTotal, cisPassed := 0, 0
 	nsaTotal, nsaPassed := 0, 0

@@ -250,3 +250,60 @@ func TestFleetComplianceScanner_ZeroTrustViolation(t *testing.T) {
 	}
 }
 
+func TestFleetComplianceScanner_FrameworkAccuracy(t *testing.T) {
+	badAgent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "insecure"})
+	}))
+	defer badAgent.Close()
+
+	mockDB := &mockDBTX{
+		hosts: []usecaseCompliance.ComputeHostRow{
+			{
+				ID:       "host-test",
+				Name:     "test-node",
+				Endpoint: badAgent.URL,
+				Address:  "127.0.0.1",
+				Status:   "connected",
+			},
+		},
+	}
+
+	scanner := usecaseCompliance.NewScanner(
+		usecaseCompliance.WithDBStore(mockDB),
+		usecaseCompliance.WithHTTPClient(badAgent.Client()),
+	)
+
+	_ = os.Setenv("K8S_POSTGRES_SSLMODE", "disable")
+
+	res, err := scanner.Scan(context.Background())
+	if err != nil {
+		t.Fatalf("scan failed: %v", err)
+	}
+
+	for _, v := range res.Violations {
+		if strings.HasPrefix(v.Policy, "NSA-CISA") || strings.HasPrefix(v.Policy, "NSA") || v.Policy == "Zero-Trust Agent Auth Enforcement" {
+			if v.Framework != "NSA-CISA" {
+				t.Errorf("expected Framework 'NSA-CISA' for policy %q, got %q", v.Policy, v.Framework)
+			}
+			if v.FrameworkID != "c1000001-0000-0000-0000-000000000002" {
+				t.Errorf("expected FrameworkID c1000001-0000-0000-0000-000000000002 for policy %q, got %q", v.Policy, v.FrameworkID)
+			}
+		} else if strings.HasPrefix(v.Policy, "SOC 2") {
+			if v.Framework != "SOC 2" {
+				t.Errorf("expected Framework 'SOC 2' for policy %q, got %q", v.Policy, v.Framework)
+			}
+			if v.FrameworkID != "c1000001-0000-0000-0000-000000000003" {
+				t.Errorf("expected FrameworkID c1000001-0000-0000-0000-000000000003 for policy %q, got %q", v.Policy, v.FrameworkID)
+			}
+		} else if strings.HasPrefix(v.Policy, "CIS") {
+			if v.Framework != "CIS" {
+				t.Errorf("expected Framework 'CIS' for policy %q, got %q", v.Policy, v.Framework)
+			}
+			if v.FrameworkID != "c1000001-0000-0000-0000-000000000001" {
+				t.Errorf("expected FrameworkID c1000001-0000-0000-0000-000000000001 for policy %q, got %q", v.Policy, v.FrameworkID)
+			}
+		}
+	}
+}
+

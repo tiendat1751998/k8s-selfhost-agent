@@ -12,11 +12,18 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/domain/incident"
 	"github.com/datdt/k8sselfhost/internal/domain/nodemetrics"
+	"github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // SnapshotProvider supplies the latest system overview metrics.
 type SnapshotProvider interface {
 	GetLastSnapshot() *SystemOverview
+}
+
+// ComputeHostLister lists active compute hosts.
+type ComputeHostLister interface {
+	ListAll(ctx context.Context) ([]docker.ComputeHost, error)
 }
 
 // NodeHistoryWorker periodically consolidates node metrics into time-series rollups,
@@ -25,6 +32,7 @@ type NodeHistoryWorker struct {
 	snapshotProvider SnapshotProvider
 	nodeMetricsRepo  nodemetrics.Repository
 	incidentRepo     incident.Repository
+	computeHostRepo  ComputeHostLister
 	logger           *zap.Logger
 
 	rollupInterval time.Duration
@@ -55,6 +63,13 @@ func WithPruneInterval(d time.Duration) NodeHistoryWorkerOption {
 		if d > 0 {
 			w.pruneInterval = d
 		}
+	}
+}
+
+// WithComputeHostLister configures the compute host lister to prevent phantom incidents.
+func WithComputeHostLister(lister ComputeHostLister) NodeHistoryWorkerOption {
+	return func(w *NodeHistoryWorker) {
+		w.computeHostRepo = lister
 	}
 }
 
@@ -164,10 +179,33 @@ func (w *NodeHistoryWorker) RecordRollupOnce(ctx context.Context) error {
 	return w.recordRollup(ctx)
 }
 
+func (w *NodeHistoryWorker) isHostActive(ctx context.Context, nodeName, nodeID string) bool {
+	if w.computeHostRepo == nil {
+		return true
+	}
+
+	hosts, err := w.computeHostRepo.ListAll(ctx)
+	if err != nil {
+		w.logger.Warn("Failed to list compute hosts for anomaly guard, suppressing incident", zap.Error(err))
+		return false
+	}
+
+	for _, h := range hosts {
+		if strings.EqualFold(h.Name, nodeName) || strings.EqualFold(h.ID, nodeID) || strings.EqualFold(h.Name, nodeID) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (w *NodeHistoryWorker) recordRollup(ctx context.Context) error {
 	if w.snapshotProvider == nil || w.nodeMetricsRepo == nil {
 		return nil
 	}
+
+	// LES-009: Wrap context with platform admin context for background worker DB queries
+	ctx = tenancy.WithPlatformAdminContext(ctx)
 
 	snap := w.snapshotProvider.GetLastSnapshot()
 	if snap == nil || len(snap.Nodes) == 0 {
@@ -208,11 +246,15 @@ func (w *NodeHistoryWorker) recordRollup(ctx context.Context) error {
 		}
 
 		// Sentinel check: detect node transition to offline or degraded
-		// Skip anomaly/incident generation (NodeNotReady) for synthetic host nodes
+		// Skip anomaly/incident generation for synthetic nodes and hosts NOT in compute_hosts
 		isSynthetic := n.Source == "host" || n.Role == "standalone" || strings.HasPrefix(n.NodeID, "host-")
 		prevStat, hasPrev := w.prevNodeStatus[nodeID]
 		if !isSynthetic && hasPrev && prevStat == "online" && (status == "offline" || status == "degraded") {
-			anomalies = append(anomalies, anomalyTrigger{metrics: n, status: status})
+			if w.isHostActive(ctx, n.NodeName, n.NodeID) {
+				anomalies = append(anomalies, anomalyTrigger{metrics: n, status: status})
+			} else {
+				w.logger.Debug("Skipping anomaly incident for unmanaged or phantom host", zap.String("node", n.NodeName))
+			}
 		}
 		w.prevNodeStatus[nodeID] = status
 
@@ -292,6 +334,15 @@ func (w *NodeHistoryWorker) triggerNodeAnomalyIncident(
 		return
 	}
 
+	// LES-009: Wrap context with platform admin context for incident creation
+	ctx = tenancy.WithPlatformAdminContext(ctx)
+
+	// Anomaly Worker Guard: NEVER generate incidents for phantom or unmanaged hostnames
+	if !w.isHostActive(ctx, n.NodeName, n.NodeID) {
+		w.logger.Warn("Blocked anomaly incident creation for unmanaged host", zap.String("node", n.NodeName))
+		return
+	}
+
 	msg := fmt.Sprintf("Node %s entered %s state (CPU: %.1f%%, Memory: %.1f%%)",
 		n.NodeName, status, n.CPUPercent, n.MemoryPercent,
 	)
@@ -335,6 +386,9 @@ func (w *NodeHistoryWorker) pruneOldData(ctx context.Context) {
 	if w.nodeMetricsRepo == nil {
 		return
 	}
+
+	// LES-009: Wrap context with platform admin context for background worker pruning
+	ctx = tenancy.WithPlatformAdminContext(ctx)
 
 	now := time.Now().UTC()
 	olderThan7Days := now.Add(-7 * 24 * time.Hour)
