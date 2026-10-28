@@ -23,6 +23,7 @@ func (m *mockRepo) CreateChannel(ctx context.Context, channel *domainAlert.Notif
 func (m *mockRepo) ListChannels(ctx context.Context, tenantID string) ([]*domainAlert.NotificationChannel, error) {
 	return m.channels, nil
 }
+func (m *mockRepo) DeleteChannel(ctx context.Context, id, tenantID string) error { return nil }
 func (m *mockRepo) CreateRule(ctx context.Context, rule *domainAlert.AlertRule) error { return nil }
 func (m *mockRepo) ListRules(ctx context.Context, tenantID string) ([]*domainAlert.AlertRule, error) {
 	return m.rules, nil

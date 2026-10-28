@@ -25,6 +25,9 @@ func (m *mockAlertRepoForPartialUpdate) CreateChannel(ctx context.Context, chann
 func (m *mockAlertRepoForPartialUpdate) ListChannels(ctx context.Context, tenantID string) ([]*alert.NotificationChannel, error) {
 	return nil, nil
 }
+func (m *mockAlertRepoForPartialUpdate) DeleteChannel(ctx context.Context, id, tenantID string) error {
+	return nil
+}
 func (m *mockAlertRepoForPartialUpdate) CreateRule(ctx context.Context, rule *alert.AlertRule) error {
 	m.rules = append(m.rules, rule)
 	return nil

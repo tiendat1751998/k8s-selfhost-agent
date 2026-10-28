@@ -22,6 +22,10 @@ func (u *Usecase) ListChannels(ctx context.Context, tenantID string) ([]*alert.N
 	return u.repo.ListChannels(ctx, tenantID)
 }
 
+func (u *Usecase) DeleteChannel(ctx context.Context, id, tenantID string) error {
+	return u.repo.DeleteChannel(ctx, id, tenantID)
+}
+
 func (u *Usecase) CreateRule(ctx context.Context, rule *alert.AlertRule) error {
 	return u.repo.CreateRule(ctx, rule)
 }

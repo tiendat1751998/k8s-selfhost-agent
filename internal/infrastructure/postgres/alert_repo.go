@@ -89,6 +89,18 @@ func (r *AlertRepo) ListChannels(ctx context.Context, tenantID string) ([]*alert
 	return channels, nil
 }
 
+func (r *AlertRepo) DeleteChannel(ctx context.Context, id, tenantID string) error {
+	query := `DELETE FROM notification_channels WHERE id = $1 AND tenant_id = $2`
+	cmd, err := r.getDB(ctx).Exec(ctx, query, id, tenantID)
+	if err != nil {
+		return fmt.Errorf("failed to delete notification channel: %w", err)
+	}
+	if cmd.RowsAffected() == 0 {
+		return fmt.Errorf("notification channel not found: %w", alert.ErrNotFound)
+	}
+	return nil
+}
+
 func (r *AlertRepo) CreateRule(ctx context.Context, rule *alert.AlertRule) error {
 	if rule.ID == "" {
 		rule.ID = uuid.NewString()

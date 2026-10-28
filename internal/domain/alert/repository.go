@@ -1,10 +1,16 @@
 package alert
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+var ErrNotFound = errors.New("alert: entity not found")
 
 type Repository interface {
 	CreateChannel(ctx context.Context, channel *NotificationChannel) error
 	ListChannels(ctx context.Context, tenantID string) ([]*NotificationChannel, error)
+	DeleteChannel(ctx context.Context, id, tenantID string) error
 
 	CreateRule(ctx context.Context, rule *AlertRule) error
 	ListRules(ctx context.Context, tenantID string) ([]*AlertRule, error)

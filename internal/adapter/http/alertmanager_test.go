@@ -52,6 +52,15 @@ func (m *mockAlertRepo) ListChannels(ctx context.Context, tenantID string) ([]*a
 	return res, nil
 }
 
+func (m *mockAlertRepo) DeleteChannel(ctx context.Context, id, tenantID string) error {
+	ch, ok := m.channels[id]
+	if !ok || (tenantID != "" && ch.TenantID != tenantID) {
+		return alert.ErrNotFound
+	}
+	delete(m.channels, id)
+	return nil
+}
+
 func (m *mockAlertRepo) CreateRule(ctx context.Context, r *alert.AlertRule) error {
 	m.rules[r.ID] = r
 	return nil

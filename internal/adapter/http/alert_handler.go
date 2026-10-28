@@ -1,7 +1,9 @@
 package http
 
 import (
+	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -24,6 +26,7 @@ func NewAlertHandler(usecase *alertUsecase.Usecase) *AlertHandler {
 func (h *AlertHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/channels", h.CreateChannel)
 	r.Get("/channels", h.ListChannels)
+	r.Delete("/channels/{id}", h.DeleteChannel)
 	r.Post("/channels/{id}/test", h.TestChannel)
 
 	r.Post("/rules", h.CreateRule)
@@ -109,6 +112,28 @@ func (h *AlertHandler) ListChannels(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"data": masked})
 }
 
+func (h *AlertHandler) DeleteChannel(w http.ResponseWriter, r *http.Request) {
+	id, err := parseUUIDParam(r, "id")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "channel id is required", err)
+		return
+	}
+
+	tenantID := middleware.TenantIDFromContext(r.Context())
+	if tenantID == "" {
+		tenantID = "default"
+	}
+
+	if err := h.usecase.DeleteChannel(r.Context(), id, tenantID); err != nil {
+		if errors.Is(err, alert.ErrNotFound) || strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, "notification channel not found", err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to delete channel", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
 
 func (h *AlertHandler) CreateRule(w http.ResponseWriter, r *http.Request) {
 	req, ok := decodeJSON[createAlertRuleRequest](w, r)
