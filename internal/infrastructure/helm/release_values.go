@@ -216,7 +216,26 @@ func (m *ReleaseManager) buildSearchIndexLocked() (*search.Index, error) {
 		if err != nil {
 			continue
 		}
-		index.AddRepo(entry.Name, indexFile, true)
+
+		// Deduplicate: filter out deprecated versions if non-deprecated exists,
+		// and pass all=false to index.AddRepo to index only the latest version.
+		filteredEntries := make(map[string]repo.ChartVersions, len(indexFile.Entries))
+		for name, versions := range indexFile.Entries {
+			var activeVersions []*repo.ChartVersion
+			for _, v := range versions {
+				if v != nil && !v.Deprecated {
+					activeVersions = append(activeVersions, v)
+				}
+			}
+			if len(activeVersions) > 0 {
+				filteredEntries[name] = activeVersions
+			} else if len(versions) > 0 {
+				filteredEntries[name] = versions[:1]
+			}
+		}
+		indexFile.Entries = filteredEntries
+
+		index.AddRepo(entry.Name, indexFile, false)
 	}
 
 	return index, nil
@@ -253,13 +272,25 @@ func (m *ReleaseManager) SearchCharts(keyword string) ([]*search.Result, error) 
 		return nil, fmt.Errorf("searching charts: %w", err)
 	}
 	search.SortScore(results)
-	if len(results) > maxSearchResults {
-		results = results[:maxSearchResults]
+
+	// Explicit deduplication by (repo/chartName) ensuring 1 latest entry per chart
+	deduped := make([]*search.Result, 0, len(results))
+	seen := make(map[string]bool, len(results))
+	for _, res := range results {
+		if res == nil || seen[res.Name] {
+			continue
+		}
+		if res.Chart != nil && res.Chart.Deprecated {
+			continue
+		}
+		seen[res.Name] = true
+		deduped = append(deduped, res)
+		if len(deduped) >= maxSearchResults {
+			break
+		}
 	}
-	if results == nil {
-		results = make([]*search.Result, 0)
-	}
-	return results, nil
+
+	return deduped, nil
 }
 
 // GetChartValues retrieves default values.yaml for a given chart from a repository.

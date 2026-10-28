@@ -31,6 +31,7 @@ type FrameworkRecord struct {
 type ViolationRecord struct {
 	ID          string    `json:"id"`
 	FrameworkID string    `json:"framework_id"`
+	Framework   string    `json:"framework,omitempty"`
 	Severity    string    `json:"severity"` // "critical" | "high" | "medium" | "low"
 	Policy      string    `json:"policy"`
 	Resource    string    `json:"resource"`
