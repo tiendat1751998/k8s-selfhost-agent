@@ -30,12 +30,15 @@ const emit = defineEmits<{
 
 function getRuleDropdownActions(_rule: AutomationRule): ActionItem[] {
   return [
+    { id: 'edit', label: 'Edit Rule', icon: 'sliders' },
     { id: 'delete', label: 'Delete Rule', icon: 'trash', variant: 'danger' },
   ]
 }
 
 function handleDropdownAction(actionId: string, rule: AutomationRule) {
-  if (actionId === 'delete') {
+  if (actionId === 'edit') {
+    emit('edit', rule)
+  } else if (actionId === 'delete') {
     emit('delete', rule.id)
   }
 }
@@ -121,14 +124,6 @@ const ruleColumns: Column<AutomationRuleRow>[] = [
             @click="emit('trigger', row)"
           >
             <BaseIcon :name="triggeringId === row.id ? 'clock' : 'zap'" size="xs" />
-          </button>
-          <button
-            class="btn-icon-cmd btn-edit-action"
-            title="Edit Rule Configuration"
-            aria-label="Edit Rule Configuration"
-            @click="emit('edit', row)"
-          >
-            <BaseIcon name="sliders" size="xs" />
           </button>
           <ActionDropdown
             :items="getRuleDropdownActions(row)"

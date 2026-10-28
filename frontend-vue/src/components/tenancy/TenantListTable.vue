@@ -2,6 +2,7 @@
 import type { Organization } from '../../api/management'
 import type { TenantStatSummary } from '../../composables/useTenancyRbac'
 import ActionDropdown from '../ui/ActionDropdown.vue'
+import StatusBadge from '../ui/StatusBadge.vue'
 
 interface Props {
   organizations: Organization[]
@@ -45,12 +46,12 @@ function confirmDelete(org: Organization) {
     <div v-else class="table-scroll">
       <table class="tenant-table">
         <colgroup>
-          <col style="width: 21%;" />
-          <col style="width: 14%;" />
-          <col style="width: 11%;" />
-          <col style="width: 11%;" />
-          <col style="width: 9%;" />
-          <col style="width: 14%;" />
+          <col style="width: 32%;" />
+          <col style="width: 12%;" />
+          <col style="width: 8%;" />
+          <col style="width: 8%;" />
+          <col style="width: 8%;" />
+          <col style="width: 12%;" />
           <col style="width: 20%;" />
         </colgroup>
         <thead>
@@ -70,7 +71,7 @@ function confirmDelete(org: Organization) {
               <div class="tenant-info-cell">
                 <div class="tenant-icon">{{ org.name.charAt(0).toUpperCase() }}</div>
                 <div class="tenant-details">
-                  <span class="tenant-title" :title="org.name">{{ org.name }}</span>
+                  <span class="tenant-title org-name" :title="org.name">{{ org.name }}</span>
                   <span class="tenant-slug font-mono" :title="org.id">{{ org.id }}</span>
                 </div>
               </div>
@@ -94,7 +95,7 @@ function confirmDelete(org: Organization) {
               </span>
             </td>
             <td>
-              <span class="status-dot-muted"><span class="dot"></span> ISOLATED</span>
+              <StatusBadge status="isolated" label="ISOLATED" size="sm" />
             </td>
             <td class="td-right">
               <div class="tenant-action-buttons" style="gap: 8px;">

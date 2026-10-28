@@ -239,7 +239,10 @@ export function useCompliance() {
   function matchesStandard(fwNameOrTag: string, standard: ComplianceStandard): boolean {
     if (standard === 'ALL') return true
     const normalized = fwNameOrTag.toLowerCase()
-    if (standard === 'CIS Benchmark') return normalized.includes('cis')
+    if (standard === 'CIS Benchmark') {
+      if (normalized.includes('nsa') || normalized === 'nsa-cisa') return false
+      return /\bcis\b/i.test(fwNameOrTag)
+    }
     if (standard === 'NIST SP 800-53') return normalized.includes('nist')
     if (standard === 'PCI-DSS') return normalized.includes('pci')
     if (standard === 'SOC 2') return normalized.includes('soc')
@@ -382,16 +385,30 @@ export function useCompliance() {
 
   function formatFrameworkTag(tag: string): string {
     if (!tag) return 'POLICY'
-    const fw = frameworks.value.find(f => f.id === tag)
-    if (fw) {
-      if (fw.name.includes('CIS')) return 'CIS LEVEL 2'
-      if (fw.name.includes('SOC 2') || fw.name.includes('SOC2')) return 'SOC 2 TYPE II'
-      if (fw.name.includes('HIPAA')) return 'HIPAA'
-      if (fw.name.includes('PCI')) return 'PCI-DSS v4.0'
-      if (fw.name.includes('NIST')) return 'NIST SP 800-53'
-      if (fw.name.includes('ISO')) return 'ISO 27001'
-      return fw.name.toUpperCase()
+    const fw = frameworks.value.find(f => f.id === tag || f.name === tag)
+    const nameToCheck = fw ? fw.name : tag
+    const idToCheck = fw ? fw.id : tag
+
+    // 1. Check NSA-CISA BEFORE CIS (CISA contains CIS!)
+    if (nameToCheck.toUpperCase().includes('NSA') || idToCheck.toLowerCase() === 'nsa-cisa' || idToCheck.toLowerCase().includes('nsa')) {
+      return 'NSA-CISA'
     }
+    // 2. Check CIS with word boundary regex
+    if (/\bCIS\b/i.test(nameToCheck)) {
+      if (nameToCheck.toLowerCase().includes('level 1') || nameToCheck.toLowerCase().includes('l1')) {
+        return 'CIS LEVEL 1'
+      }
+      return 'CIS LEVEL 2'
+    }
+    // 3. Check SOC 2
+    if (nameToCheck.toUpperCase().includes('SOC 2') || nameToCheck.toUpperCase().includes('SOC2') || idToCheck.toLowerCase().includes('soc2')) {
+      return 'SOC 2'
+    }
+    if (nameToCheck.toUpperCase().includes('HIPAA')) return 'HIPAA'
+    if (nameToCheck.toUpperCase().includes('PCI')) return 'PCI-DSS v4.0'
+    if (nameToCheck.toUpperCase().includes('NIST')) return 'NIST SP 800-53'
+    if (nameToCheck.toUpperCase().includes('ISO')) return 'ISO 27001'
+    if (fw) return fw.name.toUpperCase()
     return tag.replace(/-/g, ' ').toUpperCase()
   }
 

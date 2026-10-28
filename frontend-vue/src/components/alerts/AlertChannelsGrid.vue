@@ -8,13 +8,18 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: 'test', channelName: string): void
+  (e: 'delete', channelId: string): void
 }>()
 </script>
 
 <template>
   <div>
-    <div v-if="channels.length === 0" class="empty-list glass-panel">
-      No delivery channels configured yet. Click "+ Add Channel" above to configure Slack, Telegram, Email, or Webhooks.
+    <div v-if="channels.length === 0" class="empty-list glass-panel" style="padding: 32px; text-align: center;">
+      <div class="empty-icon" style="margin-bottom: 8px;"><BaseIcon name="radio" size="lg" /></div>
+      <div class="empty-title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">No Notification Channels</div>
+      <p class="empty-desc text-muted" style="font-size: 12.5px; margin: 0;">
+        No delivery channels configured yet. Click "+ Add Channel" above to configure Slack, Telegram, Email, or Webhooks.
+      </p>
     </div>
     <div v-else class="channels-grid">
       <div v-for="chan in channels" :key="chan.ID" class="channel-card glass-panel">
@@ -50,9 +55,12 @@ const emit = defineEmits<{
           </div>
         </div>
 
-        <div class="channel-footer">
+        <div class="channel-footer" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
           <button class="btn btn-secondary btn-sm" @click="emit('test', chan.Name)">
             <BaseIcon name="zap" size="xs" /> <span>Test Dispatch</span>
+          </button>
+          <button class="btn btn-ghost btn-sm text-rose" title="Delete Channel" aria-label="Delete Channel" @click="emit('delete', chan.ID)">
+            <BaseIcon name="trash" size="xs" /> <span>Delete</span>
           </button>
         </div>
       </div>

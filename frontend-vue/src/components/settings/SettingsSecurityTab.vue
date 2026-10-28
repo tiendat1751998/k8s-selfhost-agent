@@ -185,7 +185,8 @@ onMounted(() => {
                 class="btn btn-primary btn-sm"
                 @click="router.push('/settings/2fa-setup')"
               >
-                <span>Enable 2FA Wizard ?</span>
+                <span>Enable 2FA Wizard</span>
+                <BaseIcon name="arrow-right" :size="14" />
               </button>
             </div>
           </div>

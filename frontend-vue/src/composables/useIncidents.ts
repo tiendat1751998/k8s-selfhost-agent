@@ -161,24 +161,14 @@ export function useIncidents() {
   async function handleSimulateIncident(scenario: SimulationScenario) {
     actionLoading.value = 'sim-' + scenario.key
     try {
-      const simIncident = await incidentsApi.simulate({
-        scenario: scenario.key,
-        pod_name: scenario.workload,
-        namespace: scenario.namespace
-      })
-
+      const simIncident = await incidentsApi.simulate({ scenario: scenario.key, pod_name: scenario.workload, namespace: scenario.namespace })
       showSimulateModal.value = false
       showCreateModal.value = false
       showToast('Simulation injected: ' + scenario.title + '!', 'success')
-
       await fetchIncidents()
       const found = incidents.value.find(i => i.id === simIncident.id || i.pod_name === simIncident.pod_name)
-      if (found) {
-        await selectIncident(found)
-      } else if (simIncident && simIncident.id) {
-        incidents.value.unshift(simIncident)
-        await selectIncident(simIncident)
-      }
+      if (found) await selectIncident(found)
+      else if (simIncident?.id) { incidents.value.unshift(simIncident); await selectIncident(simIncident) }
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Simulation injection failed', 'error')
     } finally {
@@ -190,13 +180,8 @@ export function useIncidents() {
     actionLoading.value = 'create-incident'
     try {
       const newInc = await incidentsApi.create({
-        pod_name: payload.pod_name,
-        namespace: payload.namespace,
-        cluster_name: payload.cluster_name,
-        type: payload.type,
-        severity: payload.severity,
-        message: payload.message || ('Manual anomaly logged for ' + payload.pod_name),
-        status: 'detected'
+        pod_name: payload.pod_name, namespace: payload.namespace, cluster_name: payload.cluster_name,
+        type: payload.type, severity: payload.severity, message: payload.message || ('Manual anomaly logged for ' + payload.pod_name), status: 'detected'
       })
       showCreateModal.value = false
       showToast('Incident ' + newInc.pod_name + ' created successfully!', 'success')
@@ -210,21 +195,13 @@ export function useIncidents() {
   }
 
   async function handleMitigateIncident(inc: Incident, notes?: string) {
-    if (!inc || !inc.id) return
+    if (!inc?.id) return
     actionLoading.value = 'mitigate-' + inc.id
     try {
-      const updated = await incidentsApi.mitigate(inc.id, {
-        notes: notes || `Autonomous mitigation initiated for ${inc.pod_name}`
-      })
-      if (updated && updated.status) {
-        inc.status = updated.status
-        inc.updated_at = updated.updated_at
-      } else {
-        inc.status = 'mitigating'
-      }
-      if (selectedIncident.value?.id === inc.id) {
-        selectedIncident.value = { ...inc }
-      }
+      const updated = await incidentsApi.mitigate(inc.id, { notes: notes || `Autonomous mitigation initiated for ${inc.pod_name}` })
+      inc.status = updated?.status || 'mitigating'
+      if (updated?.updated_at) inc.updated_at = updated.updated_at
+      if (selectedIncident.value?.id === inc.id) selectedIncident.value = { ...inc }
       showToast('Autonomous mitigation pipeline initiated for ' + inc.pod_name + '!', 'success')
       await fetchIncidents()
     } catch (err: unknown) {
@@ -235,23 +212,14 @@ export function useIncidents() {
   }
 
   async function handleResolveIncident(inc: Incident, notes?: string) {
-    if (!inc || !inc.id) return
+    if (!inc?.id) return
     actionLoading.value = 'resolve-' + inc.id
     try {
-      const updated = await incidentsApi.resolve(inc.id, {
-        notes: notes || `Resolution verified for ${inc.pod_name}`
-      })
-      if (updated && updated.status) {
-        inc.status = updated.status
-        inc.resolved_at = updated.resolved_at || new Date().toISOString()
-        inc.updated_at = updated.updated_at
-      } else {
-        inc.status = 'resolved'
-        inc.resolved_at = new Date().toISOString()
-      }
-      if (selectedIncident.value?.id === inc.id) {
-        selectedIncident.value = { ...inc }
-      }
+      const updated = await incidentsApi.resolve(inc.id, { notes: notes || `Resolution verified for ${inc.pod_name}` })
+      inc.status = updated?.status || 'resolved'
+      inc.resolved_at = updated?.resolved_at || new Date().toISOString()
+      if (updated?.updated_at) inc.updated_at = updated.updated_at
+      if (selectedIncident.value?.id === inc.id) selectedIncident.value = { ...inc }
       showToast('Incident for ' + inc.pod_name + ' marked as resolved & verified!', 'success')
       await fetchIncidents()
     } catch (err: unknown) {
@@ -262,18 +230,12 @@ export function useIncidents() {
   }
 
   async function handleAcknowledgeIncident(inc: Incident) {
-    if (!inc || !inc.id) return
+    if (!inc?.id) return
     actionLoading.value = 'acknowledge'
     try {
       const updated = await incidentsApi.acknowledge(inc.id)
-      if (updated && updated.status) {
-        inc.status = updated.status
-      } else {
-        (inc as any).status = 'acknowledged'
-      }
-      if (selectedIncident.value?.id === inc.id) {
-        selectedIncident.value = { ...inc }
-      }
+      inc.status = updated?.status || 'acknowledged'
+      if (selectedIncident.value?.id === inc.id) selectedIncident.value = { ...inc }
       showToast('Incident ' + inc.pod_name + ' acknowledged. Escalation paused.', 'success')
       await fetchIncidents()
     } catch (err: unknown) {
@@ -284,7 +246,7 @@ export function useIncidents() {
   }
 
   async function handleExportPostmortem(inc: Incident) {
-    if (!inc || !inc.id) return
+    if (!inc?.id) return
     actionLoading.value = 'postmortem'
     try {
       const res = await incidentsApi.getPostmortem(inc.id)
@@ -329,17 +291,12 @@ export function useIncidents() {
     actionLoading.value = 'create-pr'
     try {
       const pr = await prsApi.create({
-        incident_id: selectedIncident.value.id,
-        title: prForm.value.title,
-        description: prForm.value.description,
-        repo_url: prForm.value.repoUrl,
-        branch: prForm.value.branch,
-        base_branch: prForm.value.baseBranch
+        incident_id: selectedIncident.value.id, title: prForm.value.title, description: prForm.value.description,
+        repo_url: prForm.value.repoUrl, branch: prForm.value.branch, base_branch: prForm.value.baseBranch
       })
       activePR.value = pr
       selectedIncident.value.status = 'remediating'
-      const prNumLabel = pr.pr_number ? ` #${pr.pr_number}` : ''
-      showToast(`GitOps PR${prNumLabel} created on branch ${pr.branch}!`, 'success')
+      showToast(`GitOps PR${pr.pr_number ? ` #${pr.pr_number}` : ''} created on branch ${pr.branch}!`, 'success')
       showPRModal.value = false
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'PR creation failed', 'error')
@@ -383,15 +340,9 @@ export function useIncidents() {
       const fs = filterStatus.value.toLowerCase()
       list = list.filter(i => {
         const s = (i.status || '').toLowerCase()
-        if (fs === 'open') {
-          return s === 'open' || s === 'detected'
-        }
-        if (fs === 'in_progress') {
-          return s === 'in_progress' || s === 'analyzing' || s === 'remediating' || s === 'mitigating'
-        }
-        if (fs === 'resolved') {
-          return s === 'resolved' || s === 'mitigated'
-        }
+        if (fs === 'open') return s === 'open' || s === 'detected'
+        if (fs === 'in_progress') return s === 'in_progress' || s === 'analyzing' || s === 'remediating' || s === 'mitigating'
+        if (fs === 'resolved') return s === 'resolved' || s === 'mitigated'
         return s === fs
       })
     }
@@ -408,7 +359,9 @@ export function useIncidents() {
   })
 
   const totalIncidents = computed(() => incidents.value.length)
-  const criticalCount = computed(() => incidents.value.filter(i => i.severity === 'critical').length)
+  const criticalCount = computed(() =>
+    incidents.value.filter(i => (i.severity || '').toLowerCase() === 'critical' && (i.status || '').toLowerCase() !== 'resolved').length
+  )
   const analyzingCount = computed(() => incidents.value.filter(i => i.status === 'analyzing' || i.status === 'remediating' || i.status === 'mitigating').length)
   const resolvedCount = computed(() => incidents.value.filter(i => i.status === 'resolved' || i.status === 'mitigated').length)
 
