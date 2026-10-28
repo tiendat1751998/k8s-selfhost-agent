@@ -131,6 +131,9 @@ func (m *mockAlertRepoForMasking) CreateChannel(ctx context.Context, channel *al
 func (m *mockAlertRepoForMasking) ListChannels(ctx context.Context, tenantID string) ([]*alert.NotificationChannel, error) {
 	return m.channels, nil
 }
+func (m *mockAlertRepoForMasking) DeleteChannel(ctx context.Context, id, tenantID string) error {
+	return nil
+}
 func (m *mockAlertRepoForMasking) CreateRule(ctx context.Context, rule *alert.AlertRule) error {
 	return nil
 }
