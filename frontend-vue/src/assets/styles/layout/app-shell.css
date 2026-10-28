@@ -126,8 +126,11 @@
   position: sticky; top: 0; z-index: 40; box-sizing: border-box;
 }
 .hud-left {
-  padding-left: 0; min-width: 0; flex: 1 1 auto; display: inline-flex; align-items: center; gap: 10px; position: static;
+  padding-left: 24px; min-width: 0; flex: 1 1 auto; display: inline-flex; align-items: center; gap: 10px; position: static;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+body:has(.pwa-install-banner) .main-content {
+  padding-bottom: 104px;
 }
 .hud-breadcrumb {
   display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px;

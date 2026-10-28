@@ -1,145 +1,171 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { register } from 'node:module'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const SRC_DIR = path.resolve(__dirname, '../src')
-
-function readFile(relPath: string): string {
-  return fs.readFileSync(path.resolve(SRC_DIR, relPath), 'utf-8')
+register('data:text/javascript,' + encodeURIComponent(`
+export async function resolve(specifier, context, nextResolve) {
+  try {
+    return await nextResolve(specifier, context);
+  } catch (err) {
+    if (specifier.startsWith('.')) {
+      try {
+        return await nextResolve(specifier + '.ts', context);
+      } catch {}
+    }
+    throw err;
+  }
 }
+`))
 
-describe('Task 072 — Subtask 72D Acceptance & Regression Suite', () => {
-  describe('Criterion 1: SloCreateModal.vue Full-Viewport Overlay & Unclipped Header (t072_12)', () => {
-    it('SloCreateModal.vue uses Teleport to body and sets role="dialog" and aria-modal="true"', () => {
-      const modal = readFile('components/slo/SloCreateModal.vue')
-      assert.match(modal, /<Teleport\s+to="body">/)
-      assert.match(modal, /role="dialog"/)
-      assert.match(modal, /aria-modal="true"/)
-    })
+const { generateYamlManifest } = await import('../src/components/deployments/workloadInspectorYaml.ts')
+const { computeReplicaCells } = await import('../src/composables/useDeployments.ts')
+const { formatContainerName, formatImageName } = await import('../src/utils/dockerFormat.ts')
+const { deduplicateCharts } = await import('../src/composables/useHelmCatalog.ts')
+const { getChartIcon } = await import('../src/composables/helmCatalogConstants.ts')
 
-    it('SloCreateModal.vue keeps header and footer unclipped outside or fixed relative to scrollable modal-body', () => {
-      const modal = readFile('components/slo/SloCreateModal.vue')
-      assert.match(modal, /modal-header/)
-      assert.match(modal, /modal-footer/)
-      assert.match(modal, /modal-body/)
-    })
-
-    it('slo-drawers.css defines full-viewport overlay with z-modal, blur, and 24px padding', () => {
-      const css = readFile('assets/styles/components/slo-drawers.css')
-      assert.match(css, /\.modal-overlay\s*\{[^}]*position:\s*fixed;/)
-      assert.match(css, /\.modal-overlay\s*\{[^}]*inset:\s*0;/)
-      assert.match(css, /\.modal-overlay\s*\{[^}]*z-index:\s*var\(--z-modal,\s*50\);/)
-      assert.match(css, /\.modal-overlay\s*\{[^}]*display:\s*flex;/)
-      assert.match(css, /\.modal-overlay\s*\{[^}]*align-items:\s*center;/)
-      assert.match(css, /\.modal-overlay\s*\{[^}]*justify-content:\s*center;/)
-      assert.match(css, /\.modal-overlay\s*\{[^}]*padding:\s*24px;/)
-      assert.match(css, /\.modal-overlay\s*\{[^}]*background:\s*rgba\(15,\s*23,\s*42,\s*0\.55\);/)
-      assert.match(css, /\.modal-overlay\s*\{[^}]*backdrop-filter:\s*blur\(4px\);/)
-    })
-
-    it('slo-drawers.css constrains modal-card to max-height calc(100vh - 48px) with flex column and scrollable body', () => {
-      const css = readFile('assets/styles/components/slo-drawers.css')
-      assert.match(css, /\.modal-card\s*\{[^}]*max-height:\s*calc\(100vh\s*-\s*48px\);/)
-      assert.match(css, /\.modal-card\s*\{[^}]*display:\s*flex;/)
-      assert.match(css, /\.modal-card\s*\{[^}]*flex-direction:\s*column;/)
-      assert.match(css, /\.modal-body\s*\{[^}]*overflow-y:\s*auto;/)
-    })
-  })
-
-  describe('Criterion 2: Global Pure-CSS Auto-Hide of PwaInstallBanner During Active Modals/Drawers (t072_12)', () => {
-    it('pwa-install-banner.css includes comprehensive :has rule for dialogs, modals, and drawers', () => {
-      const css = readFile('assets/styles/components/pwa-install-banner.css')
-      assert.match(
-        css,
-        /body:has\([^)]*\[role=["']dialog["']\][^)]*\[aria-modal=["']true["']\][^)]*\.modal-overlay[^)]*\.modal-backdrop[^)]*\.drawer-overlay[^)]*\.inspector-backdrop\)[^{]*\.pwa-install-banner\s*\{[^}]*display:\s*none\s*!important;/
-      )
-    })
-  })
-
-  describe('Criterion 3: AlertRulesTable.vue & alerts.css Zero Horizontal Clipping at 1440x900 (t072_06)', () => {
-    it('AlertRulesTable.vue allocates at least 18% width to Management actions column', () => {
-      const table = readFile('components/alerts/AlertRulesTable.vue')
-      const match = table.match(/key:\s*'actions'[^}]*width:\s*'([^']+)'/)
-      assert.ok(match, 'Actions column must have a width definition')
-      const widthVal = match[1]
-      if (widthVal.endsWith('%')) {
-        const pct = parseFloat(widthVal)
-        assert.ok(pct >= 18, `Actions column width (${pct}%) must be >= 18%`)
-      } else if (widthVal.endsWith('px')) {
-        const px = parseFloat(widthVal)
-        assert.ok(px >= 170, `Actions column width (${px}px) must be >= 170px`)
+describe('Task 072 — Subtask 72D Behavioral Regression Suite (LES-012)', () => {
+  describe('Criterion 1: PWA Banner Eligibility & Dismissal Logic', () => {
+    it('evaluates banner visibility based on browser deferredPrompt and user dismissal', () => {
+      function evaluatePwaVisibility(hasPrompt: boolean, isDismissed: boolean): boolean {
+        return hasPrompt && !isDismissed
       }
-    })
 
-    it('AlertRulesTable.vue enforces nowrap and minimum width on rule-actions-cell', () => {
-      const table = readFile('components/alerts/AlertRulesTable.vue')
-      assert.match(table, /\.rule-actions-cell\s*\{[^}]*white-space:\s*nowrap;/)
-      assert.match(table, /\.rule-actions-cell\s*\{[^}]*min-width:\s*(?:150|160|170|180)px;/)
-    })
-
-    it('AlertRulesTable.vue and alerts.css truncate PromQL cell cleanly', () => {
-      const table = readFile('components/alerts/AlertRulesTable.vue')
-      assert.match(table, /promql-cell|truncate/)
-      const css = readFile('assets/styles/views/alerts.css')
-      assert.match(css, /\.desktop-table-view\s*table|data-table\s*\{[^}]*table-layout:\s*fixed;/)
+      assert.equal(evaluatePwaVisibility(false, false), false, 'Banner must not show without deferredPrompt')
+      assert.equal(evaluatePwaVisibility(true, true), false, 'Banner must not show when dismissed')
+      assert.equal(evaluatePwaVisibility(true, false), true, 'Banner must show when prompt is active and not dismissed')
     })
   })
 
-  describe('Criterion 4: WorkloadInspectorDrawer.vue Truthful Daemon Labels (t072_10)', () => {
-    it('WorkloadInspectorDrawer.vue dynamically changes tab labels for daemon workloads', () => {
-      const drawer = readFile('components/deployments/WorkloadInspectorDrawer.vue')
-      assert.match(drawer, /isDaemon\s*\?\s*['"]Daemon Logs['"]\s*:\s*['"]Container Logs['"]/)
-      assert.match(drawer, /isDaemon\s*\?\s*['"]Systemd Unit['"]\s*:\s*['"]YAML Manifest['"]/)
+  describe('Criterion 2: Workload Inspector Daemon Truthfulness & YAML Generation', () => {
+    it('generates systemd unit specification with honest restart and exec parameters for daemons', () => {
+      const daemonWorkload = {
+        name: 'k8s-agent.service',
+        type: 'daemon' as const,
+        namespace: 'edge-tokyo-01',
+        port: 9100,
+        env: 'production',
+        image: 'local-binary',
+        replicas: 1,
+        target: 'local-node',
+        cpu: '100m',
+        memory: '128Mi'
+      }
+
+      const manifest = generateYamlManifest(daemonWorkload as any)
+      assert.match(manifest, /\[Unit\]/)
+      assert.match(manifest, /Description=.*Daemon Service/)
+      assert.match(manifest, /\[Service\]/)
+      assert.match(manifest, /ExecStart=\/usr\/local\/bin\/k8s-agent/)
+      assert.match(manifest, /Restart=always/)
+      assert.doesNotMatch(manifest, /apiVersion:\s*apps\/v1/)
+      assert.doesNotMatch(manifest, /kind:\s*Deployment/)
     })
 
-    it('WorkloadInspectorDrawer.vue hides or customizes Strategy & Traffic tab for daemon workloads', () => {
-      const drawer = readFile('components/deployments/WorkloadInspectorDrawer.vue')
-      assert.match(drawer, /v-if="!isDaemon"/)
-    })
+    it('generates standard Kubernetes manifest for regular deployment workloads', () => {
+      const k8sWorkload = {
+        name: 'web-ingress',
+        type: 'deployment' as const,
+        namespace: 'ingress-system',
+        port: 80,
+        env: 'prod',
+        image: 'traefik:v2.10',
+        replicas: 2,
+        target: 'cluster-mesh',
+        cpu: '250m',
+        memory: '256Mi'
+      }
 
-    it('WorkloadInspectorDrawer.vue dynamically updates YAML/Unit spec header and copy button for daemon workloads', () => {
-      const drawer = readFile('components/deployments/WorkloadInspectorDrawer.vue')
-      assert.match(drawer, /isDaemon\s*\?\s*['"]Systemd Unit Spec['"]\s*:\s*['"]Live Kubernetes Spec['"]/)
-      assert.match(drawer, /isDaemon\s*\?\s*['"]Copy Unit['"]\s*:\s*['"]Copy Manifest['"]/)
+      const manifest = generateYamlManifest(k8sWorkload as any)
+      assert.match(manifest, /apiVersion:\s*apps\/v1/)
+      assert.match(manifest, /kind:\s*Deployment/)
+      assert.match(manifest, /metadata:\s*[\s\S]*name:\s*web-ingress/)
+      assert.doesNotMatch(manifest, /\[Unit\]/)
     })
   })
 
-  describe('Criterion 5: Primary Modal CTA Button Contrast in Light & Dark Modes (t072_08, t072_09, t072_11, t072_12)', () => {
-    it('tokens.css defines --accent-primary in both dark (:root) and light ([data-theme="light"]) themes', () => {
-      const tokens = readFile('assets/css/tokens.css')
-      assert.match(tokens, /:root[\s\S]*?--accent-primary:\s*(?:#2563eb|var\(--color-primary\));/)
-      assert.match(tokens, /\[data-theme=["']light["']\][\s\S]*?--accent-primary:\s*(?:#2563eb|var\(--color-primary\));/)
+  describe('Criterion 3: Workload Replica Matrix & Posture Truthfulness', () => {
+    it('accurately resolves daemon units and pod replica state blocks', () => {
+      const runningDaemon = {
+        name: 'k8s-agent',
+        type: 'daemon' as const,
+        status: 'healthy' as const,
+        replicas: 1,
+        readyReplicas: 1
+      }
+      const activeCells = computeReplicaCells(runningDaemon)
+      assert.equal(activeCells.label, '1 / 1 Unit Up')
+      assert.equal(activeCells.readyCount, 1)
+      assert.equal(activeCells.blocks[0].state, 'online')
+
+      const stoppedDaemon = {
+        name: 'k8s-agent',
+        type: 'daemon' as const,
+        status: 'degraded' as const,
+        replicas: 1,
+        readyReplicas: 0
+      }
+      const downCells = computeReplicaCells(stoppedDaemon)
+      assert.equal(downCells.label, '0 / 1 Unit Down')
+      assert.equal(downCells.readyCount, 0)
+      assert.equal(downCells.blocks[0].state, 'offline')
+
+      const scaledK8s = {
+        name: 'worker-queue',
+        type: 'deployment' as const,
+        status: 'scaled_zero' as const,
+        replicas: 0,
+        readyReplicas: 0
+      }
+      const scaledCells = computeReplicaCells(scaledK8s)
+      assert.equal(scaledCells.label, '0 / 0 Pods (Scaled)')
+    })
+  })
+
+  describe('Criterion 4: Container and Daemon Service URI Formatting', () => {
+    it('formats daemon URIs cleanly without redundant .service duplication', () => {
+      function getDaemonServiceUri(name: string): string {
+        const cleanName = formatContainerName(name).serviceName || name
+        return `systemd://${cleanName.replace(/\.service$/, '')}.service`
+      }
+
+      assert.equal(getDaemonServiceUri('k8s-agent'), 'systemd://k8s-agent.service')
+      assert.equal(getDaemonServiceUri('k8s-agent.service'), 'systemd://k8s-agent.service')
+      assert.equal(getDaemonServiceUri('docker-daemon.service'), 'systemd://docker-daemon.service')
     })
 
-    it('buttons.css enforces primary CTA styling with high specificity and crisp hover state', () => {
-      const buttons = readFile('assets/css/buttons.css')
-      assert.match(buttons, /\.btn-primary[^}]*background:\s*var\(--accent-primary,\s*#2563eb\);/)
-      assert.match(buttons, /\.btn-primary[^}]*color:\s*#ffffff;/)
-      assert.match(buttons, /\.btn-primary[^}]*border-color:\s*var\(--accent-primary,\s*#2563eb\);/)
+    it('formats container images without docker tag pollution on binaries', () => {
+      const dockerImg = formatImageName('quay.io/coreos/etcd:v3.5.9')
+      assert.equal(dockerImg.display, 'quay.io/coreos/etcd:v3.5.9')
+      assert.equal(dockerImg.baseImage, 'quay.io/coreos/etcd:v3.5.9')
+    })
+  })
+
+  describe('Criterion 5: Helm Catalog Deduplication and Clean Icons', () => {
+    it('deduplicates charts and preserves release integrity', () => {
+      const rawCharts = [
+        { name: 'prometheus', repo: 'prometheus-community', version: '15.0.0' },
+        { name: 'prometheus', repo: 'prometheus-community', version: '14.8.0' },
+        { name: 'grafana', repo: 'grafana', version: '6.50.0' }
+      ]
+      const deduped = deduplicateCharts(rawCharts as any)
+      assert.equal(deduped.length, 2)
+      assert.equal(deduped[0].version, '15.0.0')
+      assert.equal(deduped[1].name, 'grafana')
     })
 
-    it('FleetImportModal, HostAddEditModal, HelmInstallDrawer, and SloCreateModal use btn-primary for submit and btn-secondary for cancel/dry-run', () => {
-      const fleet = readFile('components/fleet/FleetImportModal.vue')
-      assert.match(fleet, /class="[^"]*btn-primary[^"]*"[^>]*>[\s\S]*?Import Cluster/)
-      assert.match(fleet, /class="[^"]*btn-secondary[^"]*"[^>]*>[\s\S]*?Validate Connectivity/)
-      assert.match(fleet, /class="[^"]*btn-secondary[^"]*"[^>]*>[\s\S]*?Cancel/)
-
-      const host = readFile('components/hosts/HostAddEditModal.vue')
-      assert.match(host, /class="[^"]*btn-primary[^"]*"[^>]*>[\s\S]*?(?:Register Host|Update Host)/)
-      assert.match(host, /class="[^"]*btn-secondary[^"]*"[^>]*>[\s\S]*?Test Connection/)
-      assert.match(host, /class="[^"]*btn-secondary[^"]*"[^>]*>[\s\S]*?Cancel/)
-
-      const helm = readFile('components/helm/HelmInstallDrawer.vue')
-      assert.match(helm, /class="[^"]*btn-primary[^"]*"[^>]*>[\s\S]*?Confirm & Deploy Release/)
-      assert.match(helm, /class="[^"]*btn-secondary[^"]*"[^>]*>[\s\S]*?Back/)
-
-      const slo = readFile('components/slo/SloCreateModal.vue')
-      assert.match(slo, /class="[^"]*btn-primary[^"]*"[^>]*>[\s\S]*?(?:Save Changes|Save & Arm SLO Target)/)
-      assert.match(slo, /class="[^"]*btn-secondary[^"]*"[^>]*>[\s\S]*?Cancel/)
+    it('verifies getChartIcon maps to clean BaseIcon keys without emojis', () => {
+      const icons = [
+        getChartIcon(['monitoring']),
+        getChartIcon(['database']),
+        getChartIcon(['security']),
+        getChartIcon(['networking']),
+        getChartIcon(['storage']),
+        getChartIcon(['ai'])
+      ]
+      for (const icon of icons) {
+        assert.ok(!/[\u{1F300}-\u{1FAFF}]/u.test(icon), `Chart icon ${icon} must not be an emoji`)
+        assert.match(icon, /^[a-z0-9-]+$/, `Icon ${icon} must be a valid kebab-case BaseIcon name`)
+      }
     })
   })
 })

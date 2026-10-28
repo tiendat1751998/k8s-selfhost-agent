@@ -55,6 +55,8 @@ function toggleNamespace(ns: string) {
   collapsedNamespaces.value[ns] = !collapsedNamespaces.value[ns]
 }
 
+const hasDaemons = computed(() => effectiveGroups.value.some(g => g.workloads.some(isDaemon)))
+
 function isDaemon(app: DeploymentApp): boolean {
   return app.type === 'daemon' || app.type === 'host-daemon'
 }
@@ -63,31 +65,15 @@ function getCardActions(app: DeploymentApp): ActionItem[] {
   if (isDaemon(app)) {
     return [
       { id: 'inspect', label: 'Inspect Details', icon: 'search' },
-      {
-        id: 'restart',
-        label: props.actionLoading === app.name ? 'Restarting...' : 'Restart Service',
-        icon: 'refresh',
-        disabled: props.actionLoading === app.name
-      },
+      { id: 'restart', label: props.actionLoading === app.name ? 'Restarting...' : 'Restart Service', icon: 'refresh', disabled: props.actionLoading === app.name },
     ]
   }
   return [
     { id: 'inspect', label: 'Inspect Details', icon: 'search' },
     { id: 'strategy', label: 'Rollout Strategy', icon: 'git-branch' },
-    {
-      id: 'restart',
-      label: props.actionLoading === app.name ? 'Restarting...' : 'Restart Pods',
-      icon: 'refresh',
-      disabled: props.actionLoading === app.name
-    },
+    { id: 'restart', label: props.actionLoading === app.name ? 'Restarting...' : 'Restart Pods', icon: 'refresh', disabled: props.actionLoading === app.name },
     { id: 'sep', label: '', separator: true },
-    {
-      id: 'delete',
-      label: 'Delete Workload',
-      icon: 'trash',
-      variant: 'danger',
-      disabled: props.actionLoading === app.name
-    },
+    { id: 'delete', label: 'Delete Workload', icon: 'trash', variant: 'danger', disabled: props.actionLoading === app.name },
   ]
 }
 
@@ -105,10 +91,18 @@ function getAppStatusClass(app: DeploymentApp): string {
 }
 
 function getAppStatusLabel(app: DeploymentApp): string {
+  if (isDaemon(app)) {
+    return app.status === 'healthy' ? 'Active (running)' : 'Inactive (dead)'
+  }
   if (app.replicas === 0) return 'SCALED 0'
   if (app.status === 'healthy') return 'HEALTHY'
   if (app.status === 'degraded') return 'DEGRADED'
   return (app.status || 'UNKNOWN').toUpperCase()
+}
+
+function getDaemonServiceUri(app: DeploymentApp): string {
+  const name = formatContainerName(app.name).serviceName || app.name
+  return `systemd://${name.replace(/\.service$/, '')}.service`
 }
 </script>
 
@@ -118,7 +112,7 @@ function getAppStatusLabel(app: DeploymentApp): string {
     <div class="topology-posture-strip">
       <div class="posture-metric-group">
         <div class="posture-item">
-          <span class="posture-label">Namespaces Active</span>
+          <span class="posture-label">{{ hasDaemons ? 'HOST / NS SCOPES' : 'Namespaces Active' }}</span>
           <span class="posture-value font-mono">{{ effectiveGroups.length }}</span>
         </div>
         <div class="posture-item">
@@ -126,7 +120,7 @@ function getAppStatusLabel(app: DeploymentApp): string {
           <span class="posture-value font-mono">{{ totalWorkloads || (workloads ? workloads.length : 0) }}</span>
         </div>
         <div class="posture-item">
-          <span class="posture-label">Running Pod Replicas</span>
+          <span class="posture-label">{{ hasDaemons ? 'ACTIVE UNITS / PODS' : 'Running Pod Replicas' }}</span>
           <span class="posture-value font-mono">{{ readyReplicas }} / {{ totalPodReplicas }}</span>
         </div>
       </div>
@@ -179,7 +173,7 @@ function getAppStatusLabel(app: DeploymentApp): string {
           </div>
 
           <div class="lane-header-right">
-            <span class="lane-replica-summary font-mono">{{ group.totalReplicas }} pods ready</span>
+            <span class="lane-replica-summary font-mono">{{ group.workloads.every(isDaemon) ? `${group.workloads.filter(w => w.status === 'healthy').length} units active` : `${group.totalReplicas} pods ready` }}</span>
             <span
               class="lane-health-dot"
               :class="group.overallHealth === 'healthy' ? 'dot-healthy' : group.overallHealth === 'down' ? 'dot-down' : 'dot-degraded'"
@@ -214,16 +208,16 @@ function getAppStatusLabel(app: DeploymentApp): string {
               </div>
 
               <div class="card-pills-wrap font-mono">
-                <span class="pill-runtime">{{ app.strategy || app.type || 'Rolling' }}</span>
+                <span class="pill-runtime">{{ isDaemon(app) ? 'Systemd Service' : (app.strategy || app.type || 'Rolling') }}</span>
                 <span v-if="app.port > 0" class="pill-port">:{{ app.port }} / {{ app.netType || 'ingress' }}</span>
                 <span class="pill-status" :class="getAppStatusClass(app)">{{ getAppStatusLabel(app) }}</span>
               </div>
             </div>
 
             <!-- Container Image Spec -->
-            <div class="card-image-row font-mono" :title="app.image">
-              <BaseIcon name="layers" size="xs" class="image-icon" />
-              <span class="image-text">{{ formatImageName(app.image).display }}</span>
+            <div class="card-image-row font-mono" :title="isDaemon(app) ? getDaemonServiceUri(app) : app.image">
+              <BaseIcon :name="isDaemon(app) ? 'terminal' : 'layers'" size="xs" class="image-icon" />
+              <span class="image-text">{{ isDaemon(app) ? getDaemonServiceUri(app) : formatImageName(app.image).display }}</span>
             </div>
 
             <!-- Visual Pod Replica Matrix (ArgoCD / K9s style) -->

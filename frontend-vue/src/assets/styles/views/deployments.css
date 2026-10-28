@@ -135,9 +135,9 @@
 
 /* Refined Compact Dropdown (Status) */
 .deployments-toolbar-sleek .toolbar-select {
-  flex: 0 0 120px;
-  width: 120px;
-  min-width: 120px;
+  min-width: 160px;
+  width: auto;
+  flex: 0 0 auto;
   position: static;
   margin: 0;
   height: 32px;
@@ -147,7 +147,7 @@
   border: 1px solid var(--color-border-subtle);
   background: var(--color-surface-inset);
   color: var(--text-primary);
-  padding: 0 8px;
+  padding: 0 28px 0 10px;
   cursor: pointer;
   box-sizing: border-box;
   transition: all 0.15s ease;
