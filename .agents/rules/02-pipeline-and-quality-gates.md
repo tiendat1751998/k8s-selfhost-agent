@@ -31,8 +31,10 @@ Before merge, `reviewer` audits diffs against:
 7. Simplicity (`ponytail-review`): prune speculative bloat and redundant abstractions.
 8. Feature & mobile parity (no `display: none` on charts, max 2 inline table actions).
 
-## 4. Real E2E MCP QA Gate (`qa-test-engineer`)
-- **Real Backend Only (`LES-002`)**: NEVER spawn rogue scratch mock servers. Test against real Go backend (`:8080`) and clear stale mock `localStorage` keys before auditing.
-- **3-Viewport & Dual-Theme Audit (`LES-003`)**: Audit Desktop (`1440x900`), Tablet (`768x1024`), and Mobile (`375x812`) in BOTH Dark and Light modes using `chrome-devtools-mcp`.
-- **Viewport Reset Invariant (`LES-001`)**: QA MUST always reset emulation to Desktop `1440x900` (`isMobile: false`) as its final step.
-- Evidence Hygiene: Store screenshots strictly in `docs/qa-evidence/<YYYY-MM-DD>/<task-name>/`.
+## 4. Real E2E MCP QA Gate & 5-Gate Zero-Theater Definition of Done (`LES-012`)
+A passing test file NEVER suffices to declare a task "Done". Every UI / Full-Stack task MUST pass all 5 gates before reporting completion:
+1. **Zero Static-Regex Test Theater**: `fs.readFileSync` regex-matching on `.vue`/`.css`/`.go` source text is **FORBIDDEN** as acceptance proof. Tests must execute real Go HTTP handlers/usecases/SQL or real Vue component mounts/composable logic.
+2. **Real Backend & 100% Route/Sub-Tab Coverage (`LES-002`)**: NEVER spawn mock servers. Visit every affected route AND sub-tab live against `:8080` + live PostgreSQL (`0` unexpected HTTP `4xx/5xx`, `0` uncaught JS console errors, `scrollWidth <= clientWidth`). For platform-wide audits, sweep all **16/16** primary routes unblurred.
+3. **Stateful Mutation + `F5` Reload Persistence**: Every write action (`Create`/`Edit`/`Toggle`/`Resolve`/`Delete`) must be verified after a full browser `F5` reload to prove PostgreSQL persistence and silent JWT refresh survival.
+4. **3-Viewport, Dual-Theme & Main-Thread Visual Inspection (`LES-001`, `LES-003`)**: Audit Desktop (`1440x900`), Tablet (`768x1024`), and Mobile (`375x812`) in Dark & Light modes, reset emulation to `1440x900` (`isMobile: false`) at finish, and personally inspect every unblurred PNG on the main thread via `read_file` BEFORE sign-off.
+5. **Direct Inline Chat Proof**: Never hide screenshots behind a `walkthrough.md` link alone. Always copy proof PNGs to `<appDataDir>/brain/<conversation-id>/` and render `![caption](C:/Users/...)` + `[filename](file:///...)` directly inline in the chat response.
