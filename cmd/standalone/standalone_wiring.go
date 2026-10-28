@@ -166,7 +166,10 @@ func wireStandalone(ctx context.Context, cfg *config.Config, log *zap.Logger) (h
 	}
 
 	nodeMetricsRepo := postgres.NewNodeMetricsRepo(dbPool)
-	nodeHistoryWorker := usecaseMetrics.NewNodeHistoryWorker(metricsCollector, nodeMetricsRepo, incRepo, log)
+	nodeHistoryWorker := usecaseMetrics.NewNodeHistoryWorker(
+		metricsCollector, nodeMetricsRepo, incRepo, log,
+		usecaseMetrics.WithComputeHostLister(computeHostRepo),
+	)
 	go func() {
 		if err := nodeHistoryWorker.Start(ctx); err != nil {
 			log.Error("node history worker stopped with error", zap.Error(err))

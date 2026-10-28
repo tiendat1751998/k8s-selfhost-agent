@@ -47,3 +47,21 @@ SET framework = 'CIS',
     framework_id = 'c1000001-0000-0000-0000-000000000001'
 WHERE policy LIKE 'CIS%' 
    OR message LIKE 'CIS%';
+
+-- 4. Purge stale metric rollups referencing deleted or synthetic seed hostnames
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM pg_tables WHERE tablename = 'node_metric_rollups') THEN
+        EXECUTE 'DELETE FROM node_metric_rollups 
+                 WHERE node_name IN (''masterdb'', ''k8sworker3'', ''worker2'', ''worker1'', ''workerdb1'', ''test-qa-incident'')
+                    OR node_id IN (''13bc198b-a491-4692-9ba3-aba1909f0d8c'', ''59f43036-ba45-4de9-8958-c95c8af4d8c6'', ''c2cf1210-2a89-4fed-9fd7-70ffa340584d'', ''870c47f1-902e-42fb-a491-ab57a45fa9f9'', ''9d85e3d2-bd8a-44d0-b226-3943149aee40'')
+                    OR node_name LIKE ''Test Full Day%''
+                    OR node_id LIKE ''test-node%''';
+    END IF;
+    IF EXISTS (SELECT FROM pg_tables WHERE tablename = 'node_metrics') THEN
+        EXECUTE 'DELETE FROM node_metrics 
+                 WHERE node_name IN (''masterdb'', ''k8sworker3'', ''worker2'', ''worker1'', ''workerdb1'', ''test-qa-incident'')
+                    OR node_id IN (''13bc198b-a491-4692-9ba3-aba1909f0d8c'', ''59f43036-ba45-4de9-8958-c95c8af4d8c6'', ''c2cf1210-2a89-4fed-9fd7-70ffa340584d'', ''870c47f1-902e-42fb-a491-ab57a45fa9f9'', ''9d85e3d2-bd8a-44d0-b226-3943149aee40'')';
+    END IF;
+END $$;
+

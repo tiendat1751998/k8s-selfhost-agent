@@ -192,7 +192,7 @@ func initPlatformHandlers(p platformHandlerParams) *adapthttp.PlatformHandlers {
 	messagingHandler := adapthttp.NewMessagingHandler(messagingManager)
 	p.meshHandler = meshHandler
 	sreHandlers := bootstrapSREHandlers(p)
-	if sreHandlers != nil && sreHandlers.Crypto != nil && settingsRepo != nil {
+	if sreHandlers != nil && sreHandlers.Crypto != nil && settingsRepo != nil && pgPool != nil {
 		sreHandlers.Crypto.SetSettingsRepo(settingsRepo)
 	}
 

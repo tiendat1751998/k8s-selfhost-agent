@@ -186,7 +186,10 @@ func initServices(ctx context.Context, eg *errgroup.Group, cfg *config.Config, i
 	}
 
 	nodeMetricsRepo := postgres.NewNodeMetricsRepo(infra.pgClient.Pool())
-	nodeHistoryWorker := usecaseMetrics.NewNodeHistoryWorker(metricsCollector, nodeMetricsRepo, incRepo, log)
+	nodeHistoryWorker := usecaseMetrics.NewNodeHistoryWorker(
+		metricsCollector, nodeMetricsRepo, incRepo, log,
+		usecaseMetrics.WithComputeHostLister(computeHostRepo),
+	)
 	go func() {
 		if err := nodeHistoryWorker.Start(ctx); err != nil {
 			log.Error("node history worker stopped with error", zap.Error(err))
