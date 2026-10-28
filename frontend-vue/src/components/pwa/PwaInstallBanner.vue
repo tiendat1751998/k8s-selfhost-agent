@@ -64,23 +64,27 @@ async function handleInstallClick() {
   <transition name="banner-slide">
     <div v-if="shouldShow" class="pwa-install-banner">
       <div class="banner-content">
-        <div class="banner-icon-box">
-          <span class="banner-icon"><BaseIcon name="anchor" size="md" /></span>
-        </div>
-
-        <div class="banner-text">
-          <div class="banner-title-row">
-            <span class="banner-title">
-              <span class="title-full">Install K8sControl App</span>
-              <span class="title-short">Install App</span>
-            </span>
+        <div class="banner-top-row">
+          <div class="banner-title-group">
+            <div class="banner-icon-box">
+              <BaseIcon name="anchor" size="xs" />
+            </div>
+            <span class="banner-title">Install App</span>
             <span class="banner-tag font-mono">PWA</span>
           </div>
-          <p class="banner-desc">
-            <span class="desc-full">Run as standalone desktop &amp; mobile app with offline shell</span>
-            <span class="desc-short">Standalone app with offline shell</span>
-          </p>
+          <button 
+            class="btn-dismiss" 
+            @click="dismissBanner" 
+            title="Dismiss installation banner for 7 days"
+            aria-label="Dismiss banner"
+          >
+            <BaseIcon name="x" size="xs" />
+          </button>
         </div>
+
+        <p class="banner-desc">
+          Standalone app with offline shell
+        </p>
 
         <div class="banner-actions">
           <button 
@@ -89,16 +93,7 @@ async function handleInstallClick() {
             title="Install K8sControl to your device"
           >
             <BaseIcon name="download" size="xs" />
-            <span class="btn-text-full">Install Now</span>
-            <span class="btn-text-short">Install</span>
-          </button>
-          <button 
-            class="btn-dismiss" 
-            @click="dismissBanner" 
-            title="Dismiss installation banner for 7 days"
-            aria-label="Dismiss banner"
-          >
-            <BaseIcon name="x" size="xs" />
+            <span>Install Now</span>
           </button>
         </div>
       </div>

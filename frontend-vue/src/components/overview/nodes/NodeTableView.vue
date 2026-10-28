@@ -275,6 +275,10 @@ function getNodePing(node: NodeMetrics): number {
 .node-table { table-layout: fixed !important; width: 100% !important; }
 .node-table th { padding: 6px 8px !important; }
 .node-table td { padding: 2px 8px !important; }
+.node-table th:first-child,
+.node-table td:first-child {
+  padding-left: 16px !important;
+}
 .col-actions { width: 4% !important; min-width: 48px !important; text-align: center !important; }
 .sortable-th { cursor: pointer; user-select: none; transition: color 0.15s ease; }
 .sortable-th:hover { color: var(--text-primary, #fff); }

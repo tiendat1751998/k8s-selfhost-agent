@@ -1,41 +1,44 @@
-/* === PwaInstallBanner.vue === */
+/* === PwaInstallBanner.vue (Inline Sidebar Card — Zero Main Viewport Occlusion) === */
 .pwa-install-banner {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: var(--z-banner, 25);
-  width: calc(100% - 48px);
-  max-width: 440px;
-  background: var(--bg-card);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-}
-
-body:has([role="dialog"], [aria-modal="true"], .modal-overlay, .modal-backdrop, .alert-modal-backdrop, .drawer-overlay, .inspector-backdrop) .pwa-install-banner {
-  display: none !important;
-}
-
-body:has(.pwa-install-banner) .main-content {
-  padding-bottom: 104px;
-}
-
-.banner-content {
-  padding: 12px 14px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.banner-icon-box {
-  position: relative;
-  width: 36px;
-  height: 36px;
+  position: static;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 10px;
   background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.banner-content {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.banner-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.banner-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.banner-icon-box {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--color-border-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -43,26 +46,8 @@ body:has(.pwa-install-banner) .main-content {
   color: var(--text-primary);
 }
 
-.banner-icon {
-  font-size: 18px;
-}
-
-.banner-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.banner-title-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .banner-title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -73,61 +58,62 @@ body:has(.pwa-install-banner) .main-content {
 .banner-tag {
   font-size: 9px;
   font-weight: 700;
-  background: var(--color-surface-inset);
+  background: var(--bg-card);
   color: var(--text-secondary);
-  padding: 1px 5px;
+  padding: 1px 4px;
   border-radius: 4px;
   border: 1px solid var(--color-border-subtle);
 }
 
 .banner-desc {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-secondary);
   line-height: 1.3;
+  margin: 0;
 }
 
 .banner-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  gap: 6px;
+  width: 100%;
 }
 
 .btn-install {
+  flex: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  background: var(--text-primary);
-  color: var(--bg-card);
-  border: 1px solid var(--text-primary);
+  background: var(--color-primary, #326ce5);
+  color: #ffffff;
+  border: 1px solid var(--color-primary, #326ce5);
   font-size: 11px;
   font-weight: 600;
-  padding: 6px 12px;
+  padding: 5px 8px;
   border-radius: 6px;
   cursor: pointer;
-  box-shadow: none;
   transition: opacity 0.15s ease;
   white-space: nowrap;
 }
 
 .btn-install:hover {
   opacity: 0.9;
-  box-shadow: none;
 }
 
 .btn-dismiss {
-  background: var(--color-surface-inset);
+  background: var(--bg-card);
   border: 1px solid var(--color-border-subtle);
   color: var(--text-muted);
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
+  flex-shrink: 0;
   transition: all 0.15s ease;
 }
 
@@ -139,14 +125,14 @@ body:has(.pwa-install-banner) .main-content {
 
 /* iOS instructions */
 .ios-instructions-box {
-  margin: 0 12px 12px 12px;
-  padding: 10px 12px;
-  background: var(--color-surface-inset);
+  margin: 0 8px 8px 8px;
+  padding: 8px;
+  background: var(--bg-card);
   border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .ios-header {
@@ -156,111 +142,46 @@ body:has(.pwa-install-banner) .main-content {
 }
 
 .ios-title {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--text-primary);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .ios-close {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
 }
 
 .ios-steps {
-  font-size: 10px;
+  font-size: 9.5px;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: 1.4;
   padding-left: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  margin: 0;
 }
 
 .share-icon {
   color: var(--text-primary);
 }
 
-.text-cyan {
-  color: var(--text-primary);
-}
-
 /* Transitions */
 .banner-slide-enter-active,
 .banner-slide-leave-active {
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s ease;
 }
 
 .banner-slide-enter-from,
 .banner-slide-leave-to {
   opacity: 0;
-  transform: translateY(20px) scale(0.96);
-}
-
-.title-short,
-.desc-short,
-.btn-text-short {
-  display: none;
-}
-
-@media (max-width: 767.98px) {
-  .title-full,
-  .desc-full,
-  .btn-text-full {
-    display: none;
-  }
-  .title-short,
-  .desc-short,
-  .btn-text-short {
-    display: inline;
-  }
-  .pwa-install-banner {
-    bottom: calc(68px + env(safe-area-inset-bottom, 0px)) !important;
-    right: 8px;
-    left: 8px;
-    width: calc(100% - 16px);
-    max-width: none;
-    border-radius: 12px;
-  }
-  .banner-content {
-    padding: 8px 10px;
-    gap: 8px;
-  }
-
-  .banner-icon-box {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-  }
-  .banner-icon {
-    font-size: 16px;
-  }
-  .banner-title {
-    font-size: 12px;
-  }
-  .banner-desc {
-    font-size: 10px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .banner-actions {
-    gap: 6px;
-  }
-  .btn-install {
-    padding: 6px 10px;
-    font-size: 11px;
-    border-radius: 6px;
-  }
-  .btn-dismiss {
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
-  }
+  transform: translateY(8px);
 }

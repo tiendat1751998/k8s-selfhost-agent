@@ -22,7 +22,7 @@ export async function load(url, context, nextLoad) {
     return {
       format: 'module',
       shortCircuit: true,
-      source: 'export const api = { get: async () => ({}), post: async () => ({}) };'
+      source: 'export const api = { get: async () => ({}), post: async () => ({}), getToken: () => \\'mock-jwt-token\\' };'
     };
   }
   return nextLoad(url, context);

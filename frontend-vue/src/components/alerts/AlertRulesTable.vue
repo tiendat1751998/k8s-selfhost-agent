@@ -114,4 +114,11 @@ const ruleColumns: Column<AlertRuleRow>[] = [
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+@media (max-width: 1023.98px) {
+  :deep(.data-table),
+  :deep(.data-table-container) {
+    display: none !important;
+  }
+}
 </style>

@@ -379,3 +379,22 @@
   .channel-footer { justify-content: stretch; }
   .channel-footer .btn { width: 100%; justify-content: center; }
 }
+
+/* 11. Alert Rules Paired Responsive Breakpoint (1024px) */
+@media (max-width: 1023.98px) {
+  .rules-table-desktop {
+    display: none !important;
+  }
+  .alert-rules-mobile-stream {
+    display: flex !important;
+  }
+}
+@media (min-width: 1024px) {
+  .rules-table-desktop {
+    display: block !important;
+  }
+  .alert-rules-mobile-stream {
+    display: none !important;
+  }
+}
+

@@ -125,7 +125,7 @@ function formatRelativeTime(dateStr?: string): string {
       <div class="strip-item">
         <span class="strip-label font-mono">BLAST RADIUS</span>
         <span class="strip-val font-mono" :class="selectedBlastRadius?.riskLevel?.includes('Critical') ? 'text-rose' : 'text-cyan'">
-          <BaseIcon name="target" size="xs" /> {{ selectedBlastRadius?.riskLevel || 'Nominal Scope' }}
+          <BaseIcon name="target" size="xs" /> {{ selectedBlastRadius?.riskLevel || (countOpen === 0 ? 'Contained (0 Active)' : 'Nominal Scope') }}
           <template v-if="selectedBlastRadius">({{ selectedBlastRadius.impactScore }}/100)</template>
         </span>
       </div>
@@ -140,7 +140,7 @@ function formatRelativeTime(dateStr?: string): string {
       <div class="strip-item">
         <span class="strip-label font-mono">HEALTH</span>
         <span class="strip-val font-mono text-emerald">
-          {{ selectedBlastRadius?.nodeHealth || 'Nominal Workload Health' }}
+          {{ selectedBlastRadius?.nodeHealth || (countOpen === 0 ? 'Nominal (Resolved)' : 'Nominal Workload Health') }}
         </span>
       </div>
       <span class="strip-divider font-mono">|</span>

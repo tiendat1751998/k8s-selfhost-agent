@@ -48,11 +48,11 @@ function confirmDelete(org: Organization) {
         <colgroup>
           <col style="width: 32%;" />
           <col style="width: 12%;" />
-          <col style="width: 8%;" />
+          <col style="width: 12%;" />
           <col style="width: 8%;" />
           <col style="width: 8%;" />
           <col style="width: 12%;" />
-          <col style="width: 20%;" />
+          <col style="width: 16%;" />
         </colgroup>
         <thead>
           <tr>

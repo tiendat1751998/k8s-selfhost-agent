@@ -15,7 +15,6 @@ import AppCommandPalette from './components/layout/AppCommandPalette.vue'
 import TopHudAlertBell from './components/layout/TopHudAlertBell.vue'
 import AlertCenterModal from './components/overview/alerts/AlertCenterModal.vue'
 import AppMobileNav from './components/layout/AppMobileNav.vue'
-import PwaInstallBanner from './components/pwa/PwaInstallBanner.vue'
 import BaseIcon from './components/ui/BaseIcon.vue'
 import GlobalContextSelector from './components/navigation/GlobalContextSelector.vue'
 import { navGroups } from './config/navigation'
@@ -342,8 +341,5 @@ function handleNavigateToHost(nodeNameOrId: string) {
 
     <!-- ZeroTrust KMS & Dual-Sync Attestation Drawer -->
     <ZeroTrustDrawer v-model:show="showZeroTrustDrawer" />
-
-    <!-- PWA Install Floating Banner -->
-    <PwaInstallBanner />
   </div>
 </template>

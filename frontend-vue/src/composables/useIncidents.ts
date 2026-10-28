@@ -380,9 +380,36 @@ export function useIncidents() {
     return s === 'resolved' || s === 'mitigated'
   }).length)
 
-  const selectedBlastRadius = computed<BlastRadiusInfo | null>(() =>
-    calculateBlastRadius(selectedIncident.value)
-  )
+  const selectedBlastRadius = computed<BlastRadiusInfo | null>(() => {
+    if (!selectedIncident.value) {
+      if (countOpen.value === 0) {
+        return {
+          affectedNamespace: 'default',
+          affectedPod: '--',
+          cluster: '--',
+          impactScore: 0,
+          riskLevel: 'Contained (0 Active)',
+          affectedServices: [],
+          dependentWorkloads: [],
+          nodeHealth: 'Nominal (Resolved)'
+        }
+      }
+      return null
+    }
+    if (countOpen.value === 0 || (selectedIncident.value.status || '').toLowerCase() === 'resolved') {
+      return {
+        affectedNamespace: selectedIncident.value.namespace || 'default',
+        affectedPod: selectedIncident.value.pod_name || '--',
+        cluster: selectedIncident.value.cluster_name || '--',
+        impactScore: 0,
+        riskLevel: 'Contained (0 Active)',
+        affectedServices: [],
+        dependentWorkloads: [],
+        nodeHealth: 'Nominal (Resolved)'
+      }
+    }
+    return calculateBlastRadius(selectedIncident.value)
+  })
 
   const rcaTimelineEvents = computed<RcaTimelineEvent[]>(() =>
     buildRcaTimelineEvents(selectedIncident.value, selectedReport.value, activePR.value)

@@ -3,6 +3,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/authStore'
 import { navGroups } from '../../config/navigation'
 import BaseIcon from '../ui/BaseIcon.vue'
+import PwaInstallBanner from '../pwa/PwaInstallBanner.vue'
 import { useSidebarCollapse } from '../../composables/useSidebarCollapse'
 
 const props = defineProps<{
@@ -152,6 +153,9 @@ function navigateHome() {
 
     <!-- Sidebar Bottom System Telemetry -->
     <div class="sidebar-footer">
+      <!-- Inline PWA Install Banner Slot (Zero Main Viewport Occlusion) -->
+      <PwaInstallBanner v-if="!isCollapsed" />
+
       <!-- Mobile Drawer Tenant Switcher & User Profile -->
       <div class="drawer-mobile-meta">
         <div class="drawer-tenant-row">
