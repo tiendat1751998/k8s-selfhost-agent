@@ -1,0 +1,2 @@
+/* Re-export canonical design tokens from assets/css/tokens.css */
+@import '../css/tokens.css';
