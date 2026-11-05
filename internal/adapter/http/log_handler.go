@@ -344,28 +344,69 @@ func (h *LogHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleGetServices returns a deduplicated list of discovered services across compute hosts.
+// HandleGetServices returns a deduplicated list of discovered services across compute hosts,
+// supporting optional node filtering and returning a per-node catalog map.
 func (h *LogHandler) HandleGetServices(w http.ResponseWriter, r *http.Request) {
+	type serviceCatalogLister interface {
+		ListServicesCatalog(ctx context.Context) ([]string, map[string][]string, error)
+	}
 	type serviceLister interface {
 		ListServices(ctx context.Context) ([]string, error)
 	}
 	var (
-		services []string
-		err      error
+		allServices []string
+		byNode      map[string][]string
+		err         error
 	)
-	if sl, ok := h.service.(serviceLister); ok {
-		services, err = sl.ListServices(r.Context())
+	if cl, ok := h.service.(serviceCatalogLister); ok {
+		allServices, byNode, err = cl.ListServicesCatalog(r.Context())
+	} else if cl, ok := h.statusProvider.(serviceCatalogLister); ok {
+		allServices, byNode, err = cl.ListServicesCatalog(r.Context())
+	} else if sl, ok := h.service.(serviceLister); ok {
+		allServices, err = sl.ListServices(r.Context())
 	} else if sl, ok := h.statusProvider.(serviceLister); ok {
-		services, err = sl.ListServices(r.Context())
+		allServices, err = sl.ListServices(r.Context())
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list services", err)
 		return
 	}
+	if allServices == nil {
+		allServices = []string{}
+	}
+	if byNode == nil {
+		byNode = make(map[string][]string)
+	}
+	for k, v := range byNode {
+		if v == nil {
+			byNode[k] = []string{}
+		}
+	}
+
+	services := allServices
+	node := strings.TrimSpace(r.URL.Query().Get("node"))
+	if node != "" && !strings.EqualFold(node, "all") {
+		matched := false
+		for k, v := range byNode {
+			if strings.EqualFold(k, node) {
+				services = v
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			services = []string{}
+		}
+	}
 	if services == nil {
 		services = []string{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"services": services, "targets": services})
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"services": services,
+		"targets":  services,
+		"by_node":  byNode,
+	})
 }
 
 // HandleSurroundingContext retrieves log context around an event for a service.

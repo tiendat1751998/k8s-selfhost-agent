@@ -350,40 +350,45 @@ func (r *DistributedAgentLogRepo) GetStatus(ctx context.Context) (*domainLogging
 	}, nil
 }
 
-// ListServices queries active compute hosts via logClient.GetNodeServices in parallel,
-// merges the results, deduplicates them, and returns a sorted list of unique service names.
-func (r *DistributedAgentLogRepo) ListServices(ctx context.Context) ([]string, error) {
+// ListServicesCatalog queries active compute hosts in parallel, returning the merged
+// deduplicated service list and a per-node service map. Offline hosts are fast-failed.
+func (r *DistributedAgentLogRepo) ListServicesCatalog(ctx context.Context) ([]string, map[string][]string, error) {
 	var hosts []docker.ComputeHost
 	if r.hostRepo != nil {
 		var err error
 		hosts, err = r.hostRepo.ListAll(ctx)
 		if err != nil {
-			return []string{}, nil
+			return []string{}, make(map[string][]string), nil
 		}
+	}
+
+	byNode := make(map[string][]string, len(hosts))
+	for _, h := range hosts {
+		name := strings.TrimSpace(h.Name)
+		if name == "" { name = strings.TrimSpace(h.ID) }
+		if name != "" { byNode[name] = []string{} }
 	}
 
 	if len(hosts) == 0 || r.logClient == nil {
-		return []string{}, nil
+		return []string{}, byNode, nil
 	}
 
-	// Filter candidate hosts that are active and have valid endpoints
+	// Filter candidate hosts: must be online, have an endpoint, and not be in backoff cooldown
 	var candidates []docker.ComputeHost
 	for _, h := range hosts {
 		endpoint := strings.TrimSpace(h.Endpoint)
-		if endpoint == "" {
+		if endpoint == "" { continue }
+		if strings.EqualFold(h.Status, "disconnected") || strings.EqualFold(h.Status, "disabled") ||
+			strings.EqualFold(h.Status, "down") || strings.EqualFold(h.Status, "offline") ||
+			strings.EqualFold(h.Status, "stopped") || strings.EqualFold(h.Status, "unhealthy") {
 			continue
 		}
-		if strings.EqualFold(h.Status, "disconnected") || strings.EqualFold(h.Status, "disabled") || strings.EqualFold(h.Status, "down") {
-			continue
-		}
-		if r.logClient != nil && r.logClient.IsHostUnreachable(endpoint) {
-			continue
-		}
+		if r.logClient != nil && r.logClient.IsHostUnreachable(endpoint) { continue }
 		candidates = append(candidates, h)
 	}
 
 	if len(candidates) == 0 {
-		return []string{}, nil
+		return []string{}, byNode, nil
 	}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
@@ -411,17 +416,37 @@ func (r *DistributedAgentLogRepo) ListServices(ctx context.Context) ([]string, e
 			}
 
 			services, err := r.logClient.GetNodeServices(timeoutCtx, host.Endpoint, token)
-			if err != nil {
-				return
+			if err != nil { return }
+
+			// If edge agent returned empty, supplement from recent logs
+			if len(services) == 0 && r.logClient != nil {
+				if recentLogs, sErr := r.logClient.SearchNodeLogs(timeoutCtx, host.Endpoint, token, SearchLogsRequest{Limit: 20}); sErr == nil {
+					for _, l := range recentLogs {
+						if s := strings.TrimSpace(l.Service); s != "" { services = append(services, s) }
+					}
+				}
 			}
 
-			mu.Lock()
+			hostKey := strings.TrimSpace(host.Name)
+			if hostKey == "" { hostKey = strings.TrimSpace(host.ID) }
+			if hostKey == "" { hostKey = strings.TrimSpace(host.Endpoint) }
+
+			hostSet := make(map[string]struct{}, len(services))
+			cleaned := make([]string, 0, len(services))
 			for _, s := range services {
 				s = strings.TrimSpace(s)
 				if s != "" {
-					serviceSet[s] = struct{}{}
+					if _, seen := hostSet[s]; !seen {
+						hostSet[s] = struct{}{}
+						cleaned = append(cleaned, s)
+					}
 				}
 			}
+			sort.Strings(cleaned)
+
+			mu.Lock()
+			byNode[hostKey] = cleaned
+			for _, s := range cleaned { serviceSet[s] = struct{}{} }
 			mu.Unlock()
 		}()
 	}
@@ -434,7 +459,14 @@ func (r *DistributedAgentLogRepo) ListServices(ctx context.Context) ([]string, e
 	}
 	sort.Strings(result)
 
-	return result, nil
+	return result, byNode, nil
+}
+
+// ListServices queries active compute hosts via ListServicesCatalog,
+// returning a merged, deduplicated, sorted list of unique service names.
+func (r *DistributedAgentLogRepo) ListServices(ctx context.Context) ([]string, error) {
+	allServices, _, err := r.ListServicesCatalog(ctx)
+	return allServices, err
 }
 // QuerySurroundingContext delegates surrounding context queries to the underlying in-memory fallback.
 func (r *DistributedAgentLogRepo) QuerySurroundingContext(

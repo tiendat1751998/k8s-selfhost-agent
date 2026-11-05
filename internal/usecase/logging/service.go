@@ -1,4 +1,4 @@
-﻿package logging
+package logging
 
 import (
 	"context"
@@ -111,4 +111,28 @@ func (s *Service) QuerySurroundingContext(
 		return nil, err
 	}
 	return s.repo.QuerySurroundingContext(ctx, tenantID, service, timestamp, window)
+}
+
+// ListServicesCatalog delegates node service catalog discovery to the underlying repository if supported.
+func (s *Service) ListServicesCatalog(ctx context.Context) ([]string, map[string][]string, error) {
+	type catalogLister interface {
+		ListServicesCatalog(ctx context.Context) ([]string, map[string][]string, error)
+	}
+	if cl, ok := s.repo.(catalogLister); ok {
+		return cl.ListServicesCatalog(ctx)
+	}
+	type lister interface {
+		ListServices(ctx context.Context) ([]string, error)
+	}
+	if l, ok := s.repo.(lister); ok {
+		services, err := l.ListServices(ctx)
+		return services, make(map[string][]string), err
+	}
+	return []string{}, make(map[string][]string), nil
+}
+
+// ListServices delegates service discovery to ListServicesCatalog.
+func (s *Service) ListServices(ctx context.Context) ([]string, error) {
+	services, _, err := s.ListServicesCatalog(ctx)
+	return services, err
 }

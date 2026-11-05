@@ -468,8 +468,8 @@ func TestLogHandler_Services(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/logs/services", nil)
 	w := httptest.NewRecorder()
 	h.HandleGetServices(w, req)
-	var resp map[string][]string
-	if w.Code != http.StatusOK || json.NewDecoder(w.Body).Decode(&resp) != nil || len(resp["services"]) != 3 {
+	var resp struct{ Services []string }
+	if w.Code != http.StatusOK || json.NewDecoder(w.Body).Decode(&resp) != nil || len(resp.Services) != 3 {
 		t.Fatalf("unexpected services response: %d, %+v", w.Code, resp)
 	}
 
@@ -477,8 +477,8 @@ func TestLogHandler_Services(t *testing.T) {
 	hStatus := NewLogHandler(nil, &mockStatusProvider{services: []string{"redis", "postgres"}})
 	w2 := httptest.NewRecorder()
 	hStatus.HandleGetServices(w2, req)
-	var respStatus map[string][]string
-	if w2.Code != http.StatusOK || json.NewDecoder(w2.Body).Decode(&respStatus) != nil || len(respStatus["services"]) != 2 {
+	var respStatus struct{ Services []string }
+	if w2.Code != http.StatusOK || json.NewDecoder(w2.Body).Decode(&respStatus) != nil || len(respStatus.Services) != 2 {
 		t.Errorf("expected 2 services from status provider, got %d, %+v", w2.Code, respStatus)
 	}
 
