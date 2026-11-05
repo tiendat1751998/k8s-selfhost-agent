@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import BaseIcon from '../ui/BaseIcon.vue'
 import ClickHouseEngineBadge from './ClickHouseEngineBadge.vue'
-import type { LogTarget } from './LogTargetTree.vue'
+import LogNodeDropdown, { type NodeItem } from './LogNodeDropdown.vue'
+import LogServiceCombobox from './LogServiceCombobox.vue'
+import type { LogTarget } from '../../composables/useLogTargets'
 import type { TimeRangeConfig } from '../../composables/useHistoricalLogSearch'
 
 interface Props {
-  selectedTarget: LogTarget
-  isSidebarCollapsed: boolean
+  selectedTarget?: LogTarget
+  selectedNode?: string
+  nodes?: NodeItem[]
+  services?: string[]
+  isNodeOffline?: boolean
   searchKeyword: string
   mode: 'live' | 'historical'
   selectedLevel: string
@@ -21,17 +26,26 @@ interface Props {
   isScrollLocked: boolean
   wrapLines: boolean
   showHistogram: boolean
-  showMobileTree: boolean
   showErrorRadar?: boolean
   activeService?: string
   hoverPauseEnabled?: boolean
   isHoverPaused?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  selectedNode: '',
+  nodes: () => [],
+  services: () => [],
+  isNodeOffline: false,
+  activeService: '',
+  showErrorRadar: false,
+  hoverPauseEnabled: true,
+  isHoverPaused: false,
+})
 
 const emit = defineEmits<{
-  (e: 'update:isSidebarCollapsed', val: boolean): void
+  (e: 'update:selectedNode', val: string): void
+  (e: 'selectNode', node: NodeItem | null): void
   (e: 'update:searchKeyword', val: string): void
   (e: 'update:mode', val: 'live' | 'historical'): void
   (e: 'update:selectedLevel', val: string): void
@@ -39,7 +53,6 @@ const emit = defineEmits<{
   (e: 'update:selectedHistoricalLimit', val: number): void
   (e: 'update:wrapLines', val: boolean): void
   (e: 'update:showHistogram', val: boolean): void
-  (e: 'update:showMobileTree', val: boolean): void
   (e: 'update:showErrorRadar', val: boolean): void
   (e: 'update:activeService', val: string): void
   (e: 'clearActiveService'): void
@@ -50,7 +63,6 @@ const emit = defineEmits<{
   (e: 'clearBuffer'): void
   (e: 'exportLogs'): void
 }>()
-
 
 const severityFilters = [
   { label: 'ALL', value: '' },
@@ -78,31 +90,21 @@ function setLevel(val: string) {
   <div class="log-stream-toolbar-root">
     <!-- Sleek Unified 38px Enterprise Toolbar -->
     <div class="logs-toolbar-sleek glass-panel desktop-only" role="toolbar" aria-label="Kubernetes Log Stream Controls">
-      <!-- Zone 1 (Left - Sidebar & Stream Search) -->
+      <!-- Zone 1 (Left - Compact Node & App Selectors + Stream Search) -->
       <div class="toolbar-zone-left">
-        <button
-          type="button"
-          class="toolbar-btn btn-secondary btn-toggle-targets"
-          :class="{ active: !isSidebarCollapsed }"
-          title="Toggle log targets"
-          aria-label="Toggle log targets"
-          @click="emit('update:isSidebarCollapsed', !isSidebarCollapsed)"
-        >
-          <BaseIcon name="sidebar" size="sm" />
-        </button>
-        <!-- Active Service Filter Pill -->
-        <div v-if="activeService" class="toolbar-service-pill font-mono" title="Filtered by service — click × to clear">
-          <span class="pill-icon">📦</span>
-          <span class="pill-name">{{ activeService }}</span>
-          <button
-            type="button"
-            class="pill-close-btn"
-            aria-label="Clear active service filter"
-            @click="emit('clearActiveService'); emit('update:activeService', '')"
-          >
-            &times;
-          </button>
-        </div>
+        <LogNodeDropdown
+          :model-value="selectedNode"
+          :nodes="nodes"
+          @update:model-value="emit('update:selectedNode', $event)"
+          @select="emit('selectNode', $event)"
+        />
+        <LogServiceCombobox
+          :model-value="activeService"
+          :services="services"
+          :is-node-offline="isNodeOffline"
+          @update:model-value="emit('update:activeService', $event)"
+          @select="emit('update:activeService', $event)"
+        />
         <div class="toolbar-search-wrap">
           <BaseIcon name="search" size="xs" class="search-icon" />
           <input
@@ -222,20 +224,24 @@ function setLevel(val: string) {
           <BaseIcon name="download" size="xs" />
         </button>
       </div>
-
     </div>
 
     <!-- Mobile Command Bar (<768px) -->
     <div class="logs-mobile-command-bar mobile-only">
       <div class="mobile-bar-left">
-        <button
-          type="button" class="mobile-tree-toggle-btn font-mono"
-          aria-label="Toggle log targets drawer" @click="emit('update:showMobileTree', !showMobileTree)"
-        >
-          <BaseIcon :name="selectedTarget.type === 'node' ? 'server' : (selectedTarget.icon || 'box')" size="xs" />
-          <span>{{ selectedTarget.name }}</span>
-          <BaseIcon name="chevron-down" size="xs" />
-        </button>
+        <LogNodeDropdown
+          :model-value="selectedNode"
+          :nodes="nodes"
+          @update:model-value="emit('update:selectedNode', $event)"
+          @select="emit('selectNode', $event)"
+        />
+        <LogServiceCombobox
+          :model-value="activeService"
+          :services="services"
+          :is-node-offline="isNodeOffline"
+          @update:model-value="emit('update:activeService', $event)"
+          @select="emit('update:activeService', $event)"
+        />
       </div>
       <div class="mobile-bar-actions">
         <button type="button" class="mobile-btn font-mono" :class="{ active: mode === 'live' }" @click="emit('update:mode', mode === 'live' ? 'historical' : 'live')">

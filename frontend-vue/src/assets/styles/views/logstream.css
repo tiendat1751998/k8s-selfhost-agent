@@ -2,8 +2,8 @@
    Enterprise Kubernetes Log Stream Explorer Stylesheet
    Dual-Theme System using tokens.css semantic variables
    ========================================================================== */
-@import './logstream-tree.css';
 @import './logstream-terminal.css';
+@import './logstream-selectors.css';
 
 .view-container { display: flex; flex-direction: column; gap: 16px; padding: 0; min-height: calc(100vh - 120px); }
 .log-explorer-page {
@@ -22,23 +22,30 @@
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
+  position: relative;
+  z-index: 25;
 }
 
-/* 2-Column Explorer Grid with Sidebar Collapse Affordance */
+/* 100% Full-Width Explorer Container */
 .log-explorer-grid {
   flex: 1;
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  width: 100%;
   max-width: 100%;
-  transition: grid-template-columns 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.log-explorer-grid.sidebar-collapsed { grid-template-columns: 1fr; }
-.log-explorer-grid.sidebar-collapsed .explorer-left-col { display: none !important; }
-.explorer-left-col { height: 100%; overflow-y: auto; min-width: 0; }
-.explorer-right-col { height: 100%; display: flex; flex-direction: column; min-width: 0; max-width: 100%; overflow: hidden; position: relative; }
+.explorer-right-col {
+  height: 100%;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
 
 /* Collapsible Log Volume Histogram */
 .histogram-wrapper { margin-bottom: 8px; flex-shrink: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--color-border-subtle); background: var(--color-surface-card); }
@@ -66,9 +73,10 @@
   gap: 6px 8px;
   flex-shrink: 0;
   user-select: none;
+  overflow: visible;
 }
 
-/* Zone 1 (Left - Sidebar & Stream Search) */
+/* Zone 1 (Left - Compact Node & App Selectors + Stream Search) */
 .toolbar-zone-left {
   display: flex;
   align-items: center;
@@ -76,57 +84,13 @@
   flex-wrap: wrap;
   min-width: 0;
   flex-shrink: 1;
+  overflow: visible;
 }
 
-.btn-toggle-targets {
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-  min-height: 32px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border-radius: var(--rounded-md, 6px);
-  background: var(--color-surface-elevated);
-  border: 1px solid var(--color-border-subtle);
-  color: var(--color-text-secondary);
-  transition: var(--transition-fast, 150ms ease);
-}
-.btn-toggle-targets:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-body);
-}
-.btn-toggle-targets.active {
-  background: var(--color-surface-card);
-  border-color: var(--color-border-subtle);
-  color: var(--color-body);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-}
+/* Compact selectors imported via logstream-selectors.css */
 
-.toolbar-target-badge {
-  display: inline-flex; align-items: center; gap: 5px; color: var(--color-badge-k8s-text);
-  background: var(--color-badge-k8s-bg); border: 1px solid var(--color-badge-k8s-border);
-  padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
-  max-width: 130px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  box-shadow: none;
-}
-.toolbar-service-pill {
-  display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 8px;
-  background: var(--color-badge-agent-bg); border: 1px solid var(--color-badge-agent-border);
-  border-radius: 6px; font-size: 11.5px; font-weight: 600; color: var(--color-badge-agent-text);
-  flex-shrink: 0; box-sizing: border-box;
-}
-.toolbar-service-pill .pill-icon { font-size: 12px; line-height: 1; }
-.toolbar-service-pill .pill-name { max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.toolbar-service-pill .pill-close-btn {
-  background: transparent; border: none; color: var(--color-badge-agent-text); font-size: 14px; cursor: pointer;
-  padding: 0 2px; line-height: 1; display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 3px; transition: all 0.12s ease;
-}
-.toolbar-service-pill .pill-close-btn:hover { background: var(--color-badge-agent-border); color: var(--color-body); }
 
+/* Toolbar Search Wrap */
 .logs-toolbar-sleek .toolbar-search-wrap { position: relative; display: flex; align-items: center; width: clamp(130px, 14vw, 210px); min-width: 120px; height: 32px; }
 .logs-toolbar-sleek .search-icon { position: absolute; left: 8px; font-size: 11px; color: var(--color-muted); pointer-events: none; }
 .logs-toolbar-sleek .toolbar-search-input {
@@ -213,36 +177,12 @@
 }
 .load-more-compact { font-size: 11.5px; padding: 0 8px; height: 32px; border-radius: 6px; }
 
-/* Zone 3 (Center-Right - Telemetry & Engine Badge) */
-.toolbar-kpi-strip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  user-select: none;
-}
-.toolbar-kpi-strip .kpi-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-badge-k8s-text);
-  background: var(--color-badge-k8s-bg);
-  border: 1px solid var(--color-badge-k8s-border);
-  box-shadow: none;
-  padding: 0 8px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  border-radius: 6px;
-  white-space: nowrap;
-}
-
-/* ClickHouse Log Engine Badge in Sleek Toolbar */
+/* ClickHouse Log Engine Badge */
 .logs-toolbar-sleek .log-engine-badge-wrapper {
   position: relative;
   display: inline-flex;
   align-items: center;
 }
-
 .logs-toolbar-sleek .engine-badge-trigger {
   height: 32px;
   min-height: 32px;
@@ -251,7 +191,6 @@
   border-radius: 6px;
   font-size: 12.5px;
 }
-
 .logs-toolbar-sleek .engine-popover {
   position: absolute;
   z-index: 50;
@@ -332,9 +271,6 @@
 .logs-toolbar-sleek.desktop-only { display: flex !important; width: 100% !important; }
 .desktop-only { display: inline-flex !important; }
 .mobile-only { display: none !important; }
-.mobile-tree-toggle-btn { display: none; }
-.mobile-backdrop { display: none; }
-.mobile-drawer-header { display: none; }
 
 @keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
 
@@ -344,16 +280,9 @@
     padding: 0 6px;
     gap: 4px;
   }
-  .logs-toolbar-sleek .kpi-badge .kpi-tag,
-  .logs-toolbar-sleek .kpi-badge .kpi-latency {
-    display: none;
-  }
   .logs-toolbar-sleek .toolbar-search-wrap {
     width: clamp(110px, 11vw, 150px);
     min-width: 100px;
-  }
-  .toolbar-target-badge {
-    max-width: 110px;
   }
   .toolbar-actions-group {
     gap: 3px;
@@ -365,9 +294,6 @@
 }
 
 @media (max-width: 1300px) {
-  .logs-toolbar-sleek .toolbar-kpi-strip .kpi-badge {
-    display: none !important;
-  }
   .logs-toolbar-sleek .badge-text-full {
     display: none !important;
   }
@@ -401,29 +327,12 @@
   .logs-toolbar-sleek .toolbar-search-wrap {
     width: 110px;
   }
-  .toolbar-target-badge {
-    max-width: 90px;
-  }
   .logs-toolbar-sleek .toolbar-btn span {
     display: none;
   }
   .logs-toolbar-sleek .toolbar-btn {
     padding: 0 6px;
   }
-}
-
-@media (max-width: 900px) {
-  .mobile-backdrop { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); z-index: 45; }
-  .mobile-drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--color-surface-card); border-bottom: 1px solid var(--color-border-subtle); }
-  .drawer-title { font-size: 11px; font-weight: 700; color: var(--color-badge-agent-text); text-transform: uppercase; }
-  .drawer-close-btn { background: none; border: none; color: var(--color-muted); font-size: 13px; cursor: pointer; }
-  .log-explorer-grid { grid-template-columns: 1fr; position: relative; }
-  .explorer-left-col {
-    display: none; position: fixed; top: 50px; left: 12px; right: 12px; bottom: 20px;
-    max-width: 380px; z-index: 50; background: var(--color-surface-card); border: 1px solid var(--color-border-subtle);
-    border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4); flex-direction: column;
-  }
-  .explorer-left-col.mobile-tree-open { display: flex; }
 }
 
 @media (max-width: 768px) {
@@ -435,13 +344,6 @@
   }
   .logs-toolbar-sleek.desktop-only, .desktop-only { display: none !important; }
   .mobile-only { display: flex !important; }
-  .mobile-tree-toggle-btn {
-    display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px;
-    background: var(--color-badge-k8s-bg); border: 1px solid var(--color-badge-k8s-border);
-    border-radius: 4px; color: var(--color-badge-k8s-text); font-size: 11px; font-weight: 700; cursor: pointer;
-    max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    box-shadow: none;
-  }
 }
 
 .dropped-alert-banner {
