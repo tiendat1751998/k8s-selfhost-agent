@@ -321,14 +321,17 @@ body:has(.pwa-install-banner) .main-content {
   .command-search-btn { width: auto; min-width: 0; max-width: none; padding: 0 8px; }
   .command-search-btn .kbd-badge { display: none !important; }
   .hud-center { gap: 4px; }
-  .global-context-selector { max-width: 220px; }
-  .global-context-selector .context-pill { max-width: 105px; padding: 0 4px; }
-  .global-context-selector .pill-text { max-width: 80px; font-size: 11px; }
+  .global-context-selector { max-width: 320px; }
+  .global-context-selector .context-pill { max-width: 155px; padding: 0 4px; }
+  .global-context-selector .pill-text { max-width: 135px; font-size: 11px; }
 }
 @media (max-width: 800px) {
   .top-hud { max-width: 100%; overflow-x: hidden; }
   .hud-left { min-width: 0 !important; width: 0 !important; display: none !important; }
   .hud-breadcrumb { display: none !important; }
+  .global-context-selector { max-width: 300px; }
+  .global-context-selector .context-pill { max-width: 150px; }
+  .global-context-selector .pill-text { max-width: 130px; }
 }
 
 /* Laptop & Viewports <= 1366px */

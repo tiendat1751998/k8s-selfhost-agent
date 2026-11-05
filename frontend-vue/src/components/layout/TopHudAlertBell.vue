@@ -6,38 +6,27 @@ import BaseIcon from '../ui/BaseIcon.vue'
 const alertStore = useAlertStore()
 
 // 15 seconds auto-dismiss countdown for the header-anchored dropdown toast
-const DURATION_MS = 15000
-const TICK_MS = 50
+const DURATION_MS = 15000, TICK_MS = 50
 let timerId: ReturnType<typeof setInterval> | null = null
 
-const isPaused = ref(false)
-const progressPercent = ref(100)
-const elapsedMs = ref(0)
-
-const containerRef = ref<HTMLElement | null>(null)
-const toastRef = ref<HTMLElement | null>(null)
+const isPaused = ref(false), progressPercent = ref(100), elapsedMs = ref(0)
+const containerRef = ref<HTMLElement | null>(null), toastRef = ref<HTMLElement | null>(null)
 
 function startTimer() {
   stopTimer()
   elapsedMs.value = 0
   progressPercent.value = 100
-
   timerId = setInterval(() => {
     if (!isPaused.value) {
       elapsedMs.value += TICK_MS
       progressPercent.value = Math.max(0, 100 - (elapsedMs.value / DURATION_MS) * 100)
-      if (elapsedMs.value >= DURATION_MS) {
-        dismissToast()
-      }
+      if (elapsedMs.value >= DURATION_MS) dismissToast()
     }
   }, TICK_MS)
 }
 
 function stopTimer() {
-  if (timerId) {
-    clearInterval(timerId)
-    timerId = null
-  }
+  if (timerId) { clearInterval(timerId); timerId = null }
 }
 
 function dismissToast() {
@@ -49,12 +38,8 @@ const firstDownNode = computed(() => downNodeAlerts.value[0]?.node_name || downN
 
 function handleQuickFailover() {
   dismissToast()
-  if (firstDownNode.value) {
-    alertStore.openRemediation(firstDownNode.value)
-    alertStore.openAlertCenter()
-  } else {
-    alertStore.openAlertCenter()
-  }
+  if (firstDownNode.value) alertStore.openRemediation(firstDownNode.value)
+  alertStore.openAlertCenter()
 }
 
 function handleOpenDetails() {
@@ -67,28 +52,34 @@ function handleMuteAll() {
   alertStore.muteAll('restart')
 }
 
-const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth <= 640 : false)
-
-function updateIsMobile() {
-  if (typeof window !== 'undefined') {
-    isMobile.value = window.innerWidth <= 640
+// User-initiated toggle: popover opens ONLY on explicit click (DEC-257 parity)
+function handleBellClick() {
+  if (isMobile.value) {
+    alertStore.openAlertCenter()
+    return
+  }
+  if (alertStore.activeAlerts.length > 0) {
+    if (alertStore.isToastDropped) dismissToast()
+    else alertStore.isToastDropped = true
+  } else {
+    alertStore.openAlertCenter()
   }
 }
 
-// Watch for toast drop trigger from alertStore
+const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth <= 640 : false)
+function updateIsMobile() {
+  if (typeof window !== 'undefined') isMobile.value = window.innerWidth <= 640
+}
+
 watch(
   () => alertStore.isToastDropped,
   (dropped) => {
-    if (!isMobile.value && dropped && alertStore.activeAlerts.length > 0) {
-      startTimer()
-    } else {
-      stopTimer()
-    }
+    if (!isMobile.value && dropped && alertStore.activeAlerts.length > 0) startTimer()
+    else stopTimer()
   },
   { immediate: true }
 )
 
-// Computeds for alert badge and preview message
 const downNodeAlerts = computed(() => alertStore.activeAlerts.filter(a => a.type === 'node_down'))
 const hasNodeDown = computed(() => downNodeAlerts.value.length > 0)
 
@@ -103,30 +94,19 @@ const previewMessage = computed(() => {
   if (alertStore.activeAlerts.length === 0) return ''
   const names = alertStore.activeAlerts.map(a => a.node_name || a.node_id)
   const uniqueNames = Array.from(new Set(names))
-
   if (hasNodeDown.value) {
     const downNames = downNodeAlerts.value.map(a => a.node_name || a.node_id)
-    if (downNames.length <= 3) {
-      return `${downNames.join(', ')} unreachable`
-    }
+    if (downNames.length <= 3) return `${downNames.join(', ')} unreachable`
     return `${downNames.slice(0, 2).join(', ')} +${downNames.length - 2} more unreachable`
   }
-
-  if (uniqueNames.length <= 2) {
-    return `${uniqueNames.join(', ')} threshold exceeded`
-  }
+  if (uniqueNames.length <= 2) return `${uniqueNames.join(', ')} threshold exceeded`
   return `${uniqueNames.slice(0, 2).join(', ')} +${uniqueNames.length - 2} nodes reporting alerts`
 })
 
 function handleMouseEnter() {
-  if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
-    isPaused.value = true
-  }
+  if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) isPaused.value = true
 }
-
-function handleMouseLeave() {
-  isPaused.value = false
-}
+function handleMouseLeave() { isPaused.value = false }
 
 function handleDocumentInteraction(e: MouseEvent | TouchEvent) {
   if (!alertStore.isToastDropped) return
@@ -136,10 +116,15 @@ function handleDocumentInteraction(e: MouseEvent | TouchEvent) {
   }
 }
 
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && alertStore.isToastDropped) dismissToast()
+}
+
 onMounted(() => {
   if (typeof document !== 'undefined') {
     document.addEventListener('click', handleDocumentInteraction)
     document.addEventListener('touchend', handleDocumentInteraction, { passive: true })
+    document.addEventListener('keydown', handleKeydown)
     window.addEventListener('resize', updateIsMobile)
   }
 })
@@ -148,10 +133,13 @@ onUnmounted(() => {
   if (typeof document !== 'undefined') {
     document.removeEventListener('click', handleDocumentInteraction)
     document.removeEventListener('touchend', handleDocumentInteraction)
+    document.removeEventListener('keydown', handleKeydown)
     window.removeEventListener('resize', updateIsMobile)
   }
   stopTimer()
 })
+
+defineExpose({ handleBellClick, isMobile, dismissToast })
 </script>
 
 <template>
@@ -167,13 +155,13 @@ onUnmounted(() => {
       }"
       :title="
         alertStore.activeAlerts.length > 0
-          ? `Cluster Alerts: ${alertStore.activeAlerts.length} active issue(s). Click to inspect Alert Center.`
+          ? `Cluster Alerts: ${alertStore.activeAlerts.length} active issue(s). Click to toggle alert popover.`
           : alertStore.mutedAlertsCount > 0
             ? `Alert Center: ${alertStore.mutedAlertsCount} rule(s) currently silenced. Click to manage.`
             : 'Cluster Alerts: All green (0 active alerts). Click to open Alert Center.'
       "
       aria-label="Cluster Alert Center"
-      @click="alertStore.openAlertCenter"
+      @click="handleBellClick"
     >
       <span class="bell-icon-wrap">
         <BaseIcon
@@ -181,17 +169,10 @@ onUnmounted(() => {
           size="sm"
           class="bell-svg"
         />
-        <span
-          v-if="alertStore.activeAlerts.length > 0"
-          class="bell-badge-count font-mono"
-          :class="alertStore.hasCriticalAlerts ? 'badge-rose-bg' : 'badge-amber-bg'"
-        >
+        <span v-if="alertStore.activeAlerts.length > 0" class="bell-badge-count font-mono" :class="alertStore.hasCriticalAlerts ? 'badge-rose-bg' : 'badge-amber-bg'">
           {{ alertStore.activeAlerts.length }}
         </span>
-        <span
-          v-else-if="alertStore.mutedAlertsCount > 0"
-          class="bell-badge-count badge-muted-bg font-mono"
-        >
+        <span v-else-if="alertStore.mutedAlertsCount > 0" class="bell-badge-count badge-muted-bg font-mono">
           {{ alertStore.mutedAlertsCount }}
         </span>
       </span>
@@ -225,65 +206,30 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <button
-              type="button"
-              class="btn-toast-close"
-              title="Dismiss notification (Docks into bell icon)"
-              aria-label="Close notification"
-              @click.stop.prevent="dismissToast"
-            >
+            <button type="button" class="btn-toast-close" title="Dismiss notification" aria-label="Close notification" @click.stop.prevent="dismissToast">
               <BaseIcon name="x" size="xs" />
             </button>
           </div>
 
           <!-- Message Preview -->
           <div class="toast-body" @click="handleOpenDetails">
-            <p class="toast-preview-msg font-mono">
-              {{ previewMessage }}
-            </p>
-            <span v-if="isPaused" class="toast-paused-badge">
-              <BaseIcon name="activity" size="xs" /> Timer Paused
-            </span>
+            <p class="toast-preview-msg font-mono">{{ previewMessage }}</p>
+            <span v-if="isPaused" class="toast-paused-badge"><BaseIcon name="activity" size="xs" /> Timer Paused</span>
           </div>
 
           <!-- Action Buttons -->
           <div class="toast-actions">
-            <button
-              v-if="hasNodeDown"
-              type="button"
-              class="btn-toast-action btn-toast-failover"
-              title="1-Click SRE Fast Failover for offline node"
-              @click="handleQuickFailover"
-            >
-              <BaseIcon name="zap" size="xs" />
-              <span>Quick Failover</span>
+            <button v-if="hasNodeDown" type="button" class="btn-toast-action btn-toast-failover" title="1-Click SRE Fast Failover for offline node" @click="handleQuickFailover">
+              <BaseIcon name="zap" size="xs" /> <span>Quick Failover</span>
             </button>
-            <button
-              type="button"
-              class="btn-toast-action btn-toast-details"
-              title="Open interactive Alert Center"
-              @click="handleOpenDetails"
-            >
-              <BaseIcon name="search" size="xs" />
-              <span>View Details</span>
+            <button type="button" class="btn-toast-action btn-toast-details" title="Open interactive Alert Center" @click="handleOpenDetails">
+              <BaseIcon name="search" size="xs" /> <span>View Details</span>
             </button>
-            <button
-              type="button"
-              class="btn-toast-action btn-toast-mute"
-              title="Silence all active node alerts until server restart"
-              @click="handleMuteAll"
-            >
-              <BaseIcon name="bell-off" size="xs" />
-              <span>Mute All</span>
+            <button type="button" class="btn-toast-action btn-toast-mute" title="Silence all active node alerts until server restart" @click="handleMuteAll">
+              <BaseIcon name="bell-off" size="xs" /> <span>Mute All</span>
             </button>
-            <button
-              type="button"
-              class="btn-toast-action btn-toast-dismiss"
-              title="Dismiss toast and dock into bell icon"
-              @click.stop.prevent="dismissToast"
-            >
-              <BaseIcon name="x" size="xs" />
-              <span>Dismiss</span>
+            <button type="button" class="btn-toast-action btn-toast-dismiss" title="Dismiss toast and dock into bell icon" @click.stop.prevent="dismissToast">
+              <BaseIcon name="x" size="xs" /> <span>Dismiss</span>
             </button>
           </div>
 

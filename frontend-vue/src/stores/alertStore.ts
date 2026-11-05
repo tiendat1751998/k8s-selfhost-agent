@@ -146,20 +146,10 @@ export const useAlertStore = defineStore('alert', () => {
     }
   }
 
-  // Sync incoming alerts from overview or WebSocket
+  // Sync incoming alerts from overview or WebSocket (DEC-257 parity: no unsolicited toast drop)
   function syncAlerts(alerts: MetricAlert[]) {
     rawAlerts.value = alerts || []
-
-    const currentKeys = activeAlerts.value
-      .map(a => `${a.node_id || a.node_name}-${a.type}`)
-      .sort()
-      .join(',')
-
-    if (currentKeys && currentKeys.length > 0) {
-      if (currentKeys !== manuallyDismissedKeys.value) {
-        isToastDropped.value = true
-      }
-    } else {
+    if (activeAlerts.value.length === 0) {
       isToastDropped.value = false
       manuallyDismissedKeys.value = ''
     }

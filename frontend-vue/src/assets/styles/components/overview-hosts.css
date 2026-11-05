@@ -281,7 +281,7 @@
    Infrastructure Hosts Header & Sleek 38px Toolbar Controls
    ========================================================================== */
 .topology-section { display: flex; flex-direction: column; gap: 10px; }
-.hosts-header-row.topology-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 2px; margin-bottom: 0; flex-wrap: nowrap; }
+.hosts-header-row.topology-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 2px; margin-bottom: 0; flex-wrap: nowrap; padding: 0 6px; box-sizing: border-box; }
 .hosts-title-group { display: inline-flex; align-items: center; gap: 8px; }
 .hosts-pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-primary, #326ce5); flex-shrink: 0; }
 .hosts-section-title { font-size: 14.5px; font-weight: 600; color: var(--text-secondary); letter-spacing: -0.01em; margin: 0; line-height: 1.3; }

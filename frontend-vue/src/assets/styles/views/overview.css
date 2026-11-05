@@ -6,12 +6,13 @@
 
 
 .overview-dashboard {
-  padding: 6px 0 32px;
+  padding: 6px 6px 32px;
   max-width: 1680px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  box-sizing: border-box;
 }
 
 /* Sleek Unified 42px Enterprise Toolbar */
@@ -228,9 +229,21 @@
   gap: 16px;
 }
 
-.error-icon { font-size: 32px; }
-.error-info h3 { margin: 0 0 4px; font-size: 16px; color: #f43f5e; }
-.error-info p { margin: 0; font-size: 13px; color: var(--text-secondary, #94a3b8); }
+.error-icon {
+  font-size: 32px;
+}
+
+.error-info h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  color: #f43f5e;
+}
+
+.error-info p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary, #94a3b8);
+}
 
 .empty-state-card {
   padding: 48px 24px;
@@ -243,8 +256,15 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.empty-icon { font-size: 40px; }
-.empty-actions { display: flex; gap: 10px; margin-top: 12px; }
+.empty-icon {
+  font-size: 40px;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
 
 .dashboard-body {
   display: flex;
@@ -253,9 +273,23 @@
 }
 
 /* Common Indicators & Badges */
-.badge-emerald { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-.badge-cyan { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
-.badge-indigo { background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3); }
+.badge-emerald {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-cyan {
+  background: rgba(6, 182, 212, 0.15);
+  color: #22d3ee;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.badge-indigo {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
 
 .pulse-dot {
   width: 6px;
@@ -266,15 +300,37 @@
   border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
-.pulse-active { animation: pulseDot 1.5s infinite; }
-
-@keyframes pulseDot {
-  0%, 100% { transform: scale(0.95); opacity: 0.8; }
-  50% { transform: scale(1.2); opacity: 1; }
+.pulse-active {
+  animation: pulseDot 1.5s infinite;
 }
 
-.spin-icon { animation: spin 1s linear infinite; }
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes pulseDot {
+
+  0%,
+  100% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 @media (max-width: 1280px) {
   .overview-dashboard {

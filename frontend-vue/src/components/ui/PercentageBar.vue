@@ -81,10 +81,12 @@ const fillColor = computed<string>(() => {
 <style scoped>
 .percentage-bar-track {
   width: 100%;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border-subtle);
   border-radius: 9999px;
   overflow: hidden;
   position: relative;
+  box-sizing: border-box;
 }
 
 .percentage-bar-fill {
