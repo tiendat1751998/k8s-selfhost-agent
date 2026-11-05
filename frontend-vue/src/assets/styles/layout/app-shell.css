@@ -329,9 +329,9 @@ body:has(.pwa-install-banner) .main-content {
   .top-hud { max-width: 100%; overflow-x: hidden; }
   .hud-left { min-width: 0 !important; width: 0 !important; display: none !important; }
   .hud-breadcrumb { display: none !important; }
-  .global-context-selector { max-width: 320px; }
-  .global-context-selector .context-pill { max-width: 155px; }
-  .global-context-selector .pill-text { max-width: 135px; }
+  .global-context-selector { max-width: 300px; }
+  .global-context-selector .context-pill { max-width: 150px; }
+  .global-context-selector .pill-text { max-width: 130px; }
 }
 
 /* Laptop & Viewports <= 1366px */

@@ -54,6 +54,10 @@ function handleMuteAll() {
 
 // User-initiated toggle: popover opens ONLY on explicit click (DEC-257 parity)
 function handleBellClick() {
+  if (isMobile.value) {
+    alertStore.openAlertCenter()
+    return
+  }
   if (alertStore.activeAlerts.length > 0) {
     if (alertStore.isToastDropped) dismissToast()
     else alertStore.isToastDropped = true
@@ -134,6 +138,8 @@ onUnmounted(() => {
   }
   stopTimer()
 })
+
+defineExpose({ handleBellClick, isMobile, dismissToast })
 </script>
 
 <template>

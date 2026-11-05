@@ -87,20 +87,14 @@
     <section v-else-if="activeTab === 'findings'" class="audit-subview-section" aria-label="Container Vulnerabilities">
       <div class="audit-desktop-view">
         <VulnerabilityFindingsTable
-          :findings="displayedFindings"
-          :loading="findingsLoading"
-          :error="findingsError"
-          :resolving-id="resolvingFindingId"
-          @resolve="handleResolveFinding"
-          @refresh="loadFindings"
+          :findings="displayedFindings" :loading="findingsLoading" :error="findingsError"
+          :resolving-id="resolvingFindingId" @resolve="handleResolveFinding" @refresh="loadFindings"
         />
       </div>
       <div class="audit-mobile-view">
         <VulnerabilityMobileCards
-          :findings="displayedFindings"
-          :loading="findingsLoading"
-          :resolving-id="resolvingFindingId"
-          @resolve="handleResolveFinding"
+          :findings="displayedFindings" :loading="findingsLoading" :error="findingsError"
+          :resolving-id="resolvingFindingId" @resolve="handleResolveFinding" @retry="loadFindings"
         />
       </div>
     </section>
