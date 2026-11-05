@@ -107,3 +107,59 @@
 .radar-empty-state { color: var(--color-status-online); }
 .radar-error-state { color: var(--color-status-offline); }
 .radar-loading-state { color: var(--color-muted); }
+
+/* Responsive Finish-Gate: zero overflow on 768px / 375px */
+@media (max-width: 768px) {
+  .radar-header {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+  .radar-subtitle {
+    font-size: 10px;
+  }
+  .radar-target-badge {
+    max-width: 100px;
+  }
+}
+
+@media (max-width: 640px) {
+  .radar-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 6px 8px;
+    gap: 6px;
+  }
+  .radar-title-group {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+  .radar-controls-group {
+    justify-content: space-between;
+  }
+  .radar-item {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 8px;
+    gap: 6px;
+  }
+  .radar-item-left {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .radar-pattern-block {
+    width: 100%;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .radar-sample-subline {
+    flex-wrap: wrap;
+    gap: 4px;
+    white-space: normal;
+    word-break: break-word;
+  }
+  .radar-inspect-btn {
+    align-self: flex-end;
+    min-height: 28px;
+    padding: 3px 10px;
+  }
+}

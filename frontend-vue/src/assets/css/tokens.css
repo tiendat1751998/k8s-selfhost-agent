@@ -2,6 +2,7 @@
   /* Brand Accents - CNCF Kubernetes Blue */
   --color-primary: #326ce5;
   --accent-primary: #2563eb;
+  --accent-hover: #1d4ed8;
   --color-primary-hover: #3b82f6;
   --color-primary-active: #2563eb;
   --color-primary-disabled: #1e293b;
@@ -34,6 +35,7 @@
   /* Semantic Surface Aliases */
   --bg-card: var(--color-surface-card);
   --bg-card-hover: var(--color-surface-elevated, #1e293b);
+  --bg-elevated: var(--color-surface-elevated);
   --color-surface-hover: var(--color-surface-elevated);
   --color-surface-active: #2a3952;
   --color-focus-ring: rgba(50, 108, 229, 0.4);
@@ -48,6 +50,9 @@
   --color-on-dark: #ffffff;
   --color-text: var(--color-body);
   --color-text-secondary: var(--color-muted-strong);
+  --text-primary: var(--color-body);
+  --text-secondary: var(--color-muted-strong);
+  --text-muted: var(--color-muted);
   --color-endpoint-syntax: #58a6ff;
 
   /* Status Colors */
@@ -139,6 +144,7 @@
   /* Brand Accents - Cloud Console Light */
   --color-primary: #1d4ed8;
   --accent-primary: #2563eb;
+  --accent-hover: #1d4ed8;
   --color-primary-hover: #2563eb;
   --color-primary-active: #1e40af;
   --color-on-primary: #ffffff;
@@ -151,6 +157,7 @@
   --color-surface-elevated: #f8fafc;
   --bg-card: var(--color-surface-card);
   --bg-card-hover: #f1f5f9;
+  --bg-elevated: var(--color-surface-elevated);
   --color-surface-hover: #f1f5f9;
   --color-surface-active: #e2e8f0;
   --color-focus-ring: rgba(29, 78, 216, 0.25);
@@ -173,6 +180,9 @@
   --color-on-dark: #0f172a;
   --color-text: var(--color-body);
   --color-text-secondary: var(--color-muted-strong);
+  --text-primary: var(--color-body);
+  --text-secondary: var(--color-muted-strong);
+  --text-muted: var(--color-muted);
   --color-endpoint-syntax: #0969da;
 
   /* Status Colors */
