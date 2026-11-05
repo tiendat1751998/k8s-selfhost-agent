@@ -15,6 +15,8 @@ export interface LogTarget {
   namespace?: string
   node?: string
   service?: string
+  status?: string
+  online?: boolean
 }
 
 export interface TargetNodeItem {

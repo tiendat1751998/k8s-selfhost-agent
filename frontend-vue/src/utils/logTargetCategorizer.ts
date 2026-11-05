@@ -8,6 +8,8 @@
  * Filters out rotated logs (e.g. \.\d+$) and OS maintenance/installer file noise.
  */
 
+import type { LogEntry } from '../stores/logStore'
+
 export const OS_NOISE_NAMES: ReadonlySet<string> = new Set([
   'alternatives',
   'apport',
@@ -145,3 +147,55 @@ export function classifyLogTarget(name: string, defaultType?: string): Classifie
     icon: getServiceIcon(name),
   }
 }
+
+export interface AvailableServiceItem {
+  id: string
+  name: string
+  category: 'app' | 'systemd'
+  icon: string
+  count: number
+}
+
+export function extractAvailableServices(logs: LogEntry[], effectiveNode?: string): AvailableServiceItem[] {
+  const counts = new Map<string, { name: string; category: 'app' | 'systemd'; icon: string; count: number }>()
+  const effNode = effectiveNode?.toLowerCase()
+  for (const l of logs) {
+    if (effNode) {
+      const n = (l.node || l.attributes?.node || l.attributes?.node_name || '').toLowerCase()
+      if (n && !n.includes(effNode)) continue
+    }
+    const svc = l.service || l.container || l.attributes?.app || l.attributes?.service || l.attributes?.container_name || l.pod
+    if (!svc || isNoiseLog(svc)) continue
+    const lower = svc.toLowerCase()
+    const existing = counts.get(lower)
+    if (existing) {
+      existing.count++
+    } else {
+      const classified = classifyLogTarget(svc)
+      counts.set(lower, {
+        name: svc,
+        category: classified.category,
+        icon: classified.icon,
+        count: 1,
+      })
+    }
+  }
+  const result: AvailableServiceItem[] = []
+  for (const [id, item] of counts.entries()) {
+    result.push({
+      id,
+      name: item.name,
+      category: item.category,
+      icon: item.icon,
+      count: item.count,
+    })
+  }
+  result.sort((a, b) => {
+    if (a.category !== b.category) {
+      return a.category === 'app' ? -1 : 1
+    }
+    return b.count - a.count
+  })
+  return result
+}
+

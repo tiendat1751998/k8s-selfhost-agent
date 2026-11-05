@@ -172,11 +172,15 @@ function isServiceMuted(svcId: string): boolean {
 
 function handleNodeClick(node: TargetNodeItem) {
   emit('update:activeService', '')
+  const isOnline = Boolean(node.online)
   const target: LogTarget = {
     type: 'node',
     id: node.id,
     name: node.name,
     icon: 'server',
+    node: node.id,
+    online: isOnline,
+    status: isOnline ? 'online' : 'offline',
   }
   emit('select', target)
   emit('update:modelValue', target)

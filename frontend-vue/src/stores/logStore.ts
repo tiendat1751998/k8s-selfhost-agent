@@ -65,6 +65,28 @@ export function getLogFingerprint(entry: LogEntry): string {
   return `${entry.time}_${service}_${entry.msg}`
 }
 
+/**
+ * Defensive client-side normalizer for Kubernetes klog prefix:
+ * ^[EF]\d{4}\s -> 'error' / 'ERROR'
+ * ^W\d{4}\s    -> 'warn' / 'WARN'
+ */
+export function normalizeKlogLevel(level?: string, msg?: string): string {
+  const lvl = (level || 'info').trim()
+  const lower = lvl.toLowerCase()
+  if (lower === 'info' || !lower) {
+    if (msg) {
+      const trimmed = msg.trim()
+      if (/^[EF]\d{4}\s/.test(trimmed)) {
+        return lvl === 'INFO' ? 'ERROR' : 'error'
+      }
+      if (/^W\d{4}\s/.test(trimmed)) {
+        return lvl === 'INFO' ? 'WARN' : 'warn'
+      }
+    }
+  }
+  return level || 'info'
+}
+
 export const useLogStore = defineStore('log', () => {
   const logs = ref<LogEntry[]>([])
   const isConnected = ref(false)
@@ -240,7 +262,10 @@ export const useLogStore = defineStore('log', () => {
   }
 
   function addLogEntry(entry: LogEntry) {
-    const effectiveLevel = inferEffectiveLevel(entry.level, entry.msg)
+    const klogLevel = normalizeKlogLevel(entry.level, entry.msg)
+    const effectiveLevel = klogLevel.toLowerCase() !== (entry.level || 'info').toLowerCase()
+      ? klogLevel.toUpperCase()
+      : inferEffectiveLevel(entry.level, entry.msg)
     const normalized = entry.level !== effectiveLevel ? { ...entry, level: effectiveLevel } : entry
     if (logs.value.length > 0) {
       const last = logs.value[logs.value.length - 1]
@@ -265,7 +290,10 @@ export const useLogStore = defineStore('log', () => {
 
     for (let i = 0; i < entries.length; i++) {
       const cur = entries[i]
-      const effectiveLevel = inferEffectiveLevel(cur.level, cur.msg)
+      const klogLevel = normalizeKlogLevel(cur.level, cur.msg)
+      const effectiveLevel = klogLevel.toLowerCase() !== (cur.level || 'info').toLowerCase()
+        ? klogLevel.toUpperCase()
+        : inferEffectiveLevel(cur.level, cur.msg)
       const normalized = cur.level !== effectiveLevel ? { ...cur, level: effectiveLevel } : cur
       if (
         last &&

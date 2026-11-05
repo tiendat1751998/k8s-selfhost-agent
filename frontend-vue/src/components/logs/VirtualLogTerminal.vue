@@ -19,12 +19,15 @@ interface Props {
   rowHeight?: number
   hoverPauseEnabled?: boolean
   hideServiceBadge?: boolean
+  isTargetOffline?: boolean
+  mode?: 'live' | 'historical'
 }
 
 const props = withDefaults(defineProps<Props>(), {
   isConnected: true, isPaused: false, autoScroll: true, isScrollLocked: false,
   targetName: 'cluster', latency: 0, wrapLines: true, rowHeight: 24,
   hoverPauseEnabled: true, hideServiceBadge: false,
+  isTargetOffline: false, mode: 'live',
 })
 
 
@@ -37,6 +40,7 @@ const emit = defineEmits<{
   (e: 'filterService', payload: { node?: string; service: string }): void
   (e: 'muteService', service: string): void
   (e: 'hoverChange', hovering: boolean): void
+  (e: 'switchToHistory'): void
 }>()
 
 const logStore = useLogStore()
@@ -69,11 +73,23 @@ function formatLevelBadge(lvl: string): string {
 }
 
 
+let resizeObserver: ResizeObserver | null = null
+
 onMounted(() => {
   emit('registerTerminal', viewportRef.value)
   if (viewportRef.value) {
     clientHeight.value = viewportRef.value.clientHeight || 600
     viewportRef.value.addEventListener('scroll', handleViewportScroll, { passive: true })
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.target === viewportRef.value) {
+            clientHeight.value = entry.contentRect.height || viewportRef.value.clientHeight || 600
+          }
+        }
+      })
+      resizeObserver.observe(viewportRef.value)
+    }
   }
   window.addEventListener('resize', handleResize)
   if (props.autoScroll) {
@@ -82,6 +98,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
   if (viewportRef.value) {
     viewportRef.value.removeEventListener('scroll', handleViewportScroll)
   }
@@ -229,15 +249,15 @@ defineExpose({
       @mouseenter="handleMouseEnter"
       @mouseleave="handleMouseLeave"
     >
-      <!-- Spacer providing the total virtual scroll height -->
+      <!-- Spacer providing the total virtual scroll height with top breathing room -->
       <div
         class="virtual-spacer"
-        :style="{ height: windowResult.totalHeight + 'px' }"
+        :style="{ height: (windowResult.totalHeight + 12) + 'px' }"
       >
-        <!-- Transformed slice rendering visible DOM items -->
+        <!-- Transformed slice rendering visible DOM items with top breathing room -->
         <div
           class="virtual-content"
-          :style="{ transform: `translateY(${windowResult.offsetY}px)` }"
+          :style="{ transform: `translateY(${windowResult.offsetY + 6}px)` }"
         >
           <div
             v-for="item in visibleItems"
@@ -343,8 +363,30 @@ defineExpose({
         </div>
       </div>
 
-      <!-- Empty State -->
-      <div v-if="coalescedLogs.length === 0" class="virtual-empty-state font-mono">
+      <!-- Offline Node Empty State in Live Mode -->
+      <div
+        v-if="coalescedLogs.length === 0 && isTargetOffline && mode === 'live'"
+        class="virtual-empty-state font-mono offline-node-empty"
+      >
+        <BaseIcon name="zap-off" size="lg" class="text-amber" />
+        <p class="virtual-empty-title">
+          Node [{{ targetName }}] is currently offline — live stream unavailable
+        </p>
+        <p class="virtual-empty-sub">
+          Historical log records may still be stored in ClickHouse MergeTree archive.
+        </p>
+        <button
+          type="button"
+          class="btn-switch-history font-mono"
+          @click="emit('switchToHistory')"
+        >
+          <BaseIcon name="clock" size="xs" />
+          <span>Switch to History Logs</span>
+        </button>
+      </div>
+
+      <!-- Standard Empty State -->
+      <div v-else-if="coalescedLogs.length === 0" class="virtual-empty-state font-mono">
         <BaseIcon name="radio" size="lg" />
         <p class="virtual-empty-title">
           {{ isConnected ? `Waiting for logs from [${targetName || 'cluster'}]...` : 'Disconnected from log stream. Reconnecting...' }}

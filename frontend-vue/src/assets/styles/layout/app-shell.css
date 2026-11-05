@@ -251,9 +251,11 @@ body:has(.pwa-install-banner) .main-content {
 .hud-logout-btn:hover { background: rgba(244, 63, 94, 0.15); border-color: rgba(244, 63, 94, 0.4); color: #fb7185; }
 .page-container,
 .page-container.route-hosts { flex: 1; padding: 20px 24px; overflow-y: auto; }
+.page-container.route-logs { flex: 1; padding: 12px 16px; overflow-x: hidden !important; max-width: 100%; width: 100%; box-sizing: border-box; }
 @media (max-width: 1280px) {
   .page-container,
   .page-container.route-hosts { padding: 16px; }
+  .page-container.route-logs { padding: 10px 12px; }
 }
 @media (max-width: 640px) {
   .page-container,
