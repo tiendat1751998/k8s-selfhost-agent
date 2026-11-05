@@ -14,8 +14,8 @@ func matchAgentAuthToken(r *http.Request) bool {
 		return false
 	}
 	path := r.URL.Path
-	isRegister := strings.HasSuffix(path, "/agents/register") || path == "/agents/register"
-	isIngest := strings.HasSuffix(path, "/logs/ingest") || path == "/api/v1/logs/ingest"
+	isRegister := path == "/api/v1/agents/register" || path == "/agents/register"
+	isIngest := path == "/api/v1/logs/ingest" || path == "/logs/ingest"
 	if !isRegister && !isIngest {
 		return false
 	}

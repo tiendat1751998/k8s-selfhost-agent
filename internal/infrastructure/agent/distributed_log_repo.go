@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -16,9 +17,10 @@ import (
 // DistributedAgentLogRepo implements domainLogging.LogRepository by scattering queries
 // across edge k8s-agents running embedded logengine instances.
 type DistributedAgentLogRepo struct {
-	hostRepo  docker.ComputeHostRepository
-	logClient LogClientInterface
-	memRepo   *infraLogging.MemoryLogRepo
+	hostRepo     docker.ComputeHostRepository
+	logClient    LogClientInterface
+	memRepo      *infraLogging.MemoryLogRepo
+	radarHTTPCli *http.Client
 }
 
 // NewDistributedAgentLogRepo initializes a distributed log repository.
@@ -41,6 +43,10 @@ func NewDistributedAgentLogRepo(
 		hostRepo:  hostRepo,
 		logClient: logClient,
 		memRepo:   mem,
+		radarHTTPCli: &http.Client{
+			Transport: NewFastTransport(),
+			Timeout:   1 * time.Second,
+		},
 	}
 }
 

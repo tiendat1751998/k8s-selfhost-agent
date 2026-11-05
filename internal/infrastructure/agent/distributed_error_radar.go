@@ -118,9 +118,12 @@ func (r *DistributedAgentLogRepo) SummarizeErrors(ctx context.Context, filter do
 	hosts = candidates
 
 	var wg sync.WaitGroup
-	client := &http.Client{
-		Transport: NewFastTransport(),
-		Timeout:   1 * time.Second,
+	client := r.radarHTTPCli
+	if client == nil {
+		client = &http.Client{
+			Transport: NewFastTransport(),
+			Timeout:   1 * time.Second,
+		}
 	}
 
 	for _, h := range hosts {

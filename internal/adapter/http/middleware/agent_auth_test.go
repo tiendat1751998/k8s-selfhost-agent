@@ -157,6 +157,16 @@ func TestMatchAgentAuthToken_UnauthorizedRoutes(t *testing.T) {
 			method: http.MethodGet,
 			path:   "/api/v1/logs/ingest",
 		},
+		{
+			name:   "POST with nested suffix on ingest",
+			method: http.MethodPost,
+			path:   "/api/v1/organizations/123/logs/ingest",
+		},
+		{
+			name:   "POST with nested suffix on register",
+			method: http.MethodPost,
+			path:   "/api/v1/clusters/abc/agents/register",
+		},
 	}
 
 	for _, tc := range cases {

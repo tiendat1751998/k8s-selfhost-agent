@@ -234,17 +234,12 @@ func (l *GitHubRateLimiter) extractIdentity(r *http.Request) string {
 }
 
 func isIngestionRequest(r *http.Request) bool {
-	if r == nil {
-		return false
-	}
-	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+	if r == nil || r.Method != http.MethodPost {
 		return false
 	}
 	path := r.URL.Path
-	return strings.HasPrefix(path, "/api/v1/logs/ingest") ||
-		strings.HasPrefix(path, "/api/v1/metrics/ingest") ||
-		strings.HasSuffix(path, "/logs/ingest") ||
-		strings.HasSuffix(path, "/metrics/ingest")
+	return path == "/api/v1/logs/ingest" || path == "/logs/ingest" ||
+		path == "/api/v1/metrics/ingest" || path == "/metrics/ingest"
 }
 
 func isWebSocketUpgrade(r *http.Request) bool {
@@ -256,6 +251,9 @@ func isWebSocketUpgrade(r *http.Request) bool {
 }
 
 func isMutatingRequest(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
 	switch r.Method {
 	case http.MethodPost:
 		if IsReadOnlyPostPath(r.Method, r.URL.Path) {
@@ -266,11 +264,9 @@ func isMutatingRequest(r *http.Request) bool {
 		return false
 	}
 
-	if IsStreamingRequest(r) ||
-		isIngestionRequest(r) ||
-		strings.HasPrefix(r.URL.Path, "/api/v1/logs") ||
-		strings.HasPrefix(r.URL.Path, "/api/v1/metrics") ||
-		strings.HasPrefix(r.URL.Path, "/api/v1/agents/register") {
+	path := r.URL.Path
+	if isIngestionRequest(r) ||
+		path == "/api/v1/agents/register" || path == "/agents/register" {
 		return false
 	}
 
@@ -297,9 +293,9 @@ func (l *GitHubRateLimiter) Middleware() func(http.Handler) http.Handler {
 				return
 			}
 
-			isStreaming := IsStreamingRequest(r)
+			isStreaming := isVerifiedStreamingEndpoint(r)
 			isIngest := isIngestionRequest(r)
-			isWS := isWebSocketUpgrade(r)
+			isWS := isStreaming && isWebSocketUpgrade(r)
 
 			// 1. Secondary Concurrency check (streaming & edge ingestion exempt)
 			if !isStreaming && !isIngest {
