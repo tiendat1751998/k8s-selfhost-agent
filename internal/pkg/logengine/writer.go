@@ -252,6 +252,13 @@ func (w *Writer) drainToBuilderLocked(batch []Entry) int {
 		}
 		streamID := StreamToID(e.Stream)
 		lvlID := ParseLevelID(e.Level)
+		if (lvlID == LevelInfo || lvlID == LevelUnknown) && len(e.Message) > 5 {
+			if (e.Message[0] == 'E' || e.Message[0] == 'F') && klogHeaderRegex.MatchString(e.Message) {
+				lvlID = LevelError
+			} else if e.Message[0] == 'W' && klogHeaderRegex.MatchString(e.Message) {
+				lvlID = LevelWarn
+			}
+		}
 		ts := e.Timestamp.UnixNano()
 		w.builder.AppendWithMeta(ts, svcID, lvlID, nsID, podID, contID, streamID, e.Message)
 		if e.Namespace != "" {

@@ -1,6 +1,7 @@
 package logengine
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -48,5 +49,18 @@ func TestFingerprintError(t *testing.T) {
 	msg4 := []byte("record with id 12345 not found")
 	if FingerprintError(msg3) != FingerprintError(msg4) {
 		t.Errorf("expected numbers normalized to wildcard")
+	}
+}
+
+func TestFingerprintError_KlogPrefixStripping(t *testing.T) {
+	msg1 := []byte(`E1105 12:41:03.123456   1842 kubelet_node_status.go:106] "Unable to register node" err="dial tcp 10.10.10.60:6443: connect: no route to host"`)
+	msg2 := []byte(`E1105 12:42:15.987654  99999 kubelet_node_status.go:106] "Unable to register node" err="dial tcp 10.10.10.60:6443: connect: no route to host"`)
+	fp1 := FingerprintError(msg1)
+	fp2 := FingerprintError(msg2)
+	if fp1 != fp2 {
+		t.Fatalf("expected identical fingerprints for recurring klog errors with different timestamps and PIDs, got %q vs %q", fp1, fp2)
+	}
+	if !strings.HasPrefix(fp1, "kubelet_node_status.go:*]") {
+		t.Errorf("expected volatile klog header stripped so fingerprint starts with file.go:*], got %q", fp1)
 	}
 }

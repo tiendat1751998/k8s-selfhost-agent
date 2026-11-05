@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -280,6 +281,172 @@ func TestDistributedAgentLogRepo_SummarizeErrors_KlogSeverityNormalization(t *te
 	}
 	if groups[0].Level != "error" {
 		t.Errorf("expected normalized level 'error', got %s", groups[0].Level)
+	}
+}
+
+type mockQueryDispatcherClient struct {
+	onSearch func(req agent.SearchLogsRequest) ([]agent.LogSearchResult, error)
+}
+
+func (m *mockQueryDispatcherClient) GetNodeLogs(ctx context.Context, hostEndpoint, authToken, app, tail, since, until, q, level string, k8sMeta ...string) (string, error) {
+	return "", nil
+}
+
+func (m *mockQueryDispatcherClient) SearchNodeLogs(ctx context.Context, hostEndpoint, authToken string, req agent.SearchLogsRequest) ([]agent.LogSearchResult, error) {
+	if m.onSearch != nil {
+		return m.onSearch(req)
+	}
+	return nil, nil
+}
+
+func (m *mockQueryDispatcherClient) SearchClusterLogs(ctx context.Context, hosts []docker.ComputeHost, req agent.SearchLogsRequest) ([]agent.LogSearchResult, error) {
+	return nil, nil
+}
+
+func (m *mockQueryDispatcherClient) ListNodeServices(ctx context.Context, hostEndpoint, authToken string) ([]string, error) {
+	return nil, nil
+}
+
+func (m *mockQueryDispatcherClient) GetNodeServices(ctx context.Context, hostEndpoint, authToken string) ([]string, error) {
+	return nil, nil
+}
+
+func (m *mockQueryDispatcherClient) StreamLogs(ctx context.Context, agentURL, service string, onLine func(line string)) error {
+	return nil
+}
+
+func (m *mockQueryDispatcherClient) IsHostUnreachable(hostEndpoint string) bool {
+	return false
+}
+
+func TestDistributedAgentLogRepo_SummarizeErrors_KlogGroupingAndFingerprinting(t *testing.T) {
+	t0 := time.Now().UTC().Add(-10 * time.Minute)
+	t1 := time.Now().UTC().Add(-5 * time.Minute)
+
+	msg1 := `E1105 12:41:03.123456 1842 kubelet_node_status.go:106] "Unable to register node" err="dial tcp 10.10.10.60:6443: connect: no route to host"`
+	msg2 := `E1105 12:42:15.987654 9999 kubelet_node_status.go:106] "Unable to register node" err="dial tcp 10.10.10.60:6443: connect: no route to host"`
+
+	client := &mockQueryDispatcherClient{
+		onSearch: func(req agent.SearchLogsRequest) ([]agent.LogSearchResult, error) {
+			if req.Level == "error" {
+				// Historical node: MergeTree had level="info", so level=error query returns 0 rows
+				return []agent.LogSearchResult{}, nil
+			}
+			// Unfiltered sample (req.Level == "") returns both klog info entries
+			return []agent.LogSearchResult{
+				{
+					Timestamp: t0,
+					Service:   "kubelet.service",
+					Level:     "info",
+					Message:   msg1,
+				},
+				{
+					Timestamp: t1,
+					Service:   "kubelet.service",
+					Level:     "info",
+					Message:   msg2,
+				},
+			}, nil
+		},
+	}
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{ID: "node-1", Name: "worker-1", Endpoint: "http://10.10.10.80:9100", Status: "online"},
+		},
+	}
+
+	repo := agent.NewDistributedAgentLogRepo(hostRepo, client)
+	groups, err := repo.SummarizeErrors(context.Background(), domainLogging.LogFilter{Limit: 20})
+	if err != nil {
+		t.Fatalf("SummarizeErrors failed: %v", err)
+	}
+
+	if len(groups) != 1 {
+		t.Fatalf("expected exactly 1 grouped error pattern, got %d: %+v", len(groups), groups)
+	}
+
+	g := groups[0]
+	if g.Count != 2 {
+		t.Errorf("expected count 2 for recurring kubelet errors, got %d", g.Count)
+	}
+	if g.Level != "error" {
+		t.Errorf("expected normalized level error, got %s", g.Level)
+	}
+	if g.Service != "kubelet.service" {
+		t.Errorf("expected service kubelet.service, got %s", g.Service)
+	}
+	// Verify klog volatile prefix was stripped and file.go was preserved
+	if !strings.Contains(g.Fingerprint, "kubelet_node_status.go") {
+		t.Errorf("expected fingerprint to preserve file name, got %q", g.Fingerprint)
+	}
+	if strings.Contains(g.Fingerprint, "12:41:03") || strings.Contains(g.Fingerprint, "1842") || strings.Contains(g.Fingerprint, "E1105") {
+		t.Errorf("expected fingerprint to strip volatile klog prefix (E1105, time, pid), got %q", g.Fingerprint)
+	}
+}
+
+func TestDistributedAgentLogRepo_SummarizeErrors_DeduplicatesNativeErrorsAcrossQueries(t *testing.T) {
+	now := time.Now().UTC()
+	nativeMsg := "database connection pool exhausted: max connections 100"
+
+	client := &mockQueryDispatcherClient{
+		onSearch: func(req agent.SearchLogsRequest) ([]agent.LogSearchResult, error) {
+			// Both level=error query AND level="" query return the exact same native error
+			return []agent.LogSearchResult{
+				{
+					Timestamp: now,
+					Service:   "api-server",
+					Level:     "error",
+					Message:   nativeMsg,
+				},
+			}, nil
+		},
+	}
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{ID: "node-1", Name: "control-plane-1", Endpoint: "http://10.10.10.80:9100", Status: "online"},
+		},
+	}
+
+	repo := agent.NewDistributedAgentLogRepo(hostRepo, client)
+	groups, err := repo.SummarizeErrors(context.Background(), domainLogging.LogFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("SummarizeErrors failed: %v", err)
+	}
+
+	if len(groups) != 1 {
+		t.Fatalf("expected exactly 1 group, got %d", len(groups))
+	}
+	if groups[0].Count != 1 {
+		t.Fatalf("expected count 1 due to deduplication across queries, but got %d (double counted!)", groups[0].Count)
+	}
+}
+
+func TestDistributedAgentLogRepo_SummarizeErrors_FastFailsUnreachableHost(t *testing.T) {
+	backoff := agent.NewHostBackoffManager(1 * time.Minute)
+	backoff.MarkFailed("http://10.10.10.99:9100")
+
+	realClient := agent.NewAgentLogClient(agent.WithBackoffManager(backoff))
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{ID: "dead-node", Name: "dead-node", Endpoint: "http://10.10.10.99:9100", Status: "online"},
+		},
+	}
+
+	repo := agent.NewDistributedAgentLogRepo(hostRepo, realClient)
+	start := time.Now()
+	groups, err := repo.SummarizeErrors(context.Background(), domainLogging.LogFilter{Limit: 10})
+	duration := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(groups) != 0 {
+		t.Errorf("expected 0 groups from dead host, got %d", len(groups))
+	}
+	if duration > 100*time.Millisecond {
+		t.Errorf("expected fast-fail under 100ms, took %v", duration)
 	}
 }
 

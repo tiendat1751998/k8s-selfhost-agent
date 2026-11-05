@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 )
 
 // QueryLogs queries logs across sources matching the given filters.
@@ -210,6 +212,9 @@ func parseLogLine(rawLine string, defaultService string) LogEntry {
 
 // detectLogLevel classifies log level from content.
 func detectLogLevel(line string) string {
+	if norm := domainLogging.NormalizeLogLevel("", line); norm != "" && norm != domainLogging.LogLevelInfo {
+		return string(norm)
+	}
 	lower := strings.ToLower(line)
 	if strings.Contains(lower, "error") || strings.Contains(lower, "err") ||
 		strings.Contains(lower, "fatal") || strings.Contains(lower, "crit") ||

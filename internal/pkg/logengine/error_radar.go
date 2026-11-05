@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 )
+
+var klogHeaderRegex = regexp.MustCompile(`^[IWEF]\d{4}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:\s+\d+)?\s+`)
 
 // ErrorGroup aggregates similar error messages under a normalized signature.
 type ErrorGroup struct {
@@ -22,7 +25,14 @@ type ErrorGroup struct {
 }
 
 // FingerprintError normalizes variable tokens (numbers, IPs, hex, IDs) to '*' to group recurring errors.
+// It also strips volatile klog prefixes (e.g. "E1105 12:41:03.123456   1842 ") while preserving "file.go:106]".
 func FingerprintError(msg []byte) string {
+	msgStr := strings.TrimSpace(string(msg))
+	if loc := klogHeaderRegex.FindStringIndex(msgStr); len(loc) > 0 {
+		msgStr = msgStr[loc[1]:]
+	}
+	msg = []byte(msgStr)
+
 	var buf strings.Builder
 	buf.Grow(len(msg))
 	n := len(msg)
