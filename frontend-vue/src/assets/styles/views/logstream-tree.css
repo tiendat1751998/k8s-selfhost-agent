@@ -1,5 +1,6 @@
 /* ==========================================================================
    Enterprise LogTargetTree Stylesheet
+   Dual-Theme System using tokens.css semantic variables
    ========================================================================== */
 .log-target-tree {
   display: flex;
@@ -30,14 +31,14 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-muted, #94a3b8);
+  color: var(--color-muted);
 }
 
 .tree-badge {
   font-size: 10px;
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.1);
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: var(--color-badge-agent-text);
+  background: var(--color-badge-agent-bg);
+  border: 1px solid var(--color-badge-agent-border);
   padding: 1px 6px;
   border-radius: 4px;
 }
@@ -55,7 +56,7 @@
   position: absolute;
   left: 14px;
   font-size: 11px;
-  color: #64748b;
+  color: var(--color-muted);
   pointer-events: none;
 }
 
@@ -68,13 +69,13 @@
   background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
-  color: var(--color-body, #f8fafc);
+  color: var(--color-body);
   outline: none;
   transition: border-color 0.15s ease;
 }
 
 .tree-search-input:focus {
-  border-color: #38bdf8;
+  border-color: var(--color-primary);
 }
 
 .tree-search-clear {
@@ -82,14 +83,14 @@
   right: 12px;
   background: none;
   border: none;
-  color: #64748b;
+  color: var(--color-muted);
   font-size: 10px;
   cursor: pointer;
   padding: 0 4px;
 }
 
 .tree-search-clear:hover {
-  color: var(--color-heading, #f8fafc);
+  color: var(--color-heading);
 }
 
 .tree-content {
@@ -112,7 +113,7 @@
   background: transparent;
   border: 1px solid transparent;
   border-radius: 5px;
-  color: var(--color-muted, #94a3b8);
+  color: var(--color-muted);
   text-align: left;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -122,17 +123,17 @@
 
 .tree-item:hover {
   background: var(--color-surface-hover);
-  color: var(--color-heading, #f8fafc);
+  color: var(--color-heading);
 }
 
 .tree-item.active {
-  background: rgba(56, 189, 248, 0.12);
-  border-color: rgba(56, 189, 248, 0.35);
-  color: #38bdf8;
+  background: var(--color-badge-agent-bg);
+  border-color: var(--color-badge-agent-border);
+  color: var(--color-badge-agent-text);
 }
 
 .tree-item.active .item-name {
-  color: var(--color-heading, #f8fafc);
+  color: var(--color-heading);
   font-weight: 700;
 }
 
@@ -148,7 +149,7 @@
   top: 3px;
   bottom: 3px;
   width: 3px;
-  background: #38bdf8;
+  background: var(--color-badge-agent-text);
   border-radius: 0 2px 2px 0;
 }
 
@@ -159,7 +160,7 @@
 .item-icon {
   font-size: 12px;
   line-height: 1;
-  color: #64748b;
+  color: var(--color-muted);
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -167,7 +168,7 @@
 
 .tree-item:hover .item-icon,
 .tree-item.active .item-icon {
-  color: #38bdf8;
+  color: var(--color-badge-agent-text);
 }
 
 .item-name {
@@ -184,8 +185,8 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  background: var(--color-status-online);
+  box-shadow: 0 0 6px var(--color-status-online-border);
   flex-shrink: 0;
   margin: 0 2px;
 }
@@ -198,28 +199,28 @@
   background: var(--color-surface-inset);
   border: 1px solid var(--color-border-subtle);
   border-radius: 4px;
-  color: #64748b;
+  color: var(--color-muted);
   flex-shrink: 0;
   text-align: right;
 }
 
 .item-count.has-logs {
-  color: var(--color-heading, #94a3b8);
+  color: var(--color-heading);
   background: var(--color-surface-elevated);
-  border-color: var(--color-border-strong, #334155);
+  border-color: var(--color-border-strong);
 }
 
 .tree-item.active .item-count {
-  background: rgba(56, 189, 248, 0.18);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: var(--color-badge-agent-bg);
+  color: var(--color-badge-agent-text);
+  border: 1px solid var(--color-badge-agent-border);
 }
 
 .item-mute-btn {
   display: none;
   background: transparent;
   border: none;
-  color: #64748b;
+  color: var(--color-muted);
   font-size: 11px;
   line-height: 1;
   padding: 0 3px;
@@ -237,12 +238,12 @@
 }
 
 .item-mute-btn.is-muted {
-  color: #ef4444;
+  color: var(--color-status-offline);
 }
 
 .item-mute-btn:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: #f87171;
+  background: var(--color-status-offline-bg);
+  color: var(--color-status-offline);
 }
 
 /* 3-Tab Segmented Control for Services */
@@ -264,7 +265,7 @@
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: var(--color-muted, #94a3b8);
+  color: var(--color-muted);
   font-size: 10px;
   font-weight: 600;
   cursor: pointer;
@@ -275,13 +276,13 @@
 }
 
 .tree-seg-tab:hover {
-  color: var(--color-heading, #f8fafc);
+  color: var(--color-heading);
 }
 
 .tree-seg-tab.active {
   background: var(--color-surface-elevated);
-  color: #38bdf8;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  color: var(--color-badge-agent-text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 /* Muted services reset strip */
@@ -290,18 +291,18 @@
   align-items: center;
   justify-content: space-between;
   padding: 2px 6px;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: var(--color-status-offline-bg);
+  border: 1px solid var(--color-status-offline-border);
   border-radius: 4px;
   font-size: 10px;
-  color: #f87171;
+  color: var(--color-status-offline);
   margin-bottom: 4px;
 }
 
 .muted-reset-btn {
   background: none;
   border: none;
-  color: #38bdf8;
+  color: var(--color-badge-agent-text);
   font-size: 10px;
   font-weight: 600;
   cursor: pointer;
@@ -311,7 +312,6 @@
 .muted-reset-btn:hover {
   text-decoration: underline;
 }
-
 
 .tree-section {
   display: flex;
@@ -328,14 +328,14 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #64748b;
+  color: var(--color-muted);
   cursor: pointer;
   user-select: none;
   border-radius: 4px;
 }
 
 .section-toggle:hover {
-  color: var(--color-heading, #cbd5e1);
+  color: var(--color-heading);
 }
 
 .section-caret {
@@ -400,13 +400,13 @@
 }
 
 .node-expand-btn:hover {
-  color: var(--color-heading, #f8fafc);
+  color: var(--color-heading);
 }
 
 .tree-node-children {
   margin-left: 14px;
   padding-left: 8px;
-  border-left: 1px dashed var(--color-border-subtle, rgba(148, 163, 184, 0.2));
+  border-left: 1px dashed var(--color-border-subtle);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -444,4 +444,3 @@
   color: var(--color-body);
   border-color: var(--color-border-strong);
 }
-

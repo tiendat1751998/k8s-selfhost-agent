@@ -81,11 +81,14 @@ function setLevel(val: string) {
       <!-- Zone 1 (Left - Sidebar & Stream Search) -->
       <div class="toolbar-zone-left">
         <button
-          type="button" class="toolbar-btn btn-secondary" :class="{ active: isSidebarCollapsed }"
-          title="Toggle Log Targets Sidebar" aria-label="Toggle Log Targets Sidebar"
+          type="button"
+          class="toolbar-btn btn-secondary btn-toggle-targets"
+          :class="{ active: !isSidebarCollapsed }"
+          title="Toggle log targets"
+          aria-label="Toggle log targets"
           @click="emit('update:isSidebarCollapsed', !isSidebarCollapsed)"
         >
-          <BaseIcon name="sidebar" size="xs" />
+          <BaseIcon name="sidebar" size="sm" />
         </button>
         <!-- Active Service Filter Pill -->
         <div v-if="activeService" class="toolbar-service-pill font-mono" title="Filtered by service — click × to clear">

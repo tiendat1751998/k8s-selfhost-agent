@@ -14,6 +14,8 @@ interface Props {
   wrapLines?: boolean
   hoverPauseEnabled?: boolean
   hideServiceBadge?: boolean
+  isTargetOffline?: boolean
+  mode?: 'live' | 'historical'
 }
 
 withDefaults(defineProps<Props>(), {
@@ -23,6 +25,8 @@ withDefaults(defineProps<Props>(), {
   latency: 0,
   hoverPauseEnabled: true,
   hideServiceBadge: false,
+  isTargetOffline: false,
+  mode: 'live',
 })
 
 
@@ -35,6 +39,7 @@ const emit = defineEmits<{
   (e: 'filterService', payload: { node?: string; service: string }): void
   (e: 'muteService', service: string): void
   (e: 'hoverChange', hovering: boolean): void
+  (e: 'switchToHistory'): void
 }>()
 
 const virtualTerminalRef = ref<InstanceType<typeof VirtualLogTerminal> | null>(null)
@@ -62,8 +67,9 @@ defineExpose({
     :wrap-lines="wrapLines"
     :hover-pause-enabled="hoverPauseEnabled"
     :hide-service-badge="hideServiceBadge"
+    :is-target-offline="isTargetOffline"
+    :mode="mode"
     @scroll="emit('scroll', $event)"
-
     @scroll-to-bottom="emit('scrollToBottom')"
     @register-terminal="emit('registerTerminal', $event)"
     @open-trace="emit('openTrace', $event)"
@@ -71,5 +77,6 @@ defineExpose({
     @filter-service="emit('filterService', $event)"
     @mute-service="emit('muteService', $event)"
     @hover-change="emit('hoverChange', $event)"
+    @switch-to-history="emit('switchToHistory')"
   />
 </template>

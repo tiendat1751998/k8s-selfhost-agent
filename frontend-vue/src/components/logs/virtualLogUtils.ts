@@ -74,6 +74,14 @@ export function inferEffectiveLevel(rawLevel: string, rawMsg?: string): string {
   if (lvl !== 'INFO') return lvl
 
   if (rawMsg) {
+    const trimmed = rawMsg.trim()
+    if (/^[EF]\d{4}\s/.test(trimmed)) {
+      return 'ERROR'
+    }
+    if (/^W\d{4}\s/.test(trimmed)) {
+      return 'WARN'
+    }
+
     const lower = rawMsg.toLowerCase()
     if (
       lower.includes('"level":"error"') ||
@@ -249,4 +257,18 @@ export function coalesceLogEntries(logs: LogEntry[]): CoalescedLogEntry[] {
   return result
 }
 
-
+export function exportLogsToTextFile(logs: LogEntry[], targetName: string) {
+  const content = logs
+    .map((l) => `[${l.time}] [${l.level.padEnd(5)}] [${l.node || l.namespace || 'node'}/${l.service || l.pod || 'system'}]: ${l.msg}${l.traceId ? ' [trace=' + l.traceId + ']' : ''}`)
+    .join('\n')
+  if (typeof window === 'undefined') return
+  const blob = new Blob([content], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `k8s-logs-${targetName || 'cluster'}-${new Date().toISOString().replace(/[:.]/g, '-')}.log`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}

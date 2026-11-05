@@ -8,7 +8,7 @@
   display: flex;
   flex-direction: column;
   background: var(--color-surface-card);
-  border: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.15));
+  border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   overflow: hidden;
   position: relative;
@@ -21,7 +21,7 @@
   min-height: 28px;
   max-height: 28px;
   background: var(--color-surface-elevated);
-  border-bottom: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.12));
+  border-bottom: 1px solid var(--color-border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -61,7 +61,8 @@
   min-height: 0;
   background: var(--color-surface-card);
   will-change: transform, scroll-position;
-  contain: strict;
+  scroll-padding-top: 6px;
+  box-sizing: border-box;
 }
 
 .virtual-spacer {
@@ -85,20 +86,17 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 1px 8px;
-  font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  padding: 2px 8px;
+  font-family: var(--font-mono, 'Cascadia Code', 'JetBrains Mono', Consolas, monospace);
   font-size: 11.5px;
-  line-height: 22px;
+  line-height: 20px;
   min-height: 24px;
+  box-sizing: border-box;
   border-radius: 3px;
   transition: background 0.08s ease;
   position: relative;
 }
-
-.virtual-log-row:hover {
-  background: var(--color-surface-hover);
-}
-
+.virtual-log-row:hover { background: var(--color-surface-hover); }
 .virtual-log-row.log-error { background: var(--color-status-offline-bg); }
 .virtual-log-row.log-warn { background: var(--color-status-warning-bg); }
 
@@ -153,10 +151,7 @@
   transition: all 0.12s ease;
 }
 
-.virtual-badge-target:hover {
-  background: var(--color-badge-agent-bg);
-  color: var(--color-badge-agent-text);
-}
+.virtual-badge-target:hover { background: var(--color-badge-agent-bg); color: var(--color-badge-agent-text); }
 
 .virtual-target-mute-btn {
   display: none;
@@ -169,11 +164,7 @@
   cursor: pointer;
   border-radius: 2px;
 }
-
-.virtual-badge-target:hover .virtual-target-mute-btn {
-  display: inline-block;
-}
-
+.virtual-badge-target:hover .virtual-target-mute-btn { display: inline-block; }
 .virtual-target-mute-btn:hover {
   background: var(--color-status-offline-bg);
   color: var(--color-status-offline);
@@ -220,7 +211,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  font-family: var(--font-mono, 'Cascadia Code', 'JetBrains Mono', Consolas, monospace);
   font-size: 10px;
   font-weight: 700;
   color: var(--color-status-warning);
@@ -343,12 +334,7 @@
   opacity: 0;
   pointer-events: none;
 }
-
-.virtual-log-row:hover .virtual-btn-context {
-  opacity: 1;
-  pointer-events: auto;
-}
-
+.virtual-log-row:hover .virtual-btn-context { opacity: 1; pointer-events: auto; }
 .virtual-btn-context:hover {
   background: var(--color-status-offline-bg);
   color: var(--color-status-offline);
@@ -381,10 +367,9 @@
   color: var(--color-on-primary);
   transform: translateY(-1px);
 }
-
 .jump-new-count {
   background: var(--color-status-offline);
-  color: var(--color-on-primary, #ffffff);
+  color: var(--color-on-primary);
   padding: 1px 6px;
   border-radius: 10px;
   font-size: 9.5px;
@@ -400,18 +385,43 @@
   text-align: center;
   color: var(--color-muted);
 }
-
 .virtual-empty-title {
   font-size: 13px;
   color: var(--color-body);
   margin-top: 8px;
   margin-bottom: 4px;
 }
-
 .virtual-empty-sub {
   font-size: 11px;
   color: var(--color-muted);
 }
+
+.offline-node-empty .virtual-empty-title {
+  color: var(--color-status-warning);
+  font-weight: 700;
+  font-size: 13.5px;
+}
+
+.btn-switch-history {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: 1px solid var(--color-primary-active, var(--color-primary));
+  border-radius: var(--rounded-md, 6px);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast, 150ms ease);
+}
+.btn-switch-history:hover {
+  background: var(--color-primary-hover);
+  transform: translateY(-1px);
+}
+
 /* Mobile-First 2-Tier Log Card Format (<= 640px) */
 @media (max-width: 640px) {
   .virtual-log-row {
@@ -419,7 +429,7 @@
     padding: 6px 8px;
     min-height: 58px;
     gap: 4px 6px;
-    border-bottom: 1px solid var(--color-border-subtle, rgba(148, 163, 184, 0.08));
+    border-bottom: 1px solid var(--color-border-subtle);
   }
 
   /* Line 1 (Metadata Strip - order: 1) */

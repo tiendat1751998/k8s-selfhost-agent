@@ -4,9 +4,9 @@ import { useRoute } from 'vue-router'
 import { useLogStreamer } from '../composables/useLogStreamer'
 import { useHistoricalLogSearch } from '../composables/useHistoricalLogSearch'
 import { useGlobalContext } from '../composables/useGlobalContext'
-import LogTargetTree, { type LogTarget, type AvailableServiceItem } from '../components/logs/LogTargetTree.vue'
+import { useInfraHosts } from '../composables/useInfraHosts'
+import LogTargetTree, { type LogTarget } from '../components/logs/LogTargetTree.vue'
 import LogViewerTerminal from '../components/logs/LogViewerTerminal.vue'
-
 import LogVolumeHistogram from '../components/logs/LogVolumeHistogram.vue'
 import LogTraceDrawer from '../components/logs/LogTraceDrawer.vue'
 import LogContextModal from '../components/logs/LogContextModal.vue'
@@ -14,10 +14,12 @@ import LogStreamToolbar from '../components/logs/LogStreamToolbar.vue'
 import LogErrorRadarPanel from '../components/logs/LogErrorRadarPanel.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
 import type { LogFilterParams, ErrorRadarGroup } from '../api/logging'
-import { isNoiseLog, classifyLogTarget } from '../utils/logTargetCategorizer'
+import { extractAvailableServices } from '../utils/logTargetCategorizer'
+import { exportLogsToTextFile } from '../components/logs/virtualLogUtils'
 import '../assets/styles/views/logstream.css'
 
 const { activeClusterId } = useGlobalContext()
+const { hosts } = useInfraHosts()
 
 const {
   logStore, searchKeyword, selectedLevel, autoScroll, isScrollLocked,
@@ -44,48 +46,28 @@ const {
 
 let activeTargetId = ''
 
-const availableServices = computed<AvailableServiceItem[]>(() => {
-  const counts = new Map<string, { name: string; category: 'app' | 'systemd'; icon: string; count: number }>()
-  const effNode = effectiveNode.value?.toLowerCase()
-  for (const l of logStore.logs) {
-    if (effNode) {
-      const n = (l.node || l.attributes?.node || l.attributes?.node_name || '').toLowerCase()
-      if (n && !n.includes(effNode)) continue
-    }
-    const svc = l.service || l.container || l.attributes?.app || l.attributes?.service || l.attributes?.container_name || l.pod
-    if (!svc || isNoiseLog(svc)) continue
-    const lower = svc.toLowerCase()
-    const existing = counts.get(lower)
-    if (existing) {
-      existing.count++
-    } else {
-      const classified = classifyLogTarget(svc)
-      counts.set(lower, {
-        name: svc,
-        category: classified.category,
-        icon: classified.icon,
-        count: 1,
-      })
-    }
-  }
-  const result: AvailableServiceItem[] = []
-  for (const [id, item] of counts.entries()) {
-    result.push({
-      id,
-      name: item.name,
-      category: item.category,
-      icon: item.icon,
-      count: item.count,
-    })
-  }
-  result.sort((a, b) => {
-    if (a.category !== b.category) {
-      return a.category === 'app' ? -1 : 1
-    }
-    return b.count - a.count
+const availableServices = computed(() => extractAvailableServices(logStore.logs, effectiveNode.value))
+
+const isTargetOffline = computed<boolean>(() => {
+  if (selectedTarget.value.type !== 'node') return false
+  if (selectedTarget.value.online === false || selectedTarget.value.status === 'offline') return true
+  const nodeName = (selectedTarget.value.node || selectedTarget.value.id || selectedTarget.value.name).toLowerCase()
+  const match = hosts.value.find((h) => {
+    const name = (h.name || h.id || h.endpoint).toLowerCase()
+    return name === nodeName || name.includes(nodeName) || nodeName.includes(name)
   })
-  return result
+  if (match) {
+    const isOnline = match.status === 'connected' || match.status === 'online' || match.status === 'healthy'
+    return !isOnline
+  }
+  return false
 })
+
+function handleSwitchToHistoryFromOffline() {
+  mode.value = 'historical'
+  selectedTimeRange.value = '24h'
+  runHistoricalQuery()
+}
 
 async function preloadRecentLogs(target: LogTarget) {
   if (!target || !target.id) return
@@ -113,17 +95,22 @@ function connectTarget(target: LogTarget) {
   logStore.connect({ node: effectiveNode.value, service: effectiveService.value, container: effectiveService.value, namespace: ns })
 }
 
+function refreshTargetStream(target = selectedTarget.value, disconnectFirst = false) {
+  if (mode.value === 'live') {
+    connectTarget(target)
+    preloadRecentLogs(target)
+    fetchLiveHistogram()
+  } else {
+    if (disconnectFirst) logStore.disconnect()
+    runHistoricalQuery()
+  }
+}
+
 async function handleSelectTarget(target: LogTarget) {
   showMobileTree.value = false
   selectedTarget.value = target
   activeTargetId = target.id
-  if (mode.value === 'live') {
-    connectTarget(target)
-    await preloadRecentLogs(target)
-    fetchLiveHistogram()
-  } else {
-    runHistoricalQuery()
-  }
+  refreshTargetStream(target)
 }
 
 function handleToggleMuteService(serviceId: string) {
@@ -133,9 +120,7 @@ function handleToggleMuteService(serviceId: string) {
     mutedServices.value.splice(idx, 1)
   } else {
     mutedServices.value.push(lower)
-    if (activeServiceSubFilter.value.toLowerCase() === lower) {
-      activeServiceSubFilter.value = ''
-    }
+    if (activeServiceSubFilter.value.toLowerCase() === lower) activeServiceSubFilter.value = ''
   }
 }
 
@@ -145,93 +130,39 @@ function handleClearMutedServices() {
 
 function handleFilterServiceFromRow(payload: { node?: string; service: string }) {
   if (payload.node && payload.node !== selectedTarget.value.node && payload.node !== selectedTarget.value.id) {
-    selectedTarget.value = {
-      type: 'node',
-      id: payload.node,
-      name: payload.node,
-      icon: 'server',
-      node: payload.node,
-      service: payload.service,
-    }
+    selectedTarget.value = { type: 'node', id: payload.node, name: payload.node, icon: 'server', node: payload.node, service: payload.service }
   }
   activeServiceSubFilter.value = payload.service
 }
 
-watch(activeServiceSubFilter, () => {
-  if (mode.value === 'live') {
-    connectTarget(selectedTarget.value)
-    preloadRecentLogs(selectedTarget.value)
-    fetchLiveHistogram()
-  } else {
-    runHistoricalQuery()
-  }
-})
+watch(activeServiceSubFilter, () => refreshTargetStream())
 
 watch(selectedTarget, (t) => {
   if (t.id === activeTargetId) return
   activeTargetId = t.id
-  if (mode.value === 'live') {
-    connectTarget(t)
-    preloadRecentLogs(t)
-    fetchLiveHistogram()
-  } else {
-    runHistoricalQuery()
-  }
+  refreshTargetStream(t)
 })
 
-watch(mode, (newMode) => {
-  if (newMode === 'historical') {
-    logStore.disconnect()
-    runHistoricalQuery()
-  } else {
-    connectTarget(selectedTarget.value)
-    preloadRecentLogs(selectedTarget.value)
-    fetchLiveHistogram()
-  }
-})
+watch(mode, (newMode) => refreshTargetStream(selectedTarget.value, newMode === 'historical'))
 
 function syncTargetFromRoute(): boolean {
-  const node = route.query.node
-  const app = route.query.app
-  const pod = route.query.pod
-  const ns = route.query.namespace
-  const search = route.query.search
-
-  if (search) {
-    searchKeyword.value = String(search)
-  }
-
-  if (node && (pod || app)) {
-    const targetId = String(pod || app)
-    selectedTarget.value = {
-      type: 'node',
-      id: String(node),
-      name: `${node} / ${targetId}`,
-      icon: 'server',
-      node: String(node),
-      service: targetId,
-      namespace: ns ? String(ns) : undefined,
-    }
+  const node = route.query.node ? String(route.query.node) : ''
+  const app = route.query.app ? String(route.query.app) : ''
+  const pod = route.query.pod ? String(route.query.pod) : ''
+  const ns = route.query.namespace ? String(route.query.namespace) : undefined
+  if (route.query.search) searchKeyword.value = String(route.query.search)
+  const targetId = pod || app
+  if (node && targetId) {
+    selectedTarget.value = { type: 'node', id: node, name: `${node} / ${targetId}`, icon: 'server', node, service: targetId, namespace: ns }
     activeServiceSubFilter.value = targetId
     return true
-  } else if (pod || app) {
-    const targetId = String(pod || app)
-    const displayName = pod && app && pod !== app ? `${app} (${pod})` : targetId
-    selectedTarget.value = {
-      type: 'service',
-      id: targetId,
-      name: displayName,
-      icon: 'box',
-      namespace: ns ? String(ns) : undefined,
-    }
+  }
+  if (targetId) {
+    selectedTarget.value = { type: 'service', id: targetId, name: pod && app && pod !== app ? `${app} (${pod})` : targetId, icon: 'box', namespace: ns }
     return true
-  } else if (node) {
-    selectedTarget.value = {
-      type: 'node',
-      id: String(node),
-      name: String(node),
-      icon: 'server',
-    }
+  }
+  if (node) {
+    selectedTarget.value = { type: 'node', id: node, name: node, icon: 'server' }
     return true
   }
   return false
@@ -240,17 +171,9 @@ function syncTargetFromRoute(): boolean {
 watch(
   () => [route.query.node, route.query.app, route.query.pod, route.query.namespace, route.query.search],
   () => {
-    if (syncTargetFromRoute()) {
-      if (selectedTarget.value.id && selectedTarget.value.id !== activeTargetId) {
-        activeTargetId = selectedTarget.value.id
-        if (mode.value === 'live') {
-          connectTarget(selectedTarget.value)
-          preloadRecentLogs(selectedTarget.value)
-          fetchLiveHistogram()
-        } else {
-          runHistoricalQuery()
-        }
-      }
+    if (syncTargetFromRoute() && selectedTarget.value.id && selectedTarget.value.id !== activeTargetId) {
+      activeTargetId = selectedTarget.value.id
+      refreshTargetStream()
     }
   }
 )
@@ -272,12 +195,9 @@ async function fetchLiveHistogram() {
 
 onMounted(() => {
   syncTargetFromRoute()
-
   if (mode.value === 'live' && selectedTarget.value.id) {
     activeTargetId = selectedTarget.value.id
-    connectTarget(selectedTarget.value)
-    preloadRecentLogs(selectedTarget.value)
-    fetchLiveHistogram()
+    refreshTargetStream()
   }
 })
 
@@ -301,34 +221,13 @@ watch(
   }
 )
 
-function handleExport() {
-  const logsToExport = targetFilteredLogs.value.length > 0 ? targetFilteredLogs.value : logStore.logs
-  const content = logsToExport
-    .map((l) => `[${l.time}] [${l.level.padEnd(5)}] [${l.node || l.namespace || 'node'}/${l.service || l.pod || 'system'}]: ${l.msg}${l.traceId ? ' [trace=' + l.traceId + ']' : ''}`)
-    .join('\n')
-
-  if (typeof window !== 'undefined') {
-    const blob = new Blob([content], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `k8s-logs-${selectedTarget.value.id}-${new Date().toISOString().replace(/[:.]/g, '-')}.log`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
-}
-
 function handleInspectErrorGroup(group: ErrorRadarGroup, radarRange?: string) {
   showErrorRadar.value = false
   if (group.node && selectedTarget.value.type === 'node' && selectedTarget.value.id !== group.node) {
     activeTargetId = group.node
     selectedTarget.value = { type: 'node', id: group.node, name: group.node, icon: 'server' }
   }
-  if (group.service) {
-    activeServiceSubFilter.value = group.service
-  }
+  if (group.service) activeServiceSubFilter.value = group.service
   const r = (radarRange || '').toLowerCase()
   selectedTimeRange.value = (r === 'all' || !radarRange) ? '7d' : radarRange
   selectedLevel.value = 'ERROR'
@@ -343,81 +242,41 @@ function handleInspectErrorGroup(group: ErrorRadarGroup, radarRange?: string) {
 
 <template>
   <div class="view-container log-explorer-page">
-    <!-- Unified 38px Enterprise Toolbar & Mobile Command Bar -->
     <LogStreamToolbar
-      v-model:search-keyword="searchKeyword"
-      v-model:mode="mode"
-      v-model:selected-level="selectedLevel"
-      v-model:selected-time-range="selectedTimeRange"
-      v-model:selected-historical-limit="selectedHistoricalLimit"
-      v-model:is-sidebar-collapsed="isSidebarCollapsed"
-      v-model:wrap-lines="wrapLines"
-      v-model:show-histogram="showHistogram"
-      v-model:show-mobile-tree="showMobileTree"
-      v-model:show-error-radar="showErrorRadar"
-      :selected-target="selectedTarget"
-      :time-ranges="timeRanges"
-      :is-historical-loading="logStore.isHistoricalLoading"
-      :has-more-historical="logStore.hasMoreHistorical"
-      :total-historical-count="logStore.totalHistoricalCount"
-      :current-logs-count="logStore.logs.length"
-      :auto-scroll="autoScroll"
-      :is-scroll-locked="isScrollLocked"
-      :active-service="activeServiceSubFilter"
-      :hover-pause-enabled="hoverPauseEnabled"
-      :is-hover-paused="isHoverPaused"
-      @clear-active-service="activeServiceSubFilter = ''"
-      @update:active-service="activeServiceSubFilter = $event"
-      @update:hover-pause-enabled="hoverPauseEnabled = $event"
-      @run-historical-query="runHistoricalQuery"
-      @load-more-historical="loadMoreHistorical"
-      @toggle-live-tail="toggleLiveTail"
-      @clear-buffer="clearBuffer"
-      @export-logs="handleExport"
+      v-model:search-keyword="searchKeyword" v-model:mode="mode" v-model:selected-level="selectedLevel"
+      v-model:selected-time-range="selectedTimeRange" v-model:selected-historical-limit="selectedHistoricalLimit"
+      v-model:is-sidebar-collapsed="isSidebarCollapsed" v-model:wrap-lines="wrapLines"
+      v-model:show-histogram="showHistogram" v-model:show-mobile-tree="showMobileTree" v-model:show-error-radar="showErrorRadar"
+      :selected-target="selectedTarget" :time-ranges="timeRanges"
+      :is-historical-loading="logStore.isHistoricalLoading" :has-more-historical="logStore.hasMoreHistorical"
+      :total-historical-count="logStore.totalHistoricalCount" :current-logs-count="logStore.logs.length"
+      :auto-scroll="autoScroll" :is-scroll-locked="isScrollLocked" :active-service="activeServiceSubFilter"
+      :hover-pause-enabled="hoverPauseEnabled" :is-hover-paused="isHoverPaused"
+      @clear-active-service="activeServiceSubFilter = ''" @update:active-service="activeServiceSubFilter = $event"
+      @update:hover-pause-enabled="hoverPauseEnabled = $event" @run-historical-query="runHistoricalQuery"
+      @load-more-historical="loadMoreHistorical" @toggle-live-tail="toggleLiveTail" @clear-buffer="clearBuffer"
+      @export-logs="exportLogsToTextFile(targetFilteredLogs.length > 0 ? targetFilteredLogs : logStore.logs, selectedTarget.name)"
     />
 
-    <!-- Congested Buffer Warning Alert -->
-    <div
-      v-if="logStore.droppedLogsCount > 0 && showDroppedAlert"
-      class="dropped-alert-banner font-mono"
-      role="alert"
-    >
+    <div v-if="logStore.droppedLogsCount > 0 && showDroppedAlert" class="dropped-alert-banner font-mono" role="alert">
       <BaseIcon name="alert-triangle" size="xs" class="text-amber" />
-      <span>
-        Stream buffer congested: {{ logStore.droppedLogsCount.toLocaleString() }} logs dropped by edge network. Switch to Historical Search for full ClickHouse archive.
-      </span>
-      <button
-        type="button"
-        class="dropped-alert-action font-mono"
-        @click="mode = 'historical'; logStore.resetDroppedLogsCount()"
-      >
-        Switch to Historical
-      </button>
-      <button
-        type="button"
-        class="query-error-dismiss"
-        aria-label="Dismiss dropped alert"
-        @click="showDroppedAlert = false"
-      >
-        <BaseIcon name="x" size="xs" />
-      </button>
+      <span>Stream buffer congested: {{ logStore.droppedLogsCount.toLocaleString() }} logs dropped. Switch to History.</span>
+      <button type="button" class="dropped-alert-action font-mono" @click="mode = 'historical'; logStore.resetDroppedLogsCount()">Switch to Historical</button>
+      <button type="button" class="query-error-dismiss" aria-label="Dismiss dropped alert" @click="showDroppedAlert = false"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Query Error Banner -->
     <div v-if="queryError" class="query-error-banner font-mono">
       <BaseIcon name="alert-triangle" size="xs" />
       <span>{{ queryError }}</span>
       <button type="button" class="query-error-dismiss" aria-label="Dismiss error" @click="queryError = null"><BaseIcon name="x" size="xs" /></button>
     </div>
 
-    <!-- Collapsible Log Volume Histogram (70px height above grid) -->
     <div v-if="showHistogram" class="histogram-wrapper">
       <LogVolumeHistogram :buckets="logStore.histogram" :height="70" @filter-range="handleHistogramFilterRange" @clear-filter="handleClearHistogramFilter" />
     </div>
 
     <div v-if="showMobileTree" class="mobile-backdrop" aria-hidden="true" @click="showMobileTree = false" />
 
-    <!-- 2-Column Explorer Grid with Sidebar Collapse Affordance -->
     <div class="log-explorer-grid" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
       <div class="explorer-left-col" :class="{ 'mobile-tree-open': showMobileTree }">
         <div v-if="showMobileTree" class="mobile-drawer-header">
@@ -425,60 +284,36 @@ function handleInspectErrorGroup(group: ErrorRadarGroup, radarRange?: string) {
           <button type="button" class="drawer-close-btn" aria-label="Close targets drawer" @click="showMobileTree = false">&times;</button>
         </div>
         <LogTargetTree
-          v-model="selectedTarget"
-          :logs="logStore.logs"
-          :cluster="activeClusterId"
-          :available-services="availableServices"
-          :active-service="activeServiceSubFilter"
-          :source-category="sourceCategory"
-          :muted-services="mutedServices"
-          @select="handleSelectTarget"
-          @update:active-service="activeServiceSubFilter = $event"
-          @update:source-category="sourceCategory = $event"
-          @toggle-mute-service="handleToggleMuteService"
+          v-model="selectedTarget" :logs="logStore.logs" :cluster="activeClusterId"
+          :available-services="availableServices" :active-service="activeServiceSubFilter"
+          :source-category="sourceCategory" :muted-services="mutedServices"
+          @select="handleSelectTarget" @update:active-service="activeServiceSubFilter = $event"
+          @update:source-category="sourceCategory = $event" @toggle-mute-service="handleToggleMuteService"
           @clear-muted-services="handleClearMutedServices"
         />
       </div>
 
       <div class="explorer-right-col">
-        <!-- Blind Error Radar Discovery & Grouping Panel -->
         <LogErrorRadarPanel
-          v-if="showErrorRadar"
-          :node="effectiveNode"
-          :service="effectiveService"
-          :selected-time-range="selectedTimeRange"
-          @close="showErrorRadar = false"
+          v-if="showErrorRadar" :node="effectiveNode" :service="effectiveService"
+          :selected-time-range="selectedTimeRange" @close="showErrorRadar = false"
           @inspect-group="handleInspectErrorGroup"
         />
 
         <LogViewerTerminal
-          :logs="targetFilteredLogs"
-          :is-connected="mode === 'live' ? isConnected : true"
-          :is-paused="isPaused"
-          :auto-scroll="autoScroll"
-          :is-scroll-locked="isScrollLocked"
-          :target-name="selectedTarget.name"
-          :latency="latency"
-          :wrap-lines="wrapLines"
-          :hover-pause-enabled="hoverPauseEnabled"
-          :hide-service-badge="Boolean(effectiveService)"
-          @scroll="handleScroll"
-          @scroll-to-bottom="scrollToBottom"
-          @register-terminal="setTerminalRef"
-          @open-trace="logStore.openTraceDrawer"
-          @open-context="logStore.openContextModal"
-          @filter-service="handleFilterServiceFromRow"
-          @mute-service="handleToggleMuteService"
+          :logs="targetFilteredLogs" :is-connected="mode === 'live' ? isConnected : true" :is-paused="isPaused"
+          :auto-scroll="autoScroll" :is-scroll-locked="isScrollLocked" :target-name="selectedTarget.name"
+          :latency="latency" :wrap-lines="wrapLines" :hover-pause-enabled="hoverPauseEnabled"
+          :hide-service-badge="Boolean(effectiveService)" :is-target-offline="isTargetOffline" :mode="mode"
+          @switch-to-history="handleSwitchToHistoryFromOffline" @scroll="handleScroll" @scroll-to-bottom="scrollToBottom"
+          @register-terminal="setTerminalRef" @open-trace="logStore.openTraceDrawer" @open-context="logStore.openContextModal"
+          @filter-service="handleFilterServiceFromRow" @mute-service="handleToggleMuteService"
           @hover-change="isHoverPaused = $event && hoverPauseEnabled"
         />
       </div>
     </div>
 
-
-    <!-- Transaction Trace Waterfall Drawer -->
     <LogTraceDrawer />
-
-    <!-- Surrounding Context Modal -->
     <LogContextModal />
   </div>
 </template>
