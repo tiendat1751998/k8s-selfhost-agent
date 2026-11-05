@@ -6,12 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
-	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	docker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
@@ -94,6 +93,7 @@ type LogClientInterface interface {
 	ListNodeServices(ctx context.Context, hostEndpoint, authToken string) ([]string, error)
 	GetNodeServices(ctx context.Context, hostEndpoint, authToken string) ([]string, error)
 	StreamLogs(ctx context.Context, agentURL, service string, onLine func(line string)) error
+	IsHostUnreachable(hostEndpoint string) bool
 }
 
 // AgentLogClient implements communication with distributed k8s-agents (:9100).
@@ -102,6 +102,7 @@ type AgentLogClient struct {
 	clusterTimeout time.Duration
 	nodeTimeout    time.Duration
 	authToken      string
+	backoff        *HostBackoffManager
 }
 
 // AgentLogClientOption configures AgentLogClient.
@@ -133,6 +134,13 @@ func WithAuthToken(token string) AgentLogClientOption {
 	return func(c *AgentLogClient) { c.authToken = token }
 }
 
+// WithBackoffManager overrides the unreachable-host backoff manager.
+func WithBackoffManager(bm *HostBackoffManager) AgentLogClientOption {
+	return func(c *AgentLogClient) {
+		if bm != nil { c.backoff = bm }
+	}
+}
+
 func (c *AgentLogClient) getAuthToken() string {
 	if c != nil && c.authToken != "" {
 		return c.authToken
@@ -147,14 +155,49 @@ func (c *AgentLogClient) resolveAuthToken(authToken string) string {
 	return c.getAuthToken()
 }
 
-// NewAgentLogClient creates a new AgentLogClient.
+// IsHostUnreachable checks whether the specified host endpoint is currently in dead-node backoff.
+func (c *AgentLogClient) IsHostUnreachable(hostEndpoint string) bool {
+	if c == nil || c.backoff == nil {
+		return false
+	}
+	return c.backoff.IsUnreachable(hostEndpoint)
+}
+
+// BackoffManager returns the associated HostBackoffManager.
+func (c *AgentLogClient) BackoffManager() *HostBackoffManager {
+	if c == nil {
+		return nil
+	}
+	return c.backoff
+}
+
+// NewFastTransport builds an http.Transport with bounded 800ms connect timeout.
+func NewFastTransport() *http.Transport {
+	fastDialer := &net.Dialer{
+		Timeout:   800 * time.Millisecond,
+		KeepAlive: 30 * time.Second,
+	}
+	return &http.Transport{
+		DialContext:           fastDialer.DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   1 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		ResponseHeaderTimeout: 3 * time.Second,
+	}
+}
+
+// NewAgentLogClient creates a new AgentLogClient with fast dialers and circuit backoff.
 func NewAgentLogClient(opts ...AgentLogClientOption) *AgentLogClient {
 	c := &AgentLogClient{
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Transport: NewFastTransport(),
+			Timeout:   10 * time.Second,
 		},
-		clusterTimeout: 4 * time.Second,
-		nodeTimeout:    5 * time.Second,
+		clusterTimeout: 1 * time.Second,
+		nodeTimeout:    1 * time.Second,
+		backoff:        NewHostBackoffManager(15 * time.Second),
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -184,6 +227,10 @@ func (c *AgentLogClient) GetNodeLogs(ctx context.Context, hostEndpoint, authToke
 	baseURL := NormalizeHostEndpoint(hostEndpoint)
 	if baseURL == "" {
 		return "", fmt.Errorf("invalid or empty host endpoint: %q", hostEndpoint)
+	}
+
+	if c != nil && c.backoff != nil && c.backoff.IsUnreachable(baseURL) {
+		return "", fmt.Errorf("host %s in cooldown (offline)", baseURL)
 	}
 
 	reqURL, err := url.Parse(baseURL + "/logs")
@@ -222,9 +269,16 @@ func (c *AgentLogClient) GetNodeLogs(ctx context.Context, hostEndpoint, authToke
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
+		if c != nil && c.backoff != nil {
+			c.backoff.MarkFailed(baseURL)
+		}
 		return "", fmt.Errorf("executing request to %s: %w", baseURL, err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK && c != nil && c.backoff != nil {
+		c.backoff.MarkSuccess(baseURL)
+	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -259,6 +313,10 @@ func (c *AgentLogClient) SearchNodeLogs(ctx context.Context, hostEndpoint, authT
 		return nil, fmt.Errorf("invalid or empty host endpoint: %q", hostEndpoint)
 	}
 
+	if c != nil && c.backoff != nil && c.backoff.IsUnreachable(baseURL) {
+		return nil, fmt.Errorf("host %s in cooldown (offline)", baseURL)
+	}
+
 	reqBody, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling search request: %w", err)
@@ -283,9 +341,16 @@ func (c *AgentLogClient) SearchNodeLogs(ctx context.Context, hostEndpoint, authT
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
+		if c != nil && c.backoff != nil {
+			c.backoff.MarkFailed(baseURL)
+		}
 		return nil, fmt.Errorf("executing search request to %s: %w", baseURL, err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK && c != nil && c.backoff != nil {
+		c.backoff.MarkSuccess(baseURL)
+	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -317,101 +382,15 @@ func (c *AgentLogClient) SearchNodeLogs(ctx context.Context, hostEndpoint, authT
 	return []LogSearchResult{}, nil
 }
 
-// SearchClusterLogs fans out search to all active compute hosts in parallel,
-// merges results chronologically, and caps to the requested limit.
-func (c *AgentLogClient) SearchClusterLogs(ctx context.Context, hosts []docker.ComputeHost, req SearchLogsRequest) ([]LogSearchResult, error) {
-	if len(hosts) == 0 {
-		return []LogSearchResult{}, nil
-	}
-
-	// Filter candidate hosts that are active and have valid endpoints
-	var candidates []docker.ComputeHost
-	for _, h := range hosts {
-		endpoint := strings.TrimSpace(h.Endpoint)
-		if endpoint == "" {
-			continue
-		}
-		if strings.EqualFold(h.Status, "disconnected") || strings.EqualFold(h.Status, "disabled") || strings.EqualFold(h.Status, "down") {
-			continue
-		}
-		candidates = append(candidates, h)
-	}
-
-	if len(candidates) == 0 {
-		return []LogSearchResult{}, nil
-	}
-
-	timeout := c.clusterTimeout
-	if timeout <= 0 {
-		timeout = 4 * time.Second
-	}
-	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	var (
-		mu         sync.Mutex
-		allResults []LogSearchResult
-		wg         sync.WaitGroup
-	)
-
-	for _, h := range candidates {
-		host := h
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			token := ""
-			if host.Labels != nil {
-				if t, ok := host.Labels["auth_token"]; ok && t != "" {
-					token = t
-				} else if t, ok := host.Labels["token"]; ok && t != "" {
-					token = t
-				}
-			}
-
-			results, err := c.SearchNodeLogs(timeoutCtx, host.Endpoint, token, req)
-			if err != nil {
-				return
-			}
-
-			for i := range results {
-				if results[i].NodeID == "" {
-					results[i].NodeID = host.ID
-				}
-				if results[i].NodeName == "" {
-					results[i].NodeName = host.Name
-				}
-			}
-
-			mu.Lock()
-			allResults = append(allResults, results...)
-			mu.Unlock()
-		}()
-	}
-
-	wg.Wait()
-
-	limit := req.Limit
-	if limit <= 0 {
-		limit = 100
-	}
-
-	// Sort ascending (chronological order) and keep the latest N entries (tail slice)
-	sort.SliceStable(allResults, func(i, j int) bool {
-		return allResults[i].Timestamp.Before(allResults[j].Timestamp)
-	})
-	if len(allResults) > limit {
-		allResults = allResults[len(allResults)-limit:]
-	}
-
-	return allResults, nil
-}
-
 // ListNodeServices queries the list of available services from a single node agent (/logs/services).
 func (c *AgentLogClient) ListNodeServices(ctx context.Context, hostEndpoint, authToken string) ([]string, error) {
 	baseURL := NormalizeHostEndpoint(hostEndpoint)
 	if baseURL == "" {
 		return nil, fmt.Errorf("invalid or empty host endpoint: %q", hostEndpoint)
+	}
+
+	if c != nil && c.backoff != nil && c.backoff.IsUnreachable(baseURL) {
+		return nil, fmt.Errorf("host %s in cooldown (offline)", baseURL)
 	}
 
 	reqCtx := ctx
@@ -432,9 +411,16 @@ func (c *AgentLogClient) ListNodeServices(ctx context.Context, hostEndpoint, aut
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
+		if c != nil && c.backoff != nil {
+			c.backoff.MarkFailed(baseURL)
+		}
 		return nil, fmt.Errorf("executing request to %s: %w", baseURL, err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK && c != nil && c.backoff != nil {
+		c.backoff.MarkSuccess(baseURL)
+	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {

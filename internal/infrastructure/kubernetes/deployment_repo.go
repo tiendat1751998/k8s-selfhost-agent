@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -153,7 +154,9 @@ func (r *deploymentRepo) List(ctx context.Context) ([]deployment.Application, er
 			} else {
 				kCli, err := r.clientManager.GetK8sClient(ctx, c.ID)
 				if err == nil && kCli != nil {
-					deps, err := kCli.AppsV1().Deployments("").List(ctx, metav1.ListOptions{})
+					k8sCtx, cancel := context.WithTimeout(ctx, 1200*time.Millisecond)
+					deps, err := kCli.AppsV1().Deployments("").List(k8sCtx, metav1.ListOptions{})
+					cancel()
 					if err == nil {
 						for _, d := range deps.Items {
 							apps = append(apps, r.mapK8sDeployment(d, c.Name))
@@ -167,7 +170,9 @@ func (r *deploymentRepo) List(ctx context.Context) ([]deployment.Application, er
 	if len(apps) == 0 {
 		// Fallback to local default clients if available
 		if !isNilK8sClient(r.defaultK8sClient) {
-			deps, err := r.defaultK8sClient.AppsV1().Deployments("").List(ctx, metav1.ListOptions{})
+			k8sCtx, cancel := context.WithTimeout(ctx, 1200*time.Millisecond)
+			deps, err := r.defaultK8sClient.AppsV1().Deployments("").List(k8sCtx, metav1.ListOptions{})
+			cancel()
 			if err == nil {
 				for _, d := range deps.Items {
 					apps = append(apps, r.mapK8sDeployment(d, "prod-us-east"))

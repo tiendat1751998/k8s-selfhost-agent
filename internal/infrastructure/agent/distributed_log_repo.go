@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -16,9 +17,10 @@ import (
 // DistributedAgentLogRepo implements domainLogging.LogRepository by scattering queries
 // across edge k8s-agents running embedded logengine instances.
 type DistributedAgentLogRepo struct {
-	hostRepo  docker.ComputeHostRepository
-	logClient LogClientInterface
-	memRepo   *infraLogging.MemoryLogRepo
+	hostRepo     docker.ComputeHostRepository
+	logClient    LogClientInterface
+	memRepo      *infraLogging.MemoryLogRepo
+	radarHTTPCli *http.Client
 }
 
 // NewDistributedAgentLogRepo initializes a distributed log repository.
@@ -41,6 +43,10 @@ func NewDistributedAgentLogRepo(
 		hostRepo:  hostRepo,
 		logClient: logClient,
 		memRepo:   mem,
+		radarHTTPCli: &http.Client{
+			Transport: NewFastTransport(),
+			Timeout:   1 * time.Second,
+		},
 	}
 }
 
@@ -139,10 +145,7 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 		clusterResults, err := r.logClient.SearchClusterLogs(ctx, hosts, searchReq)
 		if err == nil {
 			for _, res := range clusterResults {
-				lvl, _ := domainLogging.ParseLogLevel(res.Level)
-				if lvl == "" {
-					lvl = domainLogging.LogLevelInfo
-				}
+				lvl := domainLogging.NormalizeLogLevel(res.Level, res.Message)
 				ns := res.Namespace
 				if ns == "" {
 					ns = filter.Namespace
@@ -219,11 +222,6 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 		}
 	}
 
-	// Sort descending (newest first) before applying pagination
-	sort.SliceStable(deduped, func(i, j int) bool {
-		return deduped[i].Timestamp.After(deduped[j].Timestamp)
-	})
-
 	totalCount := int64(len(deduped))
 	offset := filter.Offset
 	if offset < 0 {
@@ -232,6 +230,15 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 	limit := filter.Limit
 	if limit <= 0 {
 		limit = 100
+	}
+
+	if targetNode == "" && len(deduped) > (limit+offset) {
+		deduped = fairMergeLogEntries(deduped, limit+offset)
+	} else {
+		// Sort descending (newest first) before applying pagination
+		sort.SliceStable(deduped, func(i, j int) bool {
+			return deduped[i].Timestamp.After(deduped[j].Timestamp)
+		})
 	}
 
 	var paged []domainLogging.LogEntry
@@ -250,7 +257,7 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 		return paged[i].Timestamp.Before(paged[j].Timestamp)
 	})
 
-	hasMore := (offset + len(paged)) < len(deduped)
+	hasMore := (offset + len(paged)) < int(totalCount)
 	return &domainLogging.LogSearchResult{
 		Entries:    paged,
 		TotalCount: totalCount,
@@ -364,6 +371,9 @@ func (r *DistributedAgentLogRepo) ListServices(ctx context.Context) ([]string, e
 		if strings.EqualFold(h.Status, "disconnected") || strings.EqualFold(h.Status, "disabled") || strings.EqualFold(h.Status, "down") {
 			continue
 		}
+		if r.logClient != nil && r.logClient.IsHostUnreachable(endpoint) {
+			continue
+		}
 		candidates = append(candidates, h)
 	}
 
@@ -371,7 +381,7 @@ func (r *DistributedAgentLogRepo) ListServices(ctx context.Context) ([]string, e
 		return []string{}, nil
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
 	var (

@@ -99,6 +99,10 @@ func (m *mockLogClient) StreamLogs(ctx context.Context, agentURL, service string
 	return nil
 }
 
+func (m *mockLogClient) IsHostUnreachable(hostEndpoint string) bool {
+	return false
+}
+
 
 func TestDistributedAgentLogRepo_QueryLogs(t *testing.T) {
 	ctx := context.Background()

@@ -278,30 +278,6 @@ func TenantIDFromContext(ctx context.Context) string { return tenancy.TenantIDFr
 func UserIDFromContext(ctx context.Context) string   { return tenancy.UserIDFromContext(ctx) }
 func UserRoleFromContext(ctx context.Context) string { return tenancy.UserRoleFromContext(ctx) }
 
-// IsStreamingRequest determines if an incoming HTTP request is a streaming connection
-// (WebSocket, SSE / EventSource, log tail, or interactive exec).
-func IsStreamingRequest(r *http.Request) bool {
-	if r == nil {
-		return false
-	}
-	if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" ||
-		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") ||
-		strings.Contains(strings.ToLower(r.Header.Get("Accept")), "text/event-stream") {
-		return true
-	}
-	path := r.URL.Path
-	if path == "/ws" || strings.HasPrefix(path, "/ws/") ||
-		path == "/stream" || strings.HasSuffix(path, "/stream") || strings.Contains(path, "/stream/") || strings.Contains(path, "/stream") ||
-		strings.Contains(path, "/exec") {
-		return true
-	}
-	if (strings.Contains(path, "/logs") || strings.Contains(path, "/pods/")) &&
-		(r.URL.Query().Get("follow") == "true" || r.URL.Query().Get("follow") == "1") {
-		return true
-	}
-	return false
-}
-
 // authCtx avoids multiple heap-allocated context.WithValue wrappers on authenticated requests.
 type authCtx struct {
 	context.Context

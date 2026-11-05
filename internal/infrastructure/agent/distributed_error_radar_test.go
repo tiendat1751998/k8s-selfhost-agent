@@ -43,6 +43,10 @@ func (m *mockRadarLogClient) StreamLogs(ctx context.Context, agentURL, service s
 	return nil
 }
 
+func (m *mockRadarLogClient) IsHostUnreachable(hostEndpoint string) bool {
+	return false
+}
+
 func TestDistributedAgentLogRepo_SummarizeErrors_HttpEndpoint(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 
@@ -239,4 +243,44 @@ func TestDistributedAgentLogRepo_SummarizeErrors_FiltersNoiseServices(t *testing
 		t.Errorf("expected payment-api, got %s", groups[0].Service)
 	}
 }
+
+func TestDistributedAgentLogRepo_SummarizeErrors_KlogSeverityNormalization(t *testing.T) {
+	now := time.Now().UTC()
+	klogMsg := `E1105 04:16:25.113311 1452 kubelet_node_status.go:106] "Unable to register node with API server" err="connection refused"`
+
+	// Mock client returning kubelet entry with default/empty level
+	mockClient := &mockRadarLogClient{
+		entries: []agent.LogSearchResult{
+			{
+				Timestamp: now,
+				Service:   "kubelet",
+				Level:     "info", // Agent reported default info
+				Message:   klogMsg,
+			},
+		},
+	}
+
+	hostRepo := &mockComputeHostRepo{
+		hosts: []docker.ComputeHost{
+			{ID: "host-1", Name: "node-1", Endpoint: "http://127.0.0.1:0", Status: "connected"},
+		},
+	}
+
+	repo := agent.NewDistributedAgentLogRepo(hostRepo, mockClient)
+	groups, err := repo.SummarizeErrors(context.Background(), domainLogging.LogFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("SummarizeErrors failed: %v", err)
+	}
+
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 error group from normalized klog entry, got %d", len(groups))
+	}
+	if groups[0].Service != "kubelet" {
+		t.Errorf("expected service kubelet, got %s", groups[0].Service)
+	}
+	if groups[0].Level != "error" {
+		t.Errorf("expected normalized level 'error', got %s", groups[0].Level)
+	}
+}
+
 

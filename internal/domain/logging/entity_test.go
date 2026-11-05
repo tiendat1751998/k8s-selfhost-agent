@@ -104,3 +104,105 @@ func TestLogFilter_ValidateAndSanitize(t *testing.T) {
 	}
 	require.ErrorIs(t, invalidFilter.Validate(), logging.ErrInvalidLogQuery)
 }
+
+func TestNormalizeLogLevel_KlogAndStructured(t *testing.T) {
+	cases := []struct {
+		name       string
+		levelInput string
+		message    string
+		want       logging.LogLevel
+	}{
+		{
+			name:       "klog error header",
+			levelInput: "",
+			message:    `E1105 04:16:25.113311 1452 kubelet_node_status.go:106] "Unable to register node with API server" err="connection refused"`,
+			want:       logging.LogLevelError,
+		},
+		{
+			name:       "klog error header with default info level",
+			levelInput: "info",
+			message:    `E1105 04:16:25.113311 1452 kubelet_node_status.go:106] "Unable to register node with API server"`,
+			want:       logging.LogLevelError,
+		},
+		{
+			name:       "klog fatal header",
+			levelInput: "",
+			message:    `F1105 04:16:25.113311 1452 kubelet.go:106] "Fatal panic"`,
+			want:       logging.LogLevelError,
+		},
+		{
+			name:       "klog warning header",
+			levelInput: "info",
+			message:    `W1105 04:16:25.113311 1452 kubelet.go:106] "Disk space running low"`,
+			want:       logging.LogLevelWarn,
+		},
+		{
+			name:       "klog info header",
+			levelInput: "",
+			message:    `I1105 04:16:25.113311 1452 kubelet.go:106] "Syncing pods"`,
+			want:       logging.LogLevelInfo,
+		},
+		{
+			name:       "syslog-prefixed klog error header",
+			levelInput: "info",
+			message:    `Nov  5 04:16:25 node-1 kubelet[1452]: E1105 04:16:25.113311 1452 kubelet_node_status.go:106] "Unable to register node"`,
+			want:       logging.LogLevelError,
+		},
+		{
+			name:       "structured token level=error",
+			levelInput: "info",
+			message:    `2026-11-05T04:16:25Z level=error caller=server.go:42 msg="failed to dial db"`,
+			want:       logging.LogLevelError,
+		},
+		{
+			name:       "structured JSON level:error",
+			levelInput: "",
+			message:    `{"time":"2026-11-05T04:16:25Z","level":"error","msg":"connection reset by peer"}`,
+			want:       logging.LogLevelError,
+		},
+		{
+			name:       "structured token level=warn",
+			levelInput: "",
+			message:    `level=warn caller=pool.go:88 msg="connection slow"`,
+			want:       logging.LogLevelWarn,
+		},
+		{
+			name:       "preserves explicit warning level",
+			levelInput: "warn",
+			message:    `plain message without tokens`,
+			want:       logging.LogLevelWarn,
+		},
+		{
+			name:       "preserves explicit error level",
+			levelInput: "error",
+			message:    `I1105 04:16:25.113311 1452 sync.go:42] "Sync ok"`,
+			want:       logging.LogLevelError,
+		},
+		{
+			name:       "plain message defaults to info",
+			levelInput: "",
+			message:    `just a normal operational log`,
+			want:       logging.LogLevelInfo,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := logging.NormalizeLogLevel(tc.levelInput, tc.message)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestLogEntry_Validate_NormalizesKlogLevel(t *testing.T) {
+	entry := logging.LogEntry{
+		TenantID:  "tenant-klog",
+		ClusterID: "cluster-klog",
+		Message:   `E1105 04:16:25.113311 1452 kubelet_node_status.go:106] "Unable to register node with API server"`,
+		LogLevel:  logging.LogLevelInfo,
+	}
+
+	err := entry.Validate()
+	require.NoError(t, err)
+	require.Equal(t, logging.LogLevelError, entry.LogLevel)
+}

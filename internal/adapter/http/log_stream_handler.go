@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	docker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
+	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/agent"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/logging"
 	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
@@ -148,6 +149,9 @@ func extractStreamServiceTag(msg string) (string, string) {
 }
 
 func detectStreamLogLevel(msg string) string {
+	if inferred := domainLogging.InferSeverityFromMessage(msg); inferred != "" {
+		return strings.ToUpper(string(inferred))
+	}
 	u := strings.ToUpper(msg)
 	switch {
 	case strings.Contains(u, "ERROR") || strings.Contains(u, "FATAL") || strings.Contains(u, "PANIC"):

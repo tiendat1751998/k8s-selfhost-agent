@@ -21,6 +21,10 @@ func (c *AgentLogClient) StreamLogs(ctx context.Context, agentURL, service strin
 		return fmt.Errorf("invalid or empty agent url: %q", agentURL)
 	}
 
+	if c != nil && c.backoff != nil && c.backoff.IsUnreachable(baseURL) {
+		return fmt.Errorf("host endpoint %s is currently unreachable (circuit open)", baseURL)
+	}
+
 	if _, err := netguard.ValidateURL(baseURL, "http", "https"); err != nil {
 		return fmt.Errorf("validating agent url %q: %w", baseURL, err)
 	}
@@ -58,10 +62,17 @@ func (c *AgentLogClient) StreamLogs(ctx context.Context, agentURL, service strin
 
 	resp, err := streamClient.Do(httpReq)
 	if err != nil {
+		if c != nil && c.backoff != nil {
+			c.backoff.MarkFailed(baseURL)
+		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		return fmt.Errorf("executing stream request to %s: %w", baseURL, err)
+	}
+
+	if c != nil && c.backoff != nil {
+		c.backoff.MarkSuccess(baseURL)
 	}
 
 	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusBadRequest || (service == "" && resp.StatusCode != http.StatusOK) {
