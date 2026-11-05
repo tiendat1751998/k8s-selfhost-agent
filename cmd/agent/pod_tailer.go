@@ -300,10 +300,15 @@ func (p *PodTailer) processLine(rawLine string, meta PodMeta, state *podFileStat
 		stream = parsed.Stream
 	}
 
+	level := streamToLevel(stream)
+	if detected := detectLogLevel(finalMessage); detected != "info" && detected != "" {
+		level = detected
+	}
+
 	p.emitEntry(logengine.Entry{
 		Timestamp:     finalTime,
 		Service:       meta.ServiceName,
-		Level:         streamToLevel(stream),
+		Level:         level,
 		Message:       finalMessage,
 		Raw:           rawLine,
 		Namespace:     meta.Namespace,

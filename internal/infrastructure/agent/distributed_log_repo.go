@@ -277,6 +277,8 @@ func (r *DistributedAgentLogRepo) GetHistogram(
 	interval := time.Duration(intervalSeconds) * time.Second
 
 	histFilter := filter
+	targetLevel := filter.LogLevel
+	histFilter.LogLevel = ""
 	histFilter.Limit = 10000
 	histFilter.Offset = 0
 
@@ -287,6 +289,13 @@ func (r *DistributedAgentLogRepo) GetHistogram(
 
 	buckets := make(map[int64]*domainLogging.LogAggregationBucket)
 	for _, entry := range searchResult.Entries {
+		lvl := string(domainLogging.NormalizeLogLevel(string(entry.LogLevel), entry.Message))
+		if lvl == "" {
+			lvl = "info"
+		}
+		if targetLevel != "" && !strings.EqualFold(lvl, string(targetLevel)) {
+			continue
+		}
 		bucketTime := entry.Timestamp.Truncate(interval)
 		key := bucketTime.Unix()
 		b, exists := buckets[key]
@@ -298,10 +307,6 @@ func (r *DistributedAgentLogRepo) GetHistogram(
 			buckets[key] = b
 		}
 		b.TotalCount++
-		lvl := strings.ToLower(string(entry.LogLevel))
-		if lvl == "" {
-			lvl = "info"
-		}
 		b.LevelCount[lvl]++
 	}
 
