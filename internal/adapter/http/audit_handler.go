@@ -53,6 +53,11 @@ func NewAuditHandler(repo audit.Repository, opts ...AuditOption) *AuditHandler {
 	return h
 }
 
+// Repo returns the underlying audit repository.
+func (h *AuditHandler) Repo() audit.Repository {
+	return h.repo
+}
+
 // RegisterRoutes registers audit routes.
 func (h *AuditHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/findings", h.ListFindings)

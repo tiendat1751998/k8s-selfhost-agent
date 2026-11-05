@@ -242,3 +242,41 @@ func TestRateLimiter_ConcurrentClose(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestRateLimit_GitHubHeaders(t *testing.T) {
+	limiter := RateLimit(5, time.Minute)
+	handler := limiter(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+	req.RemoteAddr = "10.20.30.40:5000"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", rec.Code)
+	}
+
+	if rec.Header().Get("X-RateLimit-Limit") != "5" {
+		t.Errorf("expected X-RateLimit-Limit 5, got %q", rec.Header().Get("X-RateLimit-Limit"))
+	}
+	if rec.Header().Get("X-RateLimit-Remaining") != "4" {
+		t.Errorf("expected X-RateLimit-Remaining 4, got %q", rec.Header().Get("X-RateLimit-Remaining"))
+	}
+	if rec.Header().Get("X-RateLimit-Used") != "1" {
+		t.Errorf("expected X-RateLimit-Used 1, got %q", rec.Header().Get("X-RateLimit-Used"))
+	}
+	if rec.Header().Get("X-RateLimit-Resource") != "auth" {
+		t.Errorf("expected X-RateLimit-Resource auth, got %q", rec.Header().Get("X-RateLimit-Resource"))
+	}
+	resetStr := rec.Header().Get("X-RateLimit-Reset")
+	if resetStr == "" {
+		t.Error("expected X-RateLimit-Reset header to be set")
+	}
+	resetVal, err := strconv.ParseInt(resetStr, 10, 64)
+	if err != nil || resetVal <= 0 {
+		t.Errorf("invalid X-RateLimit-Reset header: %s", resetStr)
+	}
+}
+

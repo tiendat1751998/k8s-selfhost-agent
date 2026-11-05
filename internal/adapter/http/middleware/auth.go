@@ -333,6 +333,7 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 				userRole: "platform_admin",
 				tenantID: "default-tenant",
 			}
+			tenancy.SetRequestIdentity(r.Context(), "edge-agent", "platform_admin", "default-tenant", "agent_token")
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
@@ -393,6 +394,7 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 				tenantID = "default-tenant"
 			}
 			ctx := authCtx{Context: r.Context(), userID: userID, userRole: userRole, tenantID: tenantID}
+			tenancy.SetRequestIdentity(r.Context(), userID, userRole, tenantID, "api_key")
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
@@ -426,6 +428,7 @@ func JWTAuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		ctx := authCtx{Context: r.Context(), userID: userID, userRole: userRole, tenantID: tenantID}
+		tenancy.SetRequestIdentity(r.Context(), userID, userRole, tenantID, "jwt")
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

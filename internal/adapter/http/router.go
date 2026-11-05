@@ -94,10 +94,21 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 	r := chi.NewRouter()
 
 	// Standard middleware stack
-	r.Use(chimw.RequestID, mw.TrustedProxyRealIP(), chimw.Recoverer, conditionalTimeout(60*time.Second))
-	r.Use(chimw.Heartbeat("/ping"), mw.RequestBodyLimit(1<<20), mw.StructuredLogger, mw.CORS)
-	r.Use(mw.Metrics, mw.RequestCounter, mw.Tracing, mw.SecurityHeaders)
-	r.Use(mw.AdaptiveLoadShedding(mw.DefaultLoadSheddingConfig()))
+	r.Use(
+		chimw.RequestID,
+		mw.TrustedProxyRealIP(),
+		chimw.Heartbeat("/ping"),
+		mw.SecurityHeaders,
+		mw.CORS,
+		mw.Metrics,
+		mw.RequestCounter,
+		mw.Tracing,
+		mw.StructuredLogger,
+		mw.JSONRecoverer,
+		mw.AdaptiveLoadShedding(mw.DefaultLoadSheddingConfig()),
+		conditionalTimeout(60*time.Second),
+		mw.RequestBodyLimitWithSkipPrefixes(1<<20, "/api/v1/logs"),
+	)
 
 	// Health endpoints
 	r.Get("/healthz", healthHandler.ServeHTTP)
@@ -177,6 +188,10 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(mw.JWTAuthMiddleware)
+		r.Use(mw.GitHubRateLimit(mw.DefaultGitHubRateLimitConfig()))
+		if platform != nil && platform.Audit != nil && platform.Audit.Repo() != nil {
+			r.Use(mw.MutationAudit(platform.Audit.Repo()))
+		}
 
 		r.Get("/", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")

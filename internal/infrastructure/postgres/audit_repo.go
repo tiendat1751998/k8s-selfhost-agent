@@ -217,6 +217,8 @@ func sanitizeAuditDetails(val interface{}) interface{} {
 }
 
 func (r *auditRepo) RecordAction(ctx context.Context, actor, action, targetType, targetID, targetName, result string, details map[string]interface{}, ipAddress, userAgent string) error {
+	tenancy.MarkAuditRecorded(ctx)
+
 	var targetUUID *string
 	if targetID != "" {
 		if _, err := uuid.Parse(targetID); err == nil {

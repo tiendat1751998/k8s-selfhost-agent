@@ -8,7 +8,11 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 )
+
+const maxTrackedKeys = 50000
 
 // clientEntry tracks timestamps of recent requests for an IP.
 type clientEntry struct {
@@ -98,14 +102,38 @@ func (l *IPRateLimiter) ClientCount() int {
 	return len(l.clients)
 }
 
-// Allow checks if a request from the given IP is allowed under the rate limit.
-func (l *IPRateLimiter) Allow(ip string) (bool, int) {
+// RateLimitDecision holds rate limit decision metadata.
+type RateLimitDecision struct {
+	Allowed    bool
+	Limit      int
+	Remaining  int
+	Used       int
+	Reset      int64
+	RetryAfter int
+}
+
+// Check checks rate limit status and returns detailed decision metadata.
+func (l *IPRateLimiter) Check(ip string) RateLimitDecision {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	now := time.Now()
 	entry, exists := l.clients[ip]
 	if !exists {
+		if len(l.clients) >= maxTrackedKeys {
+			staleThreshold := l.window * 2
+			for k, e := range l.clients {
+				if now.Sub(e.lastSeen) > staleThreshold {
+					delete(l.clients, k)
+				}
+			}
+		}
+		if len(l.clients) >= maxTrackedKeys {
+			for k := range l.clients {
+				delete(l.clients, k)
+				break
+			}
+		}
 		entry = &clientEntry{
 			timestamps: make([]time.Time, 0, l.limit),
 			lastSeen:   now,
@@ -124,9 +152,27 @@ func (l *IPRateLimiter) Allow(ip string) (bool, int) {
 	}
 	entry.timestamps = valid
 
-	if len(entry.timestamps) < l.limit {
+	used := len(entry.timestamps)
+	reset := now.Add(l.window).Unix()
+	if used > 0 {
+		reset = entry.timestamps[0].Add(l.window).Unix()
+	}
+
+	if used < l.limit {
 		entry.timestamps = append(entry.timestamps, now)
-		return true, 0
+		used++
+		remaining := l.limit - used
+		if remaining < 0 {
+			remaining = 0
+		}
+		return RateLimitDecision{
+			Allowed:    true,
+			Limit:      l.limit,
+			Remaining:  remaining,
+			Used:       used,
+			Reset:      reset,
+			RetryAfter: 0,
+		}
 	}
 
 	// Calculate remaining time until oldest request in window expires
@@ -135,7 +181,20 @@ func (l *IPRateLimiter) Allow(ip string) (bool, int) {
 	if retryAfter < 1 {
 		retryAfter = 1
 	}
-	return false, retryAfter
+	return RateLimitDecision{
+		Allowed:    false,
+		Limit:      l.limit,
+		Remaining:  0,
+		Used:       l.limit,
+		Reset:      reset,
+		RetryAfter: retryAfter,
+	}
+}
+
+// Allow checks if a request from the given IP is allowed under the rate limit.
+func (l *IPRateLimiter) Allow(ip string) (bool, int) {
+	d := l.Check(ip)
+	return d.Allowed, d.RetryAfter
 }
 
 // extractClientIP extracts the client IP from RemoteAddr.
@@ -155,15 +214,24 @@ func (l *IPRateLimiter) Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := extractClientIP(r)
-			allowed, retryAfter := l.Allow(ip)
-			if !allowed {
-				w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+			decision := l.Check(ip)
+
+			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(decision.Limit))
+			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(decision.Remaining))
+			w.Header().Set("X-RateLimit-Used", strconv.Itoa(decision.Used))
+			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(decision.Reset, 10))
+			w.Header().Set("X-RateLimit-Resource", "auth")
+
+			if !decision.Allowed {
+				w.Header().Set("Retry-After", strconv.Itoa(decision.RetryAfter))
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusTooManyRequests)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				if err := json.NewEncoder(w).Encode(map[string]interface{}{
 					"error":       "too many requests",
-					"retry_after": retryAfter,
-				})
+					"retry_after": decision.RetryAfter,
+				}); err != nil {
+					zap.L().Warn("failed to encode rate limit json response", zap.Error(err))
+				}
 				return
 			}
 			next.ServeHTTP(w, r)
