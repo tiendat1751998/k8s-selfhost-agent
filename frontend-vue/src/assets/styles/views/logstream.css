@@ -1,6 +1,6 @@
 /* ==========================================================================
    Enterprise Kubernetes Log Stream Explorer Stylesheet
-   Dark OLED Slate tokens (rgba(15, 23, 42, 0.75), border rgba(148, 163, 184, 0.15))
+   Dual-Theme System using tokens.css semantic variables
    ========================================================================== */
 @import './logstream-tree.css';
 @import './logstream-terminal.css';
@@ -184,7 +184,7 @@
 .severity-pill-btn.pill-err.active { background: var(--color-status-offline-bg); color: var(--color-status-offline); }
 .severity-pill-btn.pill-warn.active { background: var(--color-status-warning-bg); color: var(--color-status-warning); }
 .severity-pill-btn.pill-info.active { background: var(--color-status-online-bg); color: var(--color-status-online); }
-.severity-pill-btn.pill-debug.active { background: rgba(100, 116, 139, 0.3); color: #94a3b8; }
+.severity-pill-btn.pill-debug.active { background: var(--color-surface-hover); color: var(--color-muted); }
 
 .toolbar-historical-group {
   display: inline-flex;
@@ -306,27 +306,27 @@
 /* Query Error Banner */
 .query-error-banner {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 6px 12px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25);
-  color: #f87171; border-radius: 6px; font-size: 11px; margin-bottom: 8px; flex-shrink: 0;
+  padding: 6px 12px; background: var(--color-status-offline-bg); border: 1px solid var(--color-status-offline-border);
+  color: var(--color-status-offline); border-radius: 6px; font-size: 11px; margin-bottom: 8px; flex-shrink: 0;
 }
 .query-error-dismiss {
-  background: transparent; border: none; color: #f87171; cursor: pointer;
+  background: transparent; border: none; color: var(--color-status-offline); cursor: pointer;
   padding: 2px 4px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center;
 }
-.query-error-dismiss:hover { background: rgba(239, 68, 68, 0.2); color: var(--color-status-offline); }
+.query-error-dismiss:hover { background: var(--color-status-offline-bg); color: var(--color-status-offline); }
 
 /* Pulse Dots & Utilities */
 .pulse-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-.pulse-dot-cyan { background-color: #38bdf8; box-shadow: 0 0 6px rgba(56, 189, 248, 0.6); }
-.pulse-dot-emerald { background-color: #10b981; box-shadow: 0 0 6px rgba(16, 185, 129, 0.6); }
-.pulse-dot-amber { background-color: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); }
-.pulse-dot-rose { background-color: #ef4444; }
+.pulse-dot-cyan { background-color: var(--color-badge-agent-text); box-shadow: 0 0 6px var(--color-badge-agent-border); }
+.pulse-dot-emerald { background-color: var(--color-status-online); box-shadow: 0 0 6px var(--color-status-online-border); }
+.pulse-dot-amber { background-color: var(--color-status-warning); box-shadow: 0 0 6px var(--color-status-warning-border); }
+.pulse-dot-rose { background-color: var(--color-status-offline); }
 
-.text-emerald { color: #34d399; }
-.text-amber { color: #fbbf24; }
-.text-rose { color: #f87171; }
-.text-cyan { color: #38bdf8; }
-.text-slate { color: #94a3b8; }
+.text-emerald { color: var(--color-status-online); }
+.text-amber { color: var(--color-status-warning); }
+.text-rose { color: var(--color-status-offline); }
+.text-cyan { color: var(--color-badge-agent-text); }
+.text-slate { color: var(--color-muted); }
 .font-mono { font-family: var(--font-mono, monospace); }
 
 .logs-toolbar-sleek.desktop-only { display: flex !important; width: 100% !important; }
@@ -447,21 +447,21 @@
 .dropped-alert-banner {
   margin: 0 12px 8px 12px;
   padding: 6px 12px;
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: var(--color-status-warning-bg);
+  border: 1px solid var(--color-status-warning-border);
   border-radius: 6px;
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 11px;
-  color: #fef08a;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  color: var(--color-status-warning);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .dropped-alert-action {
-  background: rgba(245, 158, 11, 0.25);
-  border: 1px solid rgba(245, 158, 11, 0.45);
-  color: #fef3c7;
+  background: var(--color-status-warning-bg);
+  border: 1px solid var(--color-status-warning-border);
+  color: var(--color-status-warning);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 10.5px;
@@ -472,6 +472,6 @@
 }
 
 .dropped-alert-action:hover {
-  background: rgba(245, 158, 11, 0.4);
-  color: #ffffff;
+  background: var(--color-status-warning-border);
+  color: var(--color-body);
 }

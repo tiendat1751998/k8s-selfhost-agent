@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed } from 'vue'
 import type { LogEntry } from '../../stores/logStore'
 import { useLogStore } from '../../stores/logStore'
 import { calculateVirtualWindow } from '../../utils/virtualWindow'
 import { detectStackTrace, type StackTraceInfo } from '../../utils/stackTraceParser'
 import { formatTime, getTargetBadge, cleanLogMessage, coalesceLogEntries } from './virtualLogUtils'
+import { useVirtualLogScroll } from './useVirtualLogScroll'
+import LogTerminalEmptyState from './LogTerminalEmptyState.vue'
 import BaseIcon from '../ui/BaseIcon.vue'
 
 interface Props {
@@ -26,10 +28,8 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   isConnected: true, isPaused: false, autoScroll: true, isScrollLocked: false,
   targetName: 'cluster', latency: 0, wrapLines: true, rowHeight: 24,
-  hoverPauseEnabled: true, hideServiceBadge: false,
-  isTargetOffline: false, mode: 'live',
+  hoverPauseEnabled: true, hideServiceBadge: false, isTargetOffline: false, mode: 'live',
 })
-
 
 const emit = defineEmits<{
   (e: 'scroll', event: Event): void
@@ -44,18 +44,25 @@ const emit = defineEmits<{
 }>()
 
 const logStore = useLogStore()
-const viewportRef = ref<HTMLElement | null>(null)
-const scrollTop = ref(0)
-const clientHeight = ref(600)
-const unpinnedNewLogsCount = ref(0)
-const isPinnedToBottom = ref(true)
-const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 640 : false)
-const effectiveRowHeight = computed(() => isMobile.value ? 58 : props.rowHeight)
-
-// Coalesce consecutive identical logs and merge SQL/multi-line continuations
 const coalescedLogs = computed(() => coalesceLogEntries(props.logs))
+const effectiveRowHeight = computed(() => (isMobile.value ? 58 : props.rowHeight))
 
-// Expanded stack traces map: index -> boolean
+const {
+  viewportRef, scrollTop, clientHeight, unpinnedNewLogsCount,
+  isPinnedToBottom, isMobile, isHoverPaused, scrollToBottom,
+  handleMouseEnter, handleMouseLeave,
+} = useVirtualLogScroll({
+  autoScroll: computed(() => props.autoScroll),
+  isScrollLocked: computed(() => props.isScrollLocked),
+  hoverPauseEnabled: computed(() => props.hoverPauseEnabled),
+  effectiveRowHeight,
+  logsCount: computed(() => coalescedLogs.value.length),
+  emitScroll: (e) => emit('scroll', e),
+  emitScrollToBottom: () => emit('scrollToBottom'),
+  emitHoverChange: (h) => emit('hoverChange', h),
+  emitRegisterTerminal: (el) => emit('registerTerminal', el),
+})
+
 const expandedStackTraces = ref<Record<number, boolean>>({})
 const expandedRowIndex = ref<number | null>(null)
 
@@ -72,60 +79,15 @@ function formatLevelBadge(lvl: string): string {
   return upper.slice(0, 4)
 }
 
-
-let resizeObserver: ResizeObserver | null = null
-
-onMounted(() => {
-  emit('registerTerminal', viewportRef.value)
-  if (viewportRef.value) {
-    clientHeight.value = viewportRef.value.clientHeight || 600
-    viewportRef.value.addEventListener('scroll', handleViewportScroll, { passive: true })
-    if (typeof ResizeObserver !== 'undefined') {
-      resizeObserver = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          if (entry.target === viewportRef.value) {
-            clientHeight.value = entry.contentRect.height || viewportRef.value.clientHeight || 600
-          }
-        }
-      })
-      resizeObserver.observe(viewportRef.value)
-    }
-  }
-  window.addEventListener('resize', handleResize)
-  if (props.autoScroll) {
-    scrollToBottom()
-  }
-})
-
-onBeforeUnmount(() => {
-  if (resizeObserver) {
-    resizeObserver.disconnect()
-    resizeObserver = null
-  }
-  if (viewportRef.value) {
-    viewportRef.value.removeEventListener('scroll', handleViewportScroll)
-  }
-  window.removeEventListener('resize', handleResize)
-})
-
-function handleResize() {
-  if (viewportRef.value) {
-    clientHeight.value = viewportRef.value.clientHeight || 600
-  }
-  if (typeof window !== 'undefined') {
-    isMobile.value = window.innerWidth < 640
-  }
-}
-
-const windowResult = computed(() => {
-  return calculateVirtualWindow({
+const windowResult = computed(() =>
+  calculateVirtualWindow({
     totalCount: coalescedLogs.value.length,
     scrollTop: scrollTop.value,
     clientHeight: clientHeight.value,
     itemHeight: effectiveRowHeight.value,
     overscan: 10,
   })
-})
+)
 
 const visibleItems = computed(() => {
   const { startIndex, endIndex } = windowResult.value
@@ -147,51 +109,6 @@ function toggleStackTrace(index: number) {
   expandedStackTraces.value[index] = !expandedStackTraces.value[index]
 }
 
-function handleViewportScroll(e: Event) {
-  emit('scroll', e)
-  const el = viewportRef.value
-  if (!el) return
-
-  scrollTop.value = el.scrollTop
-  const threshold = effectiveRowHeight.value * 2
-  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= threshold
-
-  if (atBottom) {
-    isPinnedToBottom.value = true
-    unpinnedNewLogsCount.value = 0
-  } else {
-    isPinnedToBottom.value = false
-  }
-}
-
-function scrollToBottom() {
-  const el = viewportRef.value
-  if (!el) return
-  requestAnimationFrame(() => {
-    el.scrollTop = el.scrollHeight
-    scrollTop.value = el.scrollTop
-    isPinnedToBottom.value = true
-    unpinnedNewLogsCount.value = 0
-    emit('scrollToBottom')
-  })
-}
-
-const isHovered = ref(false)
-const isHoverPaused = computed(() => !!props.hoverPauseEnabled && isHovered.value)
-
-function handleMouseEnter() {
-  isHovered.value = true
-  emit('hoverChange', true)
-}
-
-function handleMouseLeave() {
-  isHovered.value = false
-  emit('hoverChange', false)
-  if (props.autoScroll && isPinnedToBottom.value && !props.isScrollLocked) {
-    scrollToBottom()
-  }
-}
-
 function handleTargetClick(e: MouseEvent | KeyboardEvent, log: LogEntry) {
   const svc = log.service || log.pod || log.container
   if (!svc) return
@@ -206,20 +123,6 @@ function handleMuteClick(log: LogEntry) {
   const svc = log.service || log.pod || log.container
   if (svc) emit('muteService', svc)
 }
-
-watch(
-  () => coalescedLogs.value.length,
-  (newLen, oldLen) => {
-    const diff = newLen - (oldLen || 0)
-    const isPausedReading = isHoverPaused.value || props.isScrollLocked || !isPinnedToBottom.value
-    if (diff > 0 && isPausedReading) {
-      unpinnedNewLogsCount.value += diff
-    }
-    if (props.autoScroll && isPinnedToBottom.value && !props.isScrollLocked && !isHoverPaused.value) {
-      nextTick(() => scrollToBottom())
-    }
-  }
-)
 
 function handleTraceClick(traceId: string) {
   emit('openTrace', traceId)
@@ -240,7 +143,6 @@ defineExpose({
 
 <template>
   <div class="virtual-terminal-window glass-panel" role="region" aria-label="Virtual Kubernetes Terminal Log Stream">
-    <!-- Virtual Viewport Container -->
     <div
       ref="viewportRef"
       class="virtual-viewport font-mono"
@@ -249,12 +151,10 @@ defineExpose({
       @mouseenter="handleMouseEnter"
       @mouseleave="handleMouseLeave"
     >
-      <!-- Spacer providing the total virtual scroll height with top breathing room -->
       <div
         class="virtual-spacer"
         :style="{ height: (windowResult.totalHeight + 12) + 'px' }"
       >
-        <!-- Transformed slice rendering visible DOM items with top breathing room -->
         <div
           class="virtual-content"
           :style="{ transform: `translateY(${windowResult.offsetY + 6}px)` }"
@@ -291,7 +191,6 @@ defineExpose({
               </button>
             </span>
 
-            <!-- Repeat and Multiline Badges -->
             <span
               v-if="item.repeatCount > 1"
               class="virtual-repeat-badge font-mono"
@@ -308,16 +207,13 @@ defineExpose({
               +{{ item.mergedLinesCount }} lines
             </span>
 
-            <!-- Log Message & Stack Trace Section -->
             <div class="virtual-log-body" @click="toggleRowExpand(item.actualIndex)">
               <span class="virtual-msg-line" :class="{ 'virtual-msg-nowrap': !wrapLines }">
                 {{ item.stackInfo.isStackTrace ? cleanLogMessage(item.stackInfo.firstLine) : item.cleanMsg }}
               </span>
 
-              <!-- Expanded Raw Log Detail Preview -->
               <pre v-if="expandedRowIndex === item.actualIndex" class="virtual-raw-expanded font-mono" @click.stop>{{ item.fullMsg || item.log.msg }}</pre>
 
-              <!-- Stack Trace Interactive Toggle -->
               <div v-if="item.stackInfo.isStackTrace">
                 <button
                   type="button"
@@ -338,8 +234,6 @@ defineExpose({
               </div>
             </div>
 
-
-            <!-- Action Badges (Trace & Context) -->
             <button
               v-if="item.log.traceId"
               type="button"
@@ -363,38 +257,15 @@ defineExpose({
         </div>
       </div>
 
-      <!-- Offline Node Empty State in Live Mode -->
-      <div
-        v-if="coalescedLogs.length === 0 && isTargetOffline && mode === 'live'"
-        class="virtual-empty-state font-mono offline-node-empty"
-      >
-        <BaseIcon name="zap-off" size="lg" class="text-amber" />
-        <p class="virtual-empty-title">
-          Node [{{ targetName }}] is currently offline — live stream unavailable
-        </p>
-        <p class="virtual-empty-sub">
-          Historical log records may still be stored in ClickHouse MergeTree archive.
-        </p>
-        <button
-          type="button"
-          class="btn-switch-history font-mono"
-          @click="emit('switchToHistory')"
-        >
-          <BaseIcon name="clock" size="xs" />
-          <span>Switch to History Logs</span>
-        </button>
-      </div>
-
-      <!-- Standard Empty State -->
-      <div v-else-if="coalescedLogs.length === 0" class="virtual-empty-state font-mono">
-        <BaseIcon name="radio" size="lg" />
-        <p class="virtual-empty-title">
-          {{ isConnected ? `Waiting for logs from [${targetName || 'cluster'}]...` : 'Disconnected from log stream. Reconnecting...' }}
-        </p>
-        <p class="virtual-empty-sub">
-          {{ isConnected ? 'Live stream connected. Matching log events will appear in real-time.' : 'Attempting to establish WebSocket stream connection...' }}
-        </p>
-      </div>
+      <!-- Empty or Offline State -->
+      <LogTerminalEmptyState
+        v-if="coalescedLogs.length === 0"
+        :is-target-offline="isTargetOffline"
+        :mode="mode"
+        :target-name="targetName"
+        :is-connected="isConnected"
+        @switch-to-history="emit('switchToHistory')"
+      />
     </div>
 
     <!-- Floating Jump to Bottom Button -->

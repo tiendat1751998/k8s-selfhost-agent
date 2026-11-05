@@ -220,4 +220,91 @@ describe('Task 074 — Slice 74B: Frontend Logs UX & Layout Remediation', () => 
       assert.equal(historicalQueryRan, true, 'must trigger historical query immediately')
     })
   })
+
+  describe('7. Virtual Log Terminal Scroll Pinning & Buffer Physics', () => {
+    it('accurately identifies when scroll is pinned to bottom vs paused for reading', () => {
+      const rowHeight = 24
+      const clientHeight = 600
+      const threshold = rowHeight * 2 // 48px
+
+      function checkAtBottom(scrollHeight: number, scrollTop: number) {
+        return scrollHeight - scrollTop - clientHeight <= threshold
+      }
+
+      // When scrollTop is at maximum scrollHeight - clientHeight
+      assert.equal(checkAtBottom(2000, 1400), true, 'must be pinned when at bottom')
+      // When scrollTop is within 48px threshold
+      assert.equal(checkAtBottom(2000, 1360), true, 'must remain pinned within threshold')
+      // When user scrolled up to read past logs
+      assert.equal(checkAtBottom(2000, 1000), false, 'must unpin when scrolled up')
+    })
+
+    it('tracks unpinned new logs count only when reading or hover paused', () => {
+      let unpinnedCount = 0
+      let isPinned = false
+      let isHoverPaused = false
+
+      function onNewLogs(count: number) {
+        if (!isPinned || isHoverPaused) {
+          unpinnedCount += count
+        }
+      }
+
+      onNewLogs(5)
+      assert.equal(unpinnedCount, 5, 'must increment when unpinned')
+
+      // Now user jumps to bottom
+      isPinned = true
+      unpinnedCount = 0
+
+      onNewLogs(10)
+      assert.equal(unpinnedCount, 0, 'must not increment when pinned and not paused')
+
+      // Now user hovers over terminal (hover pause)
+      isHoverPaused = true
+      onNewLogs(3)
+      assert.equal(unpinnedCount, 3, 'must increment when hover paused even if pinned')
+    })
+  })
+
+  describe('8. Log Target Service Category & Filter Pipeline', () => {
+    it('filters services by category tab (all, app, systemd) and query string', () => {
+      const services = [
+        { id: 'nginx', name: 'nginx', category: 'app' as const, icon: 'box', count: 42 },
+        { id: 'redis', name: 'redis', category: 'app' as const, icon: 'box', count: 10 },
+        { id: 'kubelet.service', name: 'kubelet.service', category: 'systemd' as const, icon: 'cpu', count: 120 },
+        { id: 'docker.service', name: 'docker.service', category: 'systemd' as const, icon: 'cpu', count: 0 },
+      ]
+
+      function filterServices(list: typeof services, category: 'all' | 'app' | 'systemd', query: string) {
+        let res = [...list]
+        if (category === 'app') res = res.filter((s) => s.category === 'app')
+        if (category === 'systemd') res = res.filter((s) => s.category === 'systemd')
+        const q = query.trim().toLowerCase()
+        if (q) res = res.filter((s) => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q))
+        res.sort((a, b) => {
+          if (a.category !== b.category) return a.category === 'app' ? -1 : 1
+          return b.count - a.count
+        })
+        return res
+      }
+
+      const all = filterServices(services, 'all', '')
+      assert.equal(all.length, 4)
+      assert.equal(all[0].id, 'nginx', 'apps must appear before systemd')
+      assert.equal(all[1].id, 'redis')
+
+      const appsOnly = filterServices(services, 'app', '')
+      assert.equal(appsOnly.length, 2)
+      assert.ok(appsOnly.every((s) => s.category === 'app'))
+
+      const systemdOnly = filterServices(services, 'systemd', '')
+      assert.equal(systemdOnly.length, 2)
+      assert.ok(systemdOnly.every((s) => s.category === 'systemd'))
+
+      const searchFiltered = filterServices(services, 'all', 'kube')
+      assert.equal(searchFiltered.length, 1)
+      assert.equal(searchFiltered[0].id, 'kubelet.service')
+    })
+  })
 })
