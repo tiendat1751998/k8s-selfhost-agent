@@ -185,3 +185,27 @@ export async function getErrorRadar(params: {
   if (params.limit) query.limit = params.limit
   return api.get<ErrorRadarResponse>('/logs/errors', query)
 }
+
+export interface LogServicesResponse {
+  services: string[]
+  targets: string[]
+  by_node?: Record<string, string[]>
+}
+
+export async function getLogServices(node?: string): Promise<LogServicesResponse> {
+  const params: Record<string, string> = {}
+  if (node) params.node = node
+  try {
+    const res = await api.get<LogServicesResponse | string[]>('/logs/services', params)
+    if (Array.isArray(res)) {
+      return { services: res, targets: res }
+    }
+    return {
+      services: Array.isArray(res?.services) ? res.services : (Array.isArray(res?.targets) ? res.targets : []),
+      targets: Array.isArray(res?.targets) ? res.targets : (Array.isArray(res?.services) ? res.services : []),
+      by_node: res?.by_node,
+    }
+  } catch {
+    return { services: [], targets: [] }
+  }
+}

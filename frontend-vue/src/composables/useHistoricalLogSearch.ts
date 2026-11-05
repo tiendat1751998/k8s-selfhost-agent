@@ -1,6 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import type { Ref } from 'vue'
-import type { LogTarget } from '../components/logs/LogTargetTree.vue'
+import type { LogTarget } from './useLogTargets'
 import type { LogFilterParams } from '../api/logging'
 import type { useLogStore, LogEntry } from '../stores/logStore'
 import { isNoiseLog, isSystemdService } from '../utils/logTargetCategorizer'

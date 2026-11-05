@@ -2,6 +2,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import type { LogEntry } from '../stores/logStore'
 import { useInfraHosts } from './useInfraHosts'
 import { api } from '../api/client'
+import { getLogServices } from '../api/logging'
 import { dockerApi } from '../api/docker'
 import { k8sApi } from '../api/k8s'
 import { isNoiseLog, classifyLogTarget } from '../utils/logTargetCategorizer'
@@ -50,6 +51,26 @@ export interface UseLogTargetsProps {
   cluster?: string
 }
 
+// Module-level persistent catalogs so filtered streams never wipe out discovered services!
+const discoveredServicesByNode = ref<Record<string, Set<string>>>({})
+const globalDiscoveredServices = ref<Set<string>>(new Set())
+
+export function enrichDiscoveredServices(logs?: LogEntry[]) {
+  if (!logs || !Array.isArray(logs)) return
+  for (const log of logs) {
+    const node = (log.node || log.attributes?.node || log.attributes?.node_name || '').toLowerCase()
+    const svc = log.service || log.container || log.attributes?.app || log.attributes?.service || log.attributes?.unit || log.attributes?.container_name || log.pod || ''
+    if (!svc || isNoiseLog(svc)) continue
+    globalDiscoveredServices.value.add(svc)
+    if (node) {
+      if (!discoveredServicesByNode.value[node]) {
+        discoveredServicesByNode.value[node] = new Set()
+      }
+      discoveredServicesByNode.value[node].add(svc)
+    }
+  }
+}
+
 export function useLogTargets(
   props: UseLogTargetsProps,
   emit: {
@@ -61,6 +82,12 @@ export function useLogTargets(
   const apiServices = ref<TargetServiceItem[]>([])
   const apiWorkloads = ref<TargetWorkloadItem[]>([])
   const targetSearch = ref('')
+
+  // Immediately enrich from initial logs and react to updates
+  enrichDiscoveredServices(props.logs)
+  watch(() => props.logs, (newLogs) => {
+    enrichDiscoveredServices(newLogs)
+  }, { deep: false })
 
   async function fetchDynamicServices() {
     const foundNames = new Set<string>()
@@ -82,19 +109,42 @@ export function useLogTargets(
       workloads.push({ id: name, name, icon: 'layers', kind, namespace })
     }
 
-    // 1. Try GET /logs/services (canonical endpoint) or /logs/targets
+    // 1. Try GET /logs/services (supports by_node and services)
     try {
-      const res = await api.get<{ services?: string[]; targets?: string[] } | string[]>('/logs/services')
-      const rawList = Array.isArray(res) ? res : (res?.services || res?.targets || [])
-      for (const item of rawList) {
-        addService(typeof item === 'string' ? item : (item as { name?: string })?.name || String(item))
+      const res = await getLogServices()
+      if (res.by_node) {
+        for (const [node, svcs] of Object.entries(res.by_node)) {
+          const nLower = node.toLowerCase()
+          if (!discoveredServicesByNode.value[nLower]) {
+            discoveredServicesByNode.value[nLower] = new Set()
+          }
+          for (const s of svcs) {
+            if (!isNoiseLog(s)) {
+              discoveredServicesByNode.value[nLower].add(s)
+              globalDiscoveredServices.value.add(s)
+              addService(s)
+            }
+          }
+        }
+      }
+      if (res.services && Array.isArray(res.services)) {
+        for (const s of res.services) {
+          if (!isNoiseLog(s)) {
+            globalDiscoveredServices.value.add(s)
+            addService(s)
+          }
+        }
       }
     } catch {
       try {
         const res = await api.get<{ targets?: string[]; services?: string[] } | string[]>('/logs/targets')
         const rawList = Array.isArray(res) ? res : (res?.targets || res?.services || [])
         for (const item of rawList) {
-          addService(typeof item === 'string' ? item : (item as { name?: string })?.name || String(item))
+          const s = typeof item === 'string' ? item : (item as { name?: string })?.name || String(item)
+          if (!isNoiseLog(s)) {
+            globalDiscoveredServices.value.add(s)
+            addService(s)
+          }
         }
       } catch {}
     }
@@ -152,16 +202,40 @@ export function useLogTargets(
     return Array.from(map.values())
   })
 
-  const dynamicServices = computed<TargetServiceItem[]>(() => {
-    const map = new Map<string, TargetServiceItem>()
-    for (const s of apiServices.value) {
-      if (!isNoiseLog(s.name)) map.set(s.id.toLowerCase(), s)
-    }
-    for (const log of props.logs) {
-      const svc = log.service || log.container || log.attributes?.app || log.attributes?.service
-      if (svc && !map.has(svc.toLowerCase()) && !isNoiseLog(svc)) {
+  function getNodeServices(nodeId: string): TargetServiceItem[] {
+    const nLower = (nodeId || '').toLowerCase()
+    if (!nLower || nLower === 'all') {
+      const allNames = Array.from(globalDiscoveredServices.value).filter(s => !isNoiseLog(s))
+      // Also include apiServices
+      for (const s of apiServices.value) {
+        if (!isNoiseLog(s.name) && !allNames.includes(s.name)) {
+          allNames.push(s.name)
+        }
+      }
+      return allNames.map(svc => {
         const classified = classifyLogTarget(svc)
-        map.set(svc.toLowerCase(), {
+        return {
+          id: svc,
+          name: svc,
+          icon: classified.icon,
+          type: classified.type,
+          category: classified.category,
+        }
+      }).sort((a, b) => {
+        if (a.category !== b.category) return a.category === 'app' ? -1 : 1
+        return a.name.localeCompare(b.name)
+      })
+    }
+
+    const nodeSet = discoveredServicesByNode.value[nLower]
+    if (!nodeSet || nodeSet.size === 0) {
+      return []
+    }
+    const items: TargetServiceItem[] = []
+    for (const svc of nodeSet) {
+      if (!isNoiseLog(svc)) {
+        const classified = classifyLogTarget(svc)
+        items.push({
           id: svc,
           name: svc,
           icon: classified.icon,
@@ -170,9 +244,20 @@ export function useLogTargets(
         })
       }
     }
-    return Array.from(map.values())
-  })
+    items.sort((a, b) => {
+      if (a.category !== b.category) {
+        return a.category === 'app' ? -1 : 1
+      }
+      return a.name.localeCompare(b.name)
+    })
+    return items
+  }
 
+  function getDiscoveredServicesForNode(nodeId?: string): string[] {
+    return getNodeServices(nodeId || '').map(s => s.name)
+  }
+
+  const dynamicServices = computed<TargetServiceItem[]>(() => getNodeServices('all'))
   const dynamicAppServices = computed(() => dynamicServices.value.filter(s => s.category === 'app'))
   const dynamicSystemdServices = computed(() => dynamicServices.value.filter(s => s.category === 'systemd'))
 
@@ -232,10 +317,8 @@ export function useLogTargets(
     const nodeCounts = new Map<string, number>()
     for (const l of props.logs) {
       if (!l.msg || !cleanLogMessage(l.msg)) continue
-
       const svc = l.service || l.container || l.attributes?.app || l.attributes?.service || l.pod
       if (svc && isNoiseLog(svc)) continue
-
       const sTargets = [l.service, l.container, l.attributes?.app, l.attributes?.service, l.pod, l.namespace].filter(Boolean) as string[]
       for (const key of new Set(sTargets.map(s => s.toLowerCase()))) {
         serviceCounts.set(key, (serviceCounts.get(key) || 0) + 1)
@@ -254,46 +337,6 @@ export function useLogTargets(
 
   function getServiceCount(serviceId: string): number {
     return targetLogCounts.value.serviceCounts.get(serviceId.toLowerCase()) || 0
-  }
-
-  const nodeServicesMap = computed<Record<string, TargetServiceItem[]>>(() => {
-    const map: Record<string, Map<string, TargetServiceItem>> = {}
-    for (const log of props.logs) {
-      const node = (log.node || log.attributes?.node || log.attributes?.node_name || '').toLowerCase()
-      if (!node) continue
-      const svc = log.service || log.container || log.attributes?.app || log.attributes?.service
-      if (!svc || isNoiseLog(svc) || !cleanLogMessage(log.msg)) continue
-      if (!map[node]) {
-        map[node] = new Map<string, TargetServiceItem>()
-      }
-      const svcLower = svc.toLowerCase()
-      if (!map[node].has(svcLower)) {
-        const classified = classifyLogTarget(svc)
-        map[node].set(svcLower, {
-          id: svc,
-          name: svc,
-          icon: classified.icon,
-          type: classified.type,
-          category: classified.category,
-        })
-      }
-    }
-    const result: Record<string, TargetServiceItem[]> = {}
-    for (const [node, svcMap] of Object.entries(map)) {
-      const items = Array.from(svcMap.values())
-      items.sort((a, b) => {
-        if (a.category !== b.category) {
-          return a.category === 'app' ? -1 : 1
-        }
-        return a.name.localeCompare(b.name)
-      })
-      result[node] = items
-    }
-    return result
-  })
-
-  function getNodeServices(nodeId: string): TargetServiceItem[] {
-    return nodeServicesMap.value[nodeId.toLowerCase()] || []
   }
 
   const nodeServiceCounts = computed<Map<string, number>>(() => {
@@ -352,7 +395,11 @@ export function useLogTargets(
     getNodeCount,
     getServiceCount,
     getNodeServices,
+    getDiscoveredServicesForNode,
     getNodeServiceCount,
     selectTarget,
+    dynamicHostNodes,
+    discoveredServicesByNode,
+    globalDiscoveredServices,
   }
 }
