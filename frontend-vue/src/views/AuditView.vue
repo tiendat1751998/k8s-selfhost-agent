@@ -2,17 +2,11 @@
   <div class="view-container audit-view">
     <!-- Top Security Posture Cockpit (Always-Visible Radial Scorecards + Severity Bar) -->
     <CompliancePostureHeader
-      :frameworks="frameworks"
-      :violations="violations"
-      :findings="findings"
-      :selected-framework-id="selectedFrameworkId"
-      :active-severity="activeSeverity"
-      :loading="complianceLoading || findingsLoading"
-      :is-scanning="isScanning"
-      @select-framework="selectFramework"
-      @filter-severity="handleFilterSeverity"
-      @trigger-scan="handleTriggerScan"
-      @refresh="refreshAll"
+      :frameworks="frameworks" :violations="violations" :findings="findings"
+      :selected-framework-id="selectedFrameworkId" :active-severity="activeSeverity"
+      :loading="complianceLoading || findingsLoading" :is-scanning="isScanning"
+      @select-framework="selectFramework" @filter-severity="handleFilterSeverity"
+      @trigger-scan="handleTriggerScan" @refresh="refreshAll"
     />
 
     <!-- Notification Banner -->
@@ -91,14 +85,24 @@
 
     <!-- SUB-VIEW 2: CONTAINER CVES (TRIVY VULNERABILITIES) -->
     <section v-else-if="activeTab === 'findings'" class="audit-subview-section" aria-label="Container Vulnerabilities">
-      <VulnerabilityFindingsTable
-        :findings="displayedFindings"
-        :loading="findingsLoading"
-        :error="findingsError"
-        :resolving-id="resolvingFindingId"
-        @resolve="handleResolveFinding"
-        @refresh="loadFindings"
-      />
+      <div class="audit-desktop-view">
+        <VulnerabilityFindingsTable
+          :findings="displayedFindings"
+          :loading="findingsLoading"
+          :error="findingsError"
+          :resolving-id="resolvingFindingId"
+          @resolve="handleResolveFinding"
+          @refresh="loadFindings"
+        />
+      </div>
+      <div class="audit-mobile-view">
+        <VulnerabilityMobileCards
+          :findings="displayedFindings"
+          :loading="findingsLoading"
+          :resolving-id="resolvingFindingId"
+          @resolve="handleResolveFinding"
+        />
+      </div>
     </section>
 
     <!-- SUB-VIEW 3: FORENSIC AUDIT TIMELINE -->
@@ -167,10 +171,8 @@
 
     <!-- Manual Remediation Action Drawer -->
     <RemediationActionDrawer
-      v-model:show="showRemediationDrawer"
-      :violation="remediationTargetViolation"
-      :summary="remediationSummary"
-      :commands="remediationCommands"
+      v-model:show="showRemediationDrawer" :violation="remediationTargetViolation"
+      :summary="remediationSummary" :commands="remediationCommands"
       @remediated="onManualRemediated"
     />
   </div>
@@ -188,6 +190,7 @@ import AuditFilterToolbar from '../components/audit/AuditFilterToolbar.vue'
 import AuditMobileCards from '../components/audit/AuditMobileCards.vue'
 import AuditPayloadDrawer from '../components/audit/AuditPayloadDrawer.vue'
 import VulnerabilityFindingsTable from '../components/audit/VulnerabilityFindingsTable.vue'
+import VulnerabilityMobileCards from '../components/audit/VulnerabilityMobileCards.vue'
 import CompliancePostureHeader from '../components/compliance/CompliancePostureHeader.vue'
 import ComplianceControlsTable from '../components/compliance/ComplianceControlsTable.vue'
 import ComplianceMobileCards from '../components/compliance/ComplianceMobileCards.vue'

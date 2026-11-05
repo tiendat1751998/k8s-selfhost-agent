@@ -79,8 +79,13 @@
 .context-pill.is-active .pill-caret {
   transform: rotate(180deg);
 }
-@media (max-width: 1366px) { .pill-text { max-width: 85px; } }
-@media (max-width: 768px) { .pill-text { max-width: 75px; } }
+@media (max-width: 1366px) { .pill-text { max-width: 100px; } }
+@media (max-width: 1024px) and (min-width: 641px) {
+  .global-context-selector { max-width: 320px; }
+  .context-pill { max-width: 155px; }
+  .pill-text { max-width: 135px; }
+}
+@media (max-width: 640px) { .pill-text { max-width: 75px; } }
 
 .global-context-menu {
   position: fixed !important;

@@ -305,9 +305,15 @@
   }
 }
 
-/* Desktop vs Mobile Views */
-.audit-desktop-view { display: block; }
-.audit-mobile-view { display: none; }
+/* Desktop vs Mobile Views - DEC-257 1024px paired breakpoint (LES-011 zero dead zone) */
+@media (max-width: 1023.98px) {
+  .audit-desktop-view { display: none !important; }
+  .audit-mobile-view { display: block !important; }
+}
+@media (min-width: 1024px) {
+  .audit-desktop-view { display: block !important; }
+  .audit-mobile-view { display: none !important; }
+}
 
 /* Table Specific Styling - Enterprise Slate & Cobalt (No Neon) */
 .actor-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-primary); }
@@ -392,6 +398,7 @@
 
 /* Responsive Breakpoints & Ergonomics */
 @media (max-width: 767.98px) {
+  .audit-view { padding-bottom: 84px; }
   .audit-desktop-view { display: none !important; }
   .audit-mobile-view { display: block !important; }
   .desktop-only-actions { display: none !important; }
@@ -416,19 +423,26 @@
   .date-range-box { width: 100%; justify-content: space-between; }
 }
 
-/* Audit Tab Switcher */
+/* Audit Tab Switcher (Defect 1: Horizontal scroll, zero label wrap) */
 .audit-tab-switcher {
   display: inline-flex; align-items: center; gap: 2px;
   background: var(--color-surface-inset); border: 1px solid var(--color-border-subtle);
   border-radius: 7px; padding: 3px; height: 32px; box-sizing: border-box;
-  margin-bottom: 0; width: fit-content;
+  margin-bottom: 0; width: fit-content; max-width: 100%;
+  overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none;
 }
-.audit-tab-btn {
+.audit-tab-switcher::-webkit-scrollbar { display: none; }
+
+button.audit-tab-btn, .audit-tab-btn {
   display: inline-flex; align-items: center; gap: 6px;
   height: 24px; min-height: 24px; padding: 0 12px; font-size: 12.5px;
   font-weight: 500; font-family: var(--font-sans); border-radius: 5px;
   border: 1px solid transparent; background: none; color: var(--text-secondary);
   cursor: pointer; transition: all 0.15s ease; box-shadow: none;
+  white-space: nowrap; flex-shrink: 0;
+}
+button.audit-tab-btn span, .audit-tab-btn span {
+  white-space: nowrap; flex-shrink: 0;
 }
 .audit-tab-btn:hover { color: var(--text-primary); }
 .audit-tab-btn.active {

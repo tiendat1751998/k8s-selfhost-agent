@@ -88,7 +88,7 @@
 }
 
 /* Compact selectors imported via logstream-selectors.css */
-
+.toolbar-btn svg, button.toolbar-btn svg { flex-shrink: 0; width: 15px; height: 15px; }
 
 /* Toolbar Search Wrap */
 .logs-toolbar-sleek .toolbar-search-wrap { position: relative; display: flex; align-items: center; width: clamp(130px, 14vw, 210px); min-width: 120px; height: 32px; }
