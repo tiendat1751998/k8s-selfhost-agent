@@ -280,3 +280,50 @@ func TestRateLimit_GitHubHeaders(t *testing.T) {
 	}
 }
 
+func TestRateLimit_CapacityExceeded_FailClosed(t *testing.T) {
+	limiter := NewIPRateLimiter(5, time.Minute, 5*time.Minute)
+	limiter.SetMaxTrackedKeys(2)
+	defer limiter.Close()
+
+	handler := limiter.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Key 1 succeeds
+	req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req1.RemoteAddr = "1.1.1.1:1234"
+	rec1 := httptest.NewRecorder()
+	handler.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("expected 200 for key1, got %d", rec1.Code)
+	}
+
+	// Key 2 succeeds
+	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req2.RemoteAddr = "2.2.2.2:1234"
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected 200 for key2, got %d", rec2.Code)
+	}
+
+	// Key 3 should fail closed with 429 and "rate limit capacity exceeded"
+	req3 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req3.RemoteAddr = "3.3.3.3:1234"
+	rec3 := httptest.NewRecorder()
+	handler.ServeHTTP(rec3, req3)
+	if rec3.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 for key3, got %d", rec3.Code)
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec3.Body.Bytes(), &resp)
+	if resp["error"] != "rate limit capacity exceeded" {
+		t.Fatalf("expected 'rate limit capacity exceeded', got %v", resp["error"])
+	}
+
+	// Verify key 1 was NOT evicted
+	if limiter.ClientCount() != 2 {
+		t.Fatalf("expected client count to stay at 2, got %d", limiter.ClientCount())
+	}
+}
+

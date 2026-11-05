@@ -25,6 +25,7 @@ type GitHubRateLimitConfig struct {
 	MutationWindow  time.Duration
 	MaxConcurrent   int
 	CleanupInterval time.Duration
+	MaxTrackedKeys  int
 }
 
 // DefaultGitHubRateLimitConfig returns GitHub's standard rate limiting parameters.
@@ -36,6 +37,7 @@ func DefaultGitHubRateLimitConfig() GitHubRateLimitConfig {
 		MutationWindow:  1 * time.Minute,
 		MaxConcurrent:   100,
 		CleanupInterval: 5 * time.Minute,
+		MaxTrackedKeys:  50000,
 	}
 }
 
@@ -123,6 +125,9 @@ func NewGitHubRateLimiter(cfg GitHubRateLimitConfig) *GitHubRateLimiter {
 	if cfg.CleanupInterval <= 0 {
 		cfg.CleanupInterval = 5 * time.Minute
 	}
+	if cfg.MaxTrackedKeys <= 0 {
+		cfg.MaxTrackedKeys = maxGitHubTrackedKeys
+	}
 
 	l := &GitHubRateLimiter{
 		identities: make(map[string]*identityEntry),
@@ -176,25 +181,42 @@ func (l *GitHubRateLimiter) cleanup() {
 	}
 }
 
-func (l *GitHubRateLimiter) getOrCreateIdentity(key string, now time.Time) *identityEntry {
+func (l *GitHubRateLimiter) getOrCreateIdentity(key string, now time.Time) (*identityEntry, bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	entry, exists := l.identities[key]
-	if !exists {
-		if len(l.identities) >= maxGitHubTrackedKeys {
-			for k, e := range l.identities {
-				if e.inFlight.Load() == 0 {
+	if exists {
+		entry.lastSeen = now
+		return entry, true
+	}
+
+	maxKeys := l.cfg.MaxTrackedKeys
+	if maxKeys <= 0 {
+		maxKeys = maxGitHubTrackedKeys
+	}
+
+	if len(l.identities) >= maxKeys {
+		for k, e := range l.identities {
+			if e.inFlight.Load() == 0 {
+				e.mu.Lock()
+				primExpired := e.primary.windowStart.IsZero() || now.Sub(e.primary.windowStart) >= l.cfg.PrimaryWindow
+				mutExpired := e.mutation.windowStart.IsZero() || now.Sub(e.mutation.windowStart) >= l.cfg.MutationWindow
+				e.mu.Unlock()
+				if primExpired && mutExpired {
 					delete(l.identities, k)
-					break
 				}
 			}
 		}
-		entry = &identityEntry{lastSeen: now}
-		l.identities[key] = entry
 	}
-	entry.lastSeen = now
-	return entry
+
+	if len(l.identities) >= maxKeys {
+		return nil, false
+	}
+
+	entry = &identityEntry{lastSeen: now}
+	l.identities[key] = entry
+	return entry, true
 }
 
 func (l *GitHubRateLimiter) extractIdentity(r *http.Request) string {
@@ -213,15 +235,18 @@ func (l *GitHubRateLimiter) extractIdentity(r *http.Request) string {
 
 func isMutatingRequest(r *http.Request) bool {
 	switch r.Method {
-	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+	case http.MethodPost:
+		if IsReadOnlyPostPath(r.Method, r.URL.Path) {
+			return false
+		}
+	case http.MethodPut, http.MethodPatch, http.MethodDelete:
 	default:
 		return false
 	}
 
 	if IsStreamingRequest(r) ||
 		strings.HasPrefix(r.URL.Path, "/api/v1/logs") ||
-		strings.HasPrefix(r.URL.Path, "/api/v1/agents/register") ||
-		IsReadOnlyPostPath(r.URL.Path) {
+		strings.HasPrefix(r.URL.Path, "/api/v1/agents/register") {
 		return false
 	}
 
@@ -234,7 +259,19 @@ func (l *GitHubRateLimiter) Middleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			now := time.Now()
 			key := l.extractIdentity(r)
-			entry := l.getOrCreateIdentity(key, now)
+			entry, ok := l.getOrCreateIdentity(key, now)
+			if !ok || entry == nil {
+				w.Header().Set("Retry-After", "5")
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusTooManyRequests)
+				if err := json.NewEncoder(w).Encode(map[string]interface{}{
+					"error":       "rate limit capacity exceeded",
+					"retry_after": 5,
+				}); err != nil {
+					zap.L().Warn("failed to encode rate limit capacity response", zap.Error(err))
+				}
+				return
+			}
 
 			// 1. Secondary Concurrency check
 			isStreaming := IsStreamingRequest(r)
@@ -314,4 +351,34 @@ func (l *GitHubRateLimiter) Middleware() func(http.Handler) http.Handler {
 func GitHubRateLimit(cfg GitHubRateLimitConfig) func(http.Handler) http.Handler {
 	limiter := NewGitHubRateLimiter(cfg)
 	return limiter.Middleware()
+}
+
+var (
+	defaultGitHubLimiterMu sync.Mutex
+	defaultGitHubLimiter   *GitHubRateLimiter
+)
+
+// GetDefaultGitHubRateLimiter returns the shared process-wide GitHubRateLimiter singleton.
+func GetDefaultGitHubRateLimiter() *GitHubRateLimiter {
+	defaultGitHubLimiterMu.Lock()
+	defer defaultGitHubLimiterMu.Unlock()
+	if defaultGitHubLimiter == nil {
+		defaultGitHubLimiter = NewGitHubRateLimiter(DefaultGitHubRateLimitConfig())
+	}
+	return defaultGitHubLimiter
+}
+
+// CloseDefaultGitHubRateLimiter gracefully stops the shared default limiter's janitor.
+func CloseDefaultGitHubRateLimiter() {
+	defaultGitHubLimiterMu.Lock()
+	defer defaultGitHubLimiterMu.Unlock()
+	if defaultGitHubLimiter != nil {
+		defaultGitHubLimiter.Close()
+		defaultGitHubLimiter = nil
+	}
+}
+
+// DefaultGitHubRateLimit returns the middleware using the shared singleton limiter.
+func DefaultGitHubRateLimit() func(http.Handler) http.Handler {
+	return GetDefaultGitHubRateLimiter().Middleware()
 }

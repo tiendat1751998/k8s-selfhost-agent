@@ -37,16 +37,16 @@ func (m *mockAuditRecorder) RecordAction(ctx context.Context, actor, action, tar
 }
 
 func TestIsReadOnlyPostPath(t *testing.T) {
-	readOnlyPaths := []string{
+	readOnlyPosts := []string{
 		"/api/v1/security/ssrf/validate-url",
 		"/api/v1/system/test",
-		"/api/v1/verify",
+		"/api/v1/crypto/verify",
 		"/api/v1/discover",
 		"/api/v1/render",
 		"/api/v1/cluster-search",
-		"/api/v1/search",
-		"/api/v1/check-health",
-		"/api/v1/audit-check",
+		"/api/v1/logs/search",
+		"/api/v1/check-health-fallback",
+		"/api/v1/audit-deps",
 		"/api/v1/pod-preflight",
 		"/api/v1/pfc-deadlock-check",
 		"/api/v1/nccl-progress",
@@ -55,22 +55,63 @@ func TestIsReadOnlyPostPath(t *testing.T) {
 		"/api/v1/fips/scan",
 	}
 
-	for _, p := range readOnlyPaths {
-		if !IsReadOnlyPostPath(p) {
-			t.Errorf("expected %q to be recognized as read-only POST path", p)
+	for _, p := range readOnlyPosts {
+		if !IsReadOnlyPostPath(http.MethodPost, p) {
+			t.Errorf("expected POST %q to be recognized as read-only POST path", p)
 		}
 	}
 
-	mutatingPaths := []string{
-		"/api/v1/deployments",
-		"/api/v1/nodes/worker-1/drain",
-		"/api/v1/organizations/org-1/quota",
+	// Methods other than POST MUST NEVER be recognized as read-only
+	if IsReadOnlyPostPath(http.MethodDelete, "/api/v1/deployments/test") {
+		t.Error("expected DELETE to NOT be recognized as read-only")
+	}
+	if IsReadOnlyPostPath(http.MethodPut, "/api/v1/organizations/test/quota") {
+		t.Error("expected PUT to NOT be recognized as read-only")
+	}
+	if IsReadOnlyPostPath(http.MethodPatch, "/api/v1/nodes/worker/test") {
+		t.Error("expected PATCH to NOT be recognized as read-only")
 	}
 
-	for _, p := range mutatingPaths {
-		if IsReadOnlyPostPath(p) {
-			t.Errorf("expected %q to NOT be recognized as read-only POST path", p)
-		}
+	// Suffix that doesn't match action list (e.g. /test inside a path segment)
+	if IsReadOnlyPostPath(http.MethodPost, "/api/v1/namespaces/test/deployments") {
+		t.Error("expected POST with 'test' in path segment to NOT be recognized as read-only")
+	}
+}
+
+func TestMutationAudit_NeverExemptsNonPostOrParamSuffix(t *testing.T) {
+	recorder := &mockAuditRecorder{}
+	mw := MutationAudit(recorder)
+
+	// DELETE /api/v1/deployments/test
+	reqDel := httptest.NewRequest(http.MethodDelete, "/api/v1/deployments/test", nil)
+	recDel := httptest.NewRecorder()
+	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(recDel, reqDel)
+	if !recorder.called {
+		t.Error("expected DELETE /api/v1/deployments/test to be audited")
+	}
+
+	// PUT /api/v1/organizations/test/quota
+	recorder.called = false
+	reqPut := httptest.NewRequest(http.MethodPut, "/api/v1/organizations/test/quota", nil)
+	recPut := httptest.NewRecorder()
+	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(recPut, reqPut)
+	if !recorder.called {
+		t.Error("expected PUT /api/v1/organizations/test/quota to be audited")
+	}
+
+	// POST /api/v1/namespaces/test/deployments
+	recorder.called = false
+	reqPost := httptest.NewRequest(http.MethodPost, "/api/v1/namespaces/test/deployments", nil)
+	recPost := httptest.NewRecorder()
+	mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(recPost, reqPost)
+	if !recorder.called {
+		t.Error("expected POST /api/v1/namespaces/test/deployments to be audited")
 	}
 }
 

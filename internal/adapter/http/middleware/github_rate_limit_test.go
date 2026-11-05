@@ -181,3 +181,88 @@ func TestGitHubRateLimiter_SecondaryConcurrencyLimit(t *testing.T) {
 	close(block)
 	wg.Wait()
 }
+
+func TestGitHubRateLimiter_CapacityExceeded_FailClosed(t *testing.T) {
+	cfg := DefaultGitHubRateLimitConfig()
+	cfg.MaxTrackedKeys = 2
+	limiter := NewGitHubRateLimiter(cfg)
+	defer limiter.Close()
+
+	handler := limiter.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Identity 1 succeeds
+	req1 := httptest.NewRequest(http.MethodGet, "/api/v1/work", nil)
+	req1 = setTestIdentity(req1, "user-1", "tenant-1")
+	rec1 := httptest.NewRecorder()
+	handler.ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("expected 200 for user-1, got %d", rec1.Code)
+	}
+
+	// Identity 2 succeeds
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/work", nil)
+	req2 = setTestIdentity(req2, "user-2", "tenant-2")
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected 200 for user-2, got %d", rec2.Code)
+	}
+
+	// Identity 3 should fail closed with 429 and "rate limit capacity exceeded"
+	req3 := httptest.NewRequest(http.MethodGet, "/api/v1/work", nil)
+	req3 = setTestIdentity(req3, "user-3", "tenant-3")
+	rec3 := httptest.NewRecorder()
+	handler.ServeHTTP(rec3, req3)
+	if rec3.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 for user-3, got %d", rec3.Code)
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(rec3.Body.Bytes(), &resp)
+	if resp["error"] != "rate limit capacity exceeded" {
+		t.Fatalf("expected 'rate limit capacity exceeded', got %v", resp["error"])
+	}
+}
+
+func TestGitHubRateLimiter_MutationPaths_NeverExemptNonPostOrParamSuffix(t *testing.T) {
+	cfg := DefaultGitHubRateLimitConfig()
+	cfg.MutationLimit = 2
+	cfg.MutationWindow = time.Minute
+	limiter := NewGitHubRateLimiter(cfg)
+	defer limiter.Close()
+
+	handler := limiter.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// 1. DELETE /api/v1/deployments/test (must be counted as mutation)
+	reqDel := httptest.NewRequest(http.MethodDelete, "/api/v1/deployments/test", nil)
+	reqDel = setTestIdentity(reqDel, "actor-x", "tenant-x")
+	recDel := httptest.NewRecorder()
+	handler.ServeHTTP(recDel, reqDel)
+	if recDel.Code != http.StatusOK {
+		t.Fatalf("expected 200 for 1st mutation (DELETE), got %d", recDel.Code)
+	}
+
+	// 2. PUT /api/v1/organizations/test/quota (must be counted as mutation)
+	reqPut := httptest.NewRequest(http.MethodPut, "/api/v1/organizations/test/quota", nil)
+	reqPut = setTestIdentity(reqPut, "actor-x", "tenant-x")
+	recPut := httptest.NewRecorder()
+	handler.ServeHTTP(recPut, reqPut)
+	if recPut.Code != http.StatusOK {
+		t.Fatalf("expected 200 for 2nd mutation (PUT), got %d", recPut.Code)
+	}
+
+	// 3. POST /api/v1/namespaces/test/deployments (must be counted as mutation, exceeding limit 2)
+	reqPost := httptest.NewRequest(http.MethodPost, "/api/v1/namespaces/test/deployments", nil)
+	reqPost = setTestIdentity(reqPost, "actor-x", "tenant-x")
+	recPost := httptest.NewRecorder()
+	handler.ServeHTTP(recPost, reqPost)
+	if recPost.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 for 3rd mutation (POST), got %d", recPost.Code)
+	}
+	if recPost.Header().Get("X-RateLimit-Resource") != "mutation" {
+		t.Errorf("expected X-RateLimit-Resource mutation, got %q", recPost.Header().Get("X-RateLimit-Resource"))
+	}
+}

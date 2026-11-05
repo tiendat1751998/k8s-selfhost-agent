@@ -188,7 +188,7 @@ func NewRouterWithWS(healthHandler *health.Handler, wsHub *WSHub, platform *Plat
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(mw.JWTAuthMiddleware)
-		r.Use(mw.GitHubRateLimit(mw.DefaultGitHubRateLimitConfig()))
+		r.Use(mw.DefaultGitHubRateLimit())
 		if platform != nil && platform.Audit != nil && platform.Audit.Repo() != nil {
 			r.Use(mw.MutationAudit(platform.Audit.Repo()))
 		}

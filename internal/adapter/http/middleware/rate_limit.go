@@ -27,6 +27,7 @@ type IPRateLimiter struct {
 	limit           int
 	window          time.Duration
 	cleanupInterval time.Duration
+	maxTrackedKeys  int
 	stopCh          chan struct{}
 	stopOnce        sync.Once
 }
@@ -48,11 +49,21 @@ func NewIPRateLimiter(limit int, window time.Duration, cleanupInterval time.Dura
 		limit:           limit,
 		window:          window,
 		cleanupInterval: cleanupInterval,
+		maxTrackedKeys:  maxTrackedKeys,
 		stopCh:          make(chan struct{}),
 	}
 
 	go l.janitor()
 	return l
+}
+
+// SetMaxTrackedKeys updates the maximum number of tracked client keys.
+func (l *IPRateLimiter) SetMaxTrackedKeys(n int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if n > 0 {
+		l.maxTrackedKeys = n
+	}
 }
 
 // Close stops the background janitor goroutine.
@@ -104,12 +115,13 @@ func (l *IPRateLimiter) ClientCount() int {
 
 // RateLimitDecision holds rate limit decision metadata.
 type RateLimitDecision struct {
-	Allowed    bool
-	Limit      int
-	Remaining  int
-	Used       int
-	Reset      int64
-	RetryAfter int
+	Allowed          bool
+	CapacityExceeded bool
+	Limit            int
+	Remaining        int
+	Used             int
+	Reset            int64
+	RetryAfter       int
 }
 
 // Check checks rate limit status and returns detailed decision metadata.
@@ -120,18 +132,34 @@ func (l *IPRateLimiter) Check(ip string) RateLimitDecision {
 	now := time.Now()
 	entry, exists := l.clients[ip]
 	if !exists {
-		if len(l.clients) >= maxTrackedKeys {
-			staleThreshold := l.window * 2
+		maxKeys := l.maxTrackedKeys
+		if maxKeys <= 0 {
+			maxKeys = maxTrackedKeys
+		}
+		if len(l.clients) >= maxKeys {
+			cutoff := now.Add(-l.window)
 			for k, e := range l.clients {
-				if now.Sub(e.lastSeen) > staleThreshold {
+				allExpired := true
+				for _, ts := range e.timestamps {
+					if ts.After(cutoff) {
+						allExpired = false
+						break
+					}
+				}
+				if allExpired {
 					delete(l.clients, k)
 				}
 			}
 		}
-		if len(l.clients) >= maxTrackedKeys {
-			for k := range l.clients {
-				delete(l.clients, k)
-				break
+		if len(l.clients) >= maxKeys {
+			return RateLimitDecision{
+				Allowed:          false,
+				CapacityExceeded: true,
+				Limit:            l.limit,
+				Remaining:        0,
+				Used:             l.limit,
+				Reset:            now.Add(l.window).Unix(),
+				RetryAfter:       5,
 			}
 		}
 		entry = &clientEntry{
@@ -226,8 +254,12 @@ func (l *IPRateLimiter) Middleware() func(http.Handler) http.Handler {
 				w.Header().Set("Retry-After", strconv.Itoa(decision.RetryAfter))
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusTooManyRequests)
+				errMsg := "too many requests"
+				if decision.CapacityExceeded {
+					errMsg = "rate limit capacity exceeded"
+				}
 				if err := json.NewEncoder(w).Encode(map[string]interface{}{
-					"error":       "too many requests",
+					"error":       errMsg,
 					"retry_after": decision.RetryAfter,
 				}); err != nil {
 					zap.L().Warn("failed to encode rate limit json response", zap.Error(err))

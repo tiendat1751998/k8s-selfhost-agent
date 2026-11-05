@@ -85,3 +85,30 @@ func TestJSONRecoverer_HeadersAlreadyWritten(t *testing.T) {
 		t.Fatalf("expected original status 202 Accepted to remain, got %d", rec.Code)
 	}
 }
+
+func TestJSONRecoverer_PanicAfterHijack_DoesNotWrite500Headers(t *testing.T) {
+	rec := &flusherHijackerRecorder{ResponseRecorder: httptest.NewRecorder()}
+	handler := JSONRecoverer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatal("expected http.Hijacker")
+		}
+		_, _, err := hj.Hijack()
+		if err != nil {
+			t.Fatalf("unexpected hijack error: %v", err)
+		}
+		panic("ws boom after hijack")
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	handler.ServeHTTP(rec, req)
+
+	// Since connection was hijacked, JSONRecoverer should NOT write 500 JSON response
+	if rec.Code == http.StatusInternalServerError {
+		t.Fatalf("expected hijacked response to NOT write 500 status code, got %d", rec.Code)
+	}
+	if rec.Header().Get("Content-Type") == "application/json" {
+		t.Fatalf("expected hijacked response to NOT write application/json header")
+	}
+}
+

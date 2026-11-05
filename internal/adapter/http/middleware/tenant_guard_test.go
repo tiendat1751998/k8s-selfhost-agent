@@ -107,4 +107,47 @@ func TestRequireTenantParam(t *testing.T) {
 			t.Fatalf("expected 200 OK for matching 'id' param, got %d", rec.Code)
 		}
 	})
+
+	t.Run("Non-admin whitespace tenant param fails closed 403", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/tenants/%20/alerts", nil)
+		ctx := tenancy.WithUserRole(req.Context(), "tenant_admin")
+		ctx = tenancy.WithTenantID(ctx, "tenant-alpha")
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden for whitespace param, got %d", rec.Code)
+		}
+		var resp map[string]string
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		if resp["error"] != "access denied: invalid empty tenant parameter" {
+			t.Errorf("unexpected error for whitespace param: %v", resp["error"])
+		}
+	})
+
+	t.Run("Non-admin missing required tenant param on route fails closed 403", func(t *testing.T) {
+		rMissing := chi.NewRouter()
+		rMissing.With(guard).Get("/no-params/alerts", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/no-params/alerts", nil)
+		ctx := tenancy.WithUserRole(req.Context(), "tenant_admin")
+		ctx = tenancy.WithTenantID(ctx, "tenant-alpha")
+		req = req.WithContext(ctx)
+
+		rec := httptest.NewRecorder()
+		rMissing.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 Forbidden for missing route param, got %d", rec.Code)
+		}
+		var resp map[string]string
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		if resp["error"] != "access denied: missing required tenant parameter" {
+			t.Errorf("unexpected error for missing route param: %v", resp["error"])
+		}
+	})
 }

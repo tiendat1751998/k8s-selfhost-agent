@@ -64,7 +64,9 @@ func init() {
 
 type responseWriter struct {
 	http.ResponseWriter
-	statusCode int
+	statusCode  int
+	wroteHeader bool
+	hijacked    bool
 }
 
 func newResponseWriter(w http.ResponseWriter) *responseWriter {
@@ -72,8 +74,18 @@ func newResponseWriter(w http.ResponseWriter) *responseWriter {
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
+	if !rw.wroteHeader && !rw.hijacked {
+		rw.statusCode = code
+		rw.wroteHeader = true
+		rw.ResponseWriter.WriteHeader(code)
+	}
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	if !rw.wroteHeader && !rw.hijacked {
+		rw.wroteHeader = true
+	}
+	return rw.ResponseWriter.Write(b)
 }
 
 func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
@@ -81,7 +93,12 @@ func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("hijack not supported")
 	}
-	return hijacker.Hijack()
+	conn, rwBuf, err := hijacker.Hijack()
+	if err == nil {
+		rw.hijacked = true
+		rw.wroteHeader = true
+	}
+	return conn, rwBuf, err
 }
 
 func (rw *responseWriter) Flush() {

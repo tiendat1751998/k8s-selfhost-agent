@@ -1,14 +1,12 @@
 package middleware
 
 import (
-	"bufio"
 	"context"
-	"fmt"
-	"net"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
@@ -19,61 +17,50 @@ type AuditRecorder interface {
 	RecordAction(ctx context.Context, actor, action, targetType, targetID, targetName, result string, details map[string]interface{}, ipAddress, userAgent string) error
 }
 
-var readOnlyPostKeywords = []string{
-	"/validate",
-	"/test",
-	"/verify",
+var readOnlyPostActionSuffixes = []string{
+	"/validate-kubeconfig",
 	"/discover",
-	"/render",
 	"/cluster-search",
-	"/search",
-	"/check-",
-	"/audit-",
+	"/logs/search",
+	"/test",
+	"/health",
+	"/validate",
+	"/render",
+	"/fips/scan",
+	"/ocsp/verify-staple",
+	"/crypto/verify",
+	"/kms/verify",
+	"/validate-query",
+	"/validate-url",
+	"/audit-deps",
+	"/validate-order",
+	"/audit-symmetry",
+	"/validate-path-mtu",
+	"/resolve-digest",
+	"/validate-ephemeral",
 	"/pod-preflight",
 	"/pfc-deadlock-check",
-	"/nccl-progress",
+	"/verify-regex",
+	"/validate-clock-skew",
 	"/kv-cache-check",
-	"/resolve-digest",
-	"/fips/scan",
+	"/nccl-progress",
+	"/validate-fencing",
+	"/check-health-fallback",
 }
 
-// IsReadOnlyPostPath determines if a POST request path is an idempotent query, validation, or check.
-func IsReadOnlyPostPath(path string) bool {
-	lower := strings.ToLower(path)
-	for _, kw := range readOnlyPostKeywords {
-		if strings.Contains(lower, kw) {
+// IsReadOnlyPostPath determines if a request is an idempotent query, validation, or check.
+// It returns true ONLY when method is POST and path ends with one of the explicit read-only action suffixes.
+func IsReadOnlyPostPath(method, path string) bool {
+	if method != http.MethodPost {
+		return false
+	}
+	cleanPath := strings.ToLower(strings.TrimRight(path, "/"))
+	for _, suffix := range readOnlyPostActionSuffixes {
+		if strings.HasSuffix(cleanPath, suffix) {
 			return true
 		}
 	}
 	return false
-}
-
-type mutationResponseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rw *mutationResponseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
-}
-
-func (rw *mutationResponseWriter) Unwrap() http.ResponseWriter {
-	return rw.ResponseWriter
-}
-
-func (rw *mutationResponseWriter) Flush() {
-	if flusher, ok := rw.ResponseWriter.(http.Flusher); ok {
-		flusher.Flush()
-	}
-}
-
-func (rw *mutationResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	hijacker, ok := rw.ResponseWriter.(http.Hijacker)
-	if !ok {
-		return nil, nil, fmt.Errorf("hijack not supported")
-	}
-	return hijacker.Hijack()
 }
 
 // MutationAudit records state-modifying requests into the central audit repository.
@@ -86,17 +73,29 @@ func MutationAudit(recorder AuditRecorder) func(http.Handler) http.Handler {
 				r.Method == http.MethodHead ||
 				r.Method == http.MethodOptions ||
 				IsStreamingRequest(r) ||
-				strings.HasPrefix(r.URL.Path, "/api/v1/logs") ||
-				IsReadOnlyPostPath(r.URL.Path) {
+				strings.HasPrefix(r.URL.Path, "/api/v1/logs") {
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			rw := &mutationResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+			rw := newResponseWriter(w)
 			next.ServeHTTP(rw, r)
 
 			if tenancy.IsAuditRecorded(r.Context()) {
 				return
+			}
+
+			if r.Method == http.MethodPost && IsReadOnlyPostPath(r.Method, r.URL.Path) {
+				isParamSuffix := false
+				if rctx := chi.RouteContext(r.Context()); rctx != nil {
+					rp := strings.TrimRight(rctx.RoutePattern(), "/")
+					if strings.HasSuffix(rp, "}") {
+						isParamSuffix = true
+					}
+				}
+				if !isParamSuffix {
+					return
+				}
 			}
 
 			actor := "anonymous"
