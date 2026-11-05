@@ -81,8 +81,12 @@ func (r *DistributedAgentLogRepo) SummarizeErrors(ctx context.Context, filter do
 
 	addEntry := func(node, svc, lvl, msg string, ts time.Time) {
 		if isNoiseService(svc) { return }
+		normLvl := string(domainLogging.NormalizeLogLevel(lvl, msg))
+		if normLvl != "error" && !strings.EqualFold(lvl, "error") {
+			return
+		}
 		fp := logengine.FingerprintError([]byte(msg))
-		key := fmt.Sprintf("%s|%s|%s|%s", node, svc, lvl, fp)
+		key := fmt.Sprintf("%s|%s|%s|%s", node, svc, normLvl, fp)
 		mu.Lock()
 		defer mu.Unlock()
 		if eg, exists := groupMap[key]; exists {
@@ -91,14 +95,33 @@ func (r *DistributedAgentLogRepo) SummarizeErrors(ctx context.Context, filter do
 			if ts.After(eg.LastSeen) { eg.LastSeen = ts }
 		} else {
 			groupMap[key] = &ErrorRadarGroup{
-				Node: node, Service: svc, Level: lvl, Fingerprint: fp,
+				Node: node, Service: svc, Level: normLvl, Fingerprint: fp,
 				SampleMessage: msg, Count: 1, FirstSeen: ts, LastSeen: ts,
 			}
 		}
 	}
 
+	var candidates []docker.ComputeHost
+	for _, h := range hosts {
+		endpoint := strings.TrimSpace(h.Endpoint)
+		if endpoint == "" {
+			continue
+		}
+		if strings.EqualFold(h.Status, "disconnected") || strings.EqualFold(h.Status, "disabled") || strings.EqualFold(h.Status, "down") {
+			continue
+		}
+		if r.logClient != nil && r.logClient.IsHostUnreachable(endpoint) {
+			continue
+		}
+		candidates = append(candidates, h)
+	}
+	hosts = candidates
+
 	var wg sync.WaitGroup
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{
+		Transport: NewFastTransport(),
+		Timeout:   1 * time.Second,
+	}
 
 	for _, h := range hosts {
 		wg.Add(1)
@@ -137,14 +160,15 @@ func (r *DistributedAgentLogRepo) SummarizeErrors(ctx context.Context, filter do
 								if isNoiseService(g.Service) {
 									continue
 								}
-								key := fmt.Sprintf("%s|%s|%s|%s", host.Name, g.Service, g.Level, g.Fingerprint)
+								gLevel := string(domainLogging.NormalizeLogLevel(g.Level, g.SampleMessage))
+								key := fmt.Sprintf("%s|%s|%s|%s", host.Name, g.Service, gLevel, g.Fingerprint)
 								if eg, exists := groupMap[key]; exists {
 									eg.Count += g.Count
 									if g.FirstSeen.Before(eg.FirstSeen) { eg.FirstSeen = g.FirstSeen }
 									if g.LastSeen.After(eg.LastSeen) { eg.LastSeen = g.LastSeen }
 								} else {
 									groupMap[key] = &ErrorRadarGroup{
-										Node: host.Name, Service: g.Service, Level: g.Level,
+										Node: host.Name, Service: g.Service, Level: gLevel,
 										Fingerprint: g.Fingerprint, SampleMessage: g.SampleMessage,
 										Count: g.Count, FirstSeen: g.FirstSeen, LastSeen: g.LastSeen,
 									}

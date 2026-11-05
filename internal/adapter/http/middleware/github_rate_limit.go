@@ -233,6 +233,28 @@ func (l *GitHubRateLimiter) extractIdentity(r *http.Request) string {
 	return extractClientIP(r)
 }
 
+func isIngestionRequest(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		return false
+	}
+	path := r.URL.Path
+	return strings.HasPrefix(path, "/api/v1/logs/ingest") ||
+		strings.HasPrefix(path, "/api/v1/metrics/ingest") ||
+		strings.HasSuffix(path, "/logs/ingest") ||
+		strings.HasSuffix(path, "/metrics/ingest")
+}
+
+func isWebSocketUpgrade(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket") ||
+		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
+}
+
 func isMutatingRequest(r *http.Request) bool {
 	switch r.Method {
 	case http.MethodPost:
@@ -245,7 +267,9 @@ func isMutatingRequest(r *http.Request) bool {
 	}
 
 	if IsStreamingRequest(r) ||
+		isIngestionRequest(r) ||
 		strings.HasPrefix(r.URL.Path, "/api/v1/logs") ||
+		strings.HasPrefix(r.URL.Path, "/api/v1/metrics") ||
 		strings.HasPrefix(r.URL.Path, "/api/v1/agents/register") {
 		return false
 	}
@@ -273,9 +297,12 @@ func (l *GitHubRateLimiter) Middleware() func(http.Handler) http.Handler {
 				return
 			}
 
-			// 1. Secondary Concurrency check
 			isStreaming := IsStreamingRequest(r)
-			if !isStreaming {
+			isIngest := isIngestionRequest(r)
+			isWS := isWebSocketUpgrade(r)
+
+			// 1. Secondary Concurrency check (streaming & edge ingestion exempt)
+			if !isStreaming && !isIngest {
 				currInFlight := entry.inFlight.Add(1)
 				if currInFlight > int64(l.cfg.MaxConcurrent) {
 					entry.inFlight.Add(-1)
@@ -300,12 +327,14 @@ func (l *GitHubRateLimiter) Middleware() func(http.Handler) http.Handler {
 				entry.mu.Unlock()
 
 				if !mutAllowed {
-					w.Header().Set("X-RateLimit-Resource", "mutation")
-					w.Header().Set("X-RateLimit-Limit", strconv.Itoa(l.cfg.MutationLimit))
-					w.Header().Set("X-RateLimit-Remaining", "0")
-					w.Header().Set("X-RateLimit-Used", strconv.Itoa(l.cfg.MutationLimit))
-					w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(mutReset, 10))
-					w.Header().Set("Retry-After", strconv.Itoa(mutRetry))
+					if !isWS {
+						w.Header().Set("X-RateLimit-Resource", "mutation")
+						w.Header().Set("X-RateLimit-Limit", strconv.Itoa(l.cfg.MutationLimit))
+						w.Header().Set("X-RateLimit-Remaining", "0")
+						w.Header().Set("X-RateLimit-Used", strconv.Itoa(l.cfg.MutationLimit))
+						w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(mutReset, 10))
+						w.Header().Set("Retry-After", strconv.Itoa(mutRetry))
+					}
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusTooManyRequests)
 					if err := json.NewEncoder(w).Encode(map[string]interface{}{
@@ -318,28 +347,32 @@ func (l *GitHubRateLimiter) Middleware() func(http.Handler) http.Handler {
 				}
 			}
 
-			// 3. Primary Core rate limit check
-			entry.mu.Lock()
-			coreAllowed, coreRemaining, coreUsed, coreReset, coreRetry := entry.primary.record(now, l.cfg.PrimaryWindow, l.cfg.PrimaryLimit)
-			entry.mu.Unlock()
+			// 3. Primary Core rate limit check (streaming & ingestion exempt from decrement)
+			if !isStreaming && !isIngest {
+				entry.mu.Lock()
+				coreAllowed, coreRemaining, coreUsed, coreReset, coreRetry := entry.primary.record(now, l.cfg.PrimaryWindow, l.cfg.PrimaryLimit)
+				entry.mu.Unlock()
 
-			w.Header().Set("X-RateLimit-Resource", "core")
-			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(l.cfg.PrimaryLimit))
-			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(coreRemaining))
-			w.Header().Set("X-RateLimit-Used", strconv.Itoa(coreUsed))
-			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(coreReset, 10))
-
-			if !coreAllowed {
-				w.Header().Set("Retry-After", strconv.Itoa(coreRetry))
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusTooManyRequests)
-				if err := json.NewEncoder(w).Encode(map[string]interface{}{
-					"error":       "rate limit exceeded",
-					"retry_after": coreRetry,
-				}); err != nil {
-					zap.L().Warn("failed to encode primary rate limit response", zap.Error(err))
+				if !isWS {
+					w.Header().Set("X-RateLimit-Resource", "core")
+					w.Header().Set("X-RateLimit-Limit", strconv.Itoa(l.cfg.PrimaryLimit))
+					w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(coreRemaining))
+					w.Header().Set("X-RateLimit-Used", strconv.Itoa(coreUsed))
+					w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(coreReset, 10))
 				}
-				return
+
+				if !coreAllowed {
+					w.Header().Set("Retry-After", strconv.Itoa(coreRetry))
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusTooManyRequests)
+					if err := json.NewEncoder(w).Encode(map[string]interface{}{
+						"error":       "rate limit exceeded",
+						"retry_after": coreRetry,
+					}); err != nil {
+						zap.L().Warn("failed to encode primary rate limit response", zap.Error(err))
+					}
+					return
+				}
 			}
 
 			next.ServeHTTP(w, r)

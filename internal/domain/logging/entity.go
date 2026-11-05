@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -62,6 +63,78 @@ func ParseLogLevel(s string) (LogLevel, error) {
 	}
 }
 
+var (
+	klogErrRegex  = regexp.MustCompile(`(?:^|[\s:\]])([EF]\d{4}\s)`)
+	klogWarnRegex = regexp.MustCompile(`(?:^|[\s:\]])(W\d{4}\s)`)
+	klogInfoRegex = regexp.MustCompile(`(?:^|[\s:\]])(I\d{4}\s)`)
+)
+
+// InferSeverityFromMessage inspects a log message for Kubernetes klog headers
+// (^E\d{4}\s, ^F\d{4}\s -> error, ^W\d{4}\s -> warn, ^I\d{4}\s -> info)
+// as well as explicit structured tokens (level=error, "level":"error", level=warn, "level":"warn").
+func InferSeverityFromMessage(msg string) LogLevel {
+	trimmed := strings.TrimSpace(msg)
+	if trimmed == "" {
+		return ""
+	}
+
+	// 1. Google/Kubernetes klog header inspection
+	if klogErrRegex.MatchString(trimmed) {
+		return LogLevelError
+	}
+	if klogWarnRegex.MatchString(trimmed) {
+		return LogLevelWarn
+	}
+
+	// 2. Structured log token inspection (case-insensitive)
+	lower := strings.ToLower(trimmed)
+	if strings.Contains(lower, "level=error") || strings.Contains(lower, `"level":"error"`) ||
+		strings.Contains(lower, `level="error"`) || strings.Contains(lower, "lvl=error") ||
+		strings.Contains(lower, "level=fatal") || strings.Contains(lower, `"level":"fatal"`) ||
+		strings.Contains(lower, `level="fatal"`) || strings.Contains(lower, "lvl=fatal") ||
+		strings.Contains(lower, "level=panic") || strings.Contains(lower, `"level":"panic"`) {
+		return LogLevelError
+	}
+	if strings.Contains(lower, "level=warn") || strings.Contains(lower, `"level":"warn"`) ||
+		strings.Contains(lower, `level="warn"`) || strings.Contains(lower, "lvl=warn") ||
+		strings.Contains(lower, "level=warning") || strings.Contains(lower, `"level":"warning"`) ||
+		strings.Contains(lower, `level="warning"`) {
+		return LogLevelWarn
+	}
+	if strings.Contains(lower, "level=debug") || strings.Contains(lower, `"level":"debug"`) ||
+		strings.Contains(lower, `level="debug"`) || strings.Contains(lower, "lvl=debug") {
+		return LogLevelDebug
+	}
+
+	if klogInfoRegex.MatchString(trimmed) {
+		return LogLevelInfo
+	}
+	if strings.Contains(lower, "level=info") || strings.Contains(lower, `"level":"info"`) ||
+		strings.Contains(lower, `level="info"`) || strings.Contains(lower, "lvl=info") {
+		return LogLevelInfo
+	}
+
+	return ""
+}
+
+// NormalizeLogLevel returns the normalized severity level. When level is empty or default "info",
+// it inspects the message for klog headers and structured tokens.
+func NormalizeLogLevel(level, message string) LogLevel {
+	parsed, _ := ParseLogLevel(level)
+	if parsed != "" && parsed != LogLevelInfo {
+		return parsed
+	}
+
+	if inferred := InferSeverityFromMessage(message); inferred != "" {
+		return inferred
+	}
+
+	if parsed == LogLevelInfo {
+		return LogLevelInfo
+	}
+	return LogLevelInfo
+}
+
 // LogEntry represents an immutable streaming log event.
 type LogEntry struct {
 	Timestamp        time.Time         `json:"timestamp"`
@@ -93,8 +166,8 @@ func (e *LogEntry) Validate() error {
 	if strings.TrimSpace(e.Stream) == "" {
 		e.Stream = "stdout"
 	}
-	if strings.TrimSpace(string(e.LogLevel)) == "" {
-		e.LogLevel = LogLevelInfo
+	if strings.TrimSpace(string(e.LogLevel)) == "" || e.LogLevel == LogLevelInfo {
+		e.LogLevel = NormalizeLogLevel(string(e.LogLevel), e.Message)
 	}
 	if !e.LogLevel.IsValid() {
 		return fmt.Errorf("%w: invalid log level '%s'", ErrLogIngestionFailed, e.LogLevel)

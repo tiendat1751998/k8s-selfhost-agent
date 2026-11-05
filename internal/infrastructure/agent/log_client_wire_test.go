@@ -179,6 +179,9 @@ func (m *wireMockLogClient) GetNodeServices(ctx context.Context, hostEndpoint, a
 func (m *wireMockLogClient) StreamLogs(ctx context.Context, agentURL, service string, onLine func(line string)) error {
 	return nil
 }
+func (m *wireMockLogClient) IsHostUnreachable(hostEndpoint string) bool {
+	return false
+}
 
 // TestDistributedAgentLogRepo_K8sAndNonK8sFilters verifies that DistributedAgentLogRepo:
 // 1. Populates K8s fields and maps them into domainLogging.LogEntry

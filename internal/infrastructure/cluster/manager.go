@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/docker/docker/client"
 	"k8s.io/client-go/kubernetes"
@@ -131,6 +133,8 @@ func (m *ClientManager) GetK8sRestConfig(ctx context.Context, clusterID string) 
 	if config.TLSClientConfig.Insecure {
 		return nil, fmt.Errorf("insecure TLS rejected: cluster %s has insecure TLS enabled", clusterID)
 	}
+
+	config.Dial = (&net.Dialer{Timeout: 800 * time.Millisecond}).DialContext
 
 	m.k8sConfigPool[clusterID] = config
 	return config, nil

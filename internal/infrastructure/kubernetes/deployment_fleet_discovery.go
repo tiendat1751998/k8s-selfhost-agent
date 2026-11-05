@@ -94,13 +94,43 @@ func (r *deploymentRepo) discoverFleetWorkloads(ctx context.Context) ([]deployme
 		return []deployment.Application{}, nil
 	}
 
-	client := &http.Client{Timeout: 2 * time.Second}
+	var candidates []domainDocker.ComputeHost
+	for _, h := range hosts {
+		endpoint := strings.TrimSpace(h.Endpoint)
+		if endpoint == "" {
+			continue
+		}
+		if strings.EqualFold(h.Status, "disconnected") || strings.EqualFold(h.Status, "disabled") || strings.EqualFold(h.Status, "down") {
+			continue
+		}
+		candidates = append(candidates, h)
+	}
+	if len(candidates) == 0 {
+		return []deployment.Application{}, nil
+	}
+
+	fastTransport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   800 * time.Millisecond,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   800 * time.Millisecond,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+	client := &http.Client{
+		Transport: fastTransport,
+		Timeout:   1500 * time.Millisecond,
+	}
 
 	var mu sync.Mutex
 	var applications []deployment.Application
 
 	var wg sync.WaitGroup
-	for _, h := range hosts {
+	for _, h := range candidates {
 		wg.Add(1)
 		go func(host domainDocker.ComputeHost) {
 			defer wg.Done()
@@ -124,7 +154,7 @@ func (r *deploymentRepo) discoverHostDaemons(ctx context.Context, client *http.C
 	hostBaseURL := formatHostBaseURL(host.Endpoint)
 	token := resolveComputeHostToken(host)
 
-	hostCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	hostCtx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
 	defer cancel()
 
 	var metricsPayload fleetMetricsPayload

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -266,3 +267,128 @@ func TestGitHubRateLimiter_MutationPaths_NeverExemptNonPostOrParamSuffix(t *test
 		t.Errorf("expected X-RateLimit-Resource mutation, got %q", recPost.Header().Get("X-RateLimit-Resource"))
 	}
 }
+
+func TestGitHubRateLimiter_StreamingExemptionAndNoWSHeaders(t *testing.T) {
+	cfg := DefaultGitHubRateLimitConfig()
+	cfg.PrimaryLimit = 2
+	cfg.PrimaryWindow = time.Minute
+	limiter := NewGitHubRateLimiter(cfg)
+	defer limiter.Close()
+
+	handler := limiter.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+
+	// 1. WebSocket request: must succeed and NOT have any X-RateLimit-* headers
+	wsReq := httptest.NewRequest(http.MethodGet, "/api/v1/logs/stream", nil)
+	wsReq.Header.Set("Upgrade", "websocket")
+	wsReq.Header.Set("Connection", "Upgrade")
+	wsReq = setTestIdentity(wsReq, "stream-user", "tenant-stream")
+	wsRec := httptest.NewRecorder()
+	handler.ServeHTTP(wsRec, wsReq)
+
+	if wsRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for WS request, got %d", wsRec.Code)
+	}
+	if h := wsRec.Header().Get("X-RateLimit-Limit"); h != "" {
+		t.Errorf("expected no X-RateLimit-Limit header on WS upgrade, got %q", h)
+	}
+	if h := wsRec.Header().Get("X-RateLimit-Resource"); h != "" {
+		t.Errorf("expected no X-RateLimit-Resource header on WS upgrade, got %q", h)
+	}
+
+	// 2. Perform 5 SSE streaming requests: should not decrement primary core limit
+	for i := 0; i < 5; i++ {
+		sseReq := httptest.NewRequest(http.MethodGet, "/api/v1/logs/stream?follow=true", nil)
+		sseReq.Header.Set("Accept", "text/event-stream")
+		sseReq = setTestIdentity(sseReq, "stream-user", "tenant-stream")
+		sseRec := httptest.NewRecorder()
+		handler.ServeHTTP(sseRec, sseReq)
+		if sseRec.Code != http.StatusOK {
+			t.Fatalf("expected 200 for SSE request %d, got %d", i, sseRec.Code)
+		}
+	}
+
+	// 3. Normal request for same user: quota should still have all 2 requests remaining
+	normReq := httptest.NewRequest(http.MethodGet, "/api/v1/logs/search", nil)
+	normReq = setTestIdentity(normReq, "stream-user", "tenant-stream")
+	normRec := httptest.NewRecorder()
+	handler.ServeHTTP(normRec, normReq)
+	if normRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for normal request, got %d", normRec.Code)
+	}
+	if rem := normRec.Header().Get("X-RateLimit-Remaining"); rem != "1" {
+		t.Errorf("expected 1 remaining after 1 normal request (streaming was exempt), got %q", rem)
+	}
+}
+
+func TestGitHubRateLimiter_IngestionExemptFromCoreQuotaAndConcurrencyCap(t *testing.T) {
+	cfg := DefaultGitHubRateLimitConfig()
+	cfg.PrimaryLimit = 2
+	cfg.MaxConcurrent = 1
+	limiter := NewGitHubRateLimiter(cfg)
+	defer limiter.Close()
+
+	started := make(chan struct{})
+	blockIngest := make(chan struct{})
+	handler := limiter.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/ingest") && r.Header.Get("X-Block") == "true" {
+			close(started)
+			<-blockIngest
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// 1. Launch a blocking ingestion request to occupy concurrency
+	go func() {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/logs/ingest", nil)
+		req.Header.Set("X-Block", "true")
+		req = setTestIdentity(req, "edge-agent", "default-tenant")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+	}()
+
+	<-started
+
+	// 2. Second concurrent ingestion request to /api/v1/logs/ingest must succeed (exempt from MaxConcurrent: 1)
+	reqIngest2 := httptest.NewRequest(http.MethodPost, "/api/v1/logs/ingest", nil)
+	reqIngest2 = setTestIdentity(reqIngest2, "edge-agent", "default-tenant")
+	recIngest2 := httptest.NewRecorder()
+	handler.ServeHTTP(recIngest2, reqIngest2)
+	if recIngest2.Code != http.StatusOK {
+		t.Fatalf("expected 200 for concurrent ingestion, got %d", recIngest2.Code)
+	}
+
+	// 3. Metric ingestion /api/v1/metrics/ingest also succeeds
+	reqMetrics := httptest.NewRequest(http.MethodPost, "/api/v1/metrics/ingest", nil)
+	reqMetrics = setTestIdentity(reqMetrics, "edge-agent", "default-tenant")
+	recMetrics := httptest.NewRecorder()
+	handler.ServeHTTP(recMetrics, reqMetrics)
+	if recMetrics.Code != http.StatusOK {
+		t.Fatalf("expected 200 for metrics ingestion, got %d", recMetrics.Code)
+	}
+
+	close(blockIngest)
+
+	// 4. Send 10 ingestion requests to exceed PrimaryLimit (2)
+	for i := 0; i < 10; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/logs/ingest", nil)
+		req = setTestIdentity(req, "edge-agent", "default-tenant")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("ingestion %d expected 200, got %d", i, rec.Code)
+		}
+	}
+
+	// 5. Normal UI search request is NOT starved by the 10+ ingestion requests
+	searchReq := httptest.NewRequest(http.MethodGet, "/api/v1/logs/search", nil)
+	searchReq = setTestIdentity(searchReq, "edge-agent", "default-tenant")
+	searchRec := httptest.NewRecorder()
+	handler.ServeHTTP(searchRec, searchReq)
+	if searchRec.Code != http.StatusOK {
+		t.Fatalf("UI search request expected 200 (not starved), got %d", searchRec.Code)
+	}
+}
+

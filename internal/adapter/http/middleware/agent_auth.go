@@ -7,14 +7,16 @@ import (
 	"strings"
 )
 
-// matchAgentAuthToken checks if an incoming request to /agents/register has a valid AGENT_AUTH_TOKEN.
+// matchAgentAuthToken checks if an incoming request to /agents/register or /api/v1/logs/ingest has a valid AGENT_AUTH_TOKEN.
 // Accepts "Authorization: Bearer <token>" or "X-Agent-Token: <token>".
 func matchAgentAuthToken(r *http.Request) bool {
 	if r.Method != http.MethodPost {
 		return false
 	}
 	path := r.URL.Path
-	if !strings.HasSuffix(path, "/agents/register") && path != "/agents/register" {
+	isRegister := strings.HasSuffix(path, "/agents/register") || path == "/agents/register"
+	isIngest := strings.HasSuffix(path, "/logs/ingest") || path == "/api/v1/logs/ingest"
+	if !isRegister && !isIngest {
 		return false
 	}
 
