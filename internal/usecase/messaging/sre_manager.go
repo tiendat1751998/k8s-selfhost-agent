@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	domain "github.com/datdt/k8sselfhost/internal/domain/messaging"
 )
 
@@ -153,11 +155,13 @@ func (m *Manager) EnforceKafkaCooperativePolicy(ctx context.Context, clusterID, 
 	}
 
 	m.metrics.IncRebalanceStormsMitigated()
-	_ = m.auditQueue.TryPush(domain.SREAuditRecord{
+	if !m.auditQueue.TryPush(domain.SREAuditRecord{
 		Timestamp: time.Now().Unix(),
 		Action:    "cooperative_sticky_enforced",
 		Target:    groupID,
-	})
+	}) {
+		zap.L().Warn("messaging SRE audit queue full, dropping record", zap.String("action", "cooperative_sticky_enforced"), zap.String("target", groupID))
+	}
 
 	return nil
 }
@@ -187,13 +191,19 @@ func (m *Manager) AuditRabbitMQMemoryAndTopology(ctx context.Context, clusterID 
 	// Automated rescue policy: if memory exceeds 85%, throttle publishers and trigger GC.
 	if report.MemoryPercentage >= 85.0 {
 		m.metrics.IncWatermarkRescuesTriggered()
-		_ = m.rabbitmqGateway.SetConnectionBackpressure(ctx, clusterID, true)
-		_ = m.rabbitmqGateway.TriggerMemoryPurgeAndGC(ctx, clusterID)
-		_ = m.auditQueue.TryPush(domain.SREAuditRecord{
+		if bpErr := m.rabbitmqGateway.SetConnectionBackpressure(ctx, clusterID, true); bpErr != nil {
+			zap.L().Warn("failed to set rabbitmq connection backpressure", zap.Error(bpErr), zap.String("cluster_id", clusterID))
+		}
+		if gcErr := m.rabbitmqGateway.TriggerMemoryPurgeAndGC(ctx, clusterID); gcErr != nil {
+			zap.L().Warn("failed to trigger rabbitmq memory purge and GC", zap.Error(gcErr), zap.String("cluster_id", clusterID))
+		}
+		if !m.auditQueue.TryPush(domain.SREAuditRecord{
 			Timestamp: time.Now().Unix(),
 			Action:    "high_watermark_backpressure_gc_enacted",
 			Target:    clusterID,
-		})
+		}) {
+			zap.L().Warn("messaging SRE audit queue full, dropping record", zap.String("action", "high_watermark_backpressure_gc_enacted"), zap.String("target", clusterID))
+		}
 	}
 
 	return report, nil
@@ -235,11 +245,13 @@ func (m *Manager) ApplyKafkaKernelTuning(ctx context.Context, nodeName string) e
 		}
 	}
 
-	_ = m.auditQueue.TryPush(domain.SREAuditRecord{
+	if !m.auditQueue.TryPush(domain.SREAuditRecord{
 		Timestamp: time.Now().Unix(),
 		Action:    "kafka_kernel_dirty_pages_tuned",
 		Target:    nodeName,
-	})
+	}) {
+		zap.L().Warn("messaging SRE audit queue full, dropping record", zap.String("action", "kafka_kernel_dirty_pages_tuned"), zap.String("target", nodeName))
+	}
 
 	return nil
 }

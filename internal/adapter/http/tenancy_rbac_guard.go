@@ -8,7 +8,6 @@ import (
 
 	"github.com/datdt/k8sselfhost/internal/adapter/http/middleware"
 	"github.com/datdt/k8sselfhost/internal/domain/tenancy"
-	"github.com/datdt/k8sselfhost/internal/pkg/errors"
 )
 
 // RegisterTenantScopedRoutes registers tenancy routes enforcing tenant-admin isolation.
@@ -43,22 +42,7 @@ func (h *TenancyHandler) RegisterTenantScopedRoutes(r chi.Router) {
 
 // tenantScopedHandler ensures non-platform_admin users only access their own tenant_id.
 func (h *TenancyHandler) tenantScopedHandler(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		role := middleware.UserRoleFromContext(r.Context())
-		if role == "platform_admin" {
-			next(w, r)
-			return
-		}
-
-		targetOrgID := chi.URLParam(r, "id")
-		userTenant := middleware.TenantIDFromContext(r.Context())
-		if targetOrgID != "" && userTenant != "" && !strings.EqualFold(targetOrgID, userTenant) {
-			writeError(w, http.StatusForbidden, "access denied: cross-tenant access prohibited", errors.NewConflict("tenancy", "cross-tenant access prohibited"))
-			return
-		}
-
-		next(w, r)
-	}
+	return middleware.RequireTenantParam("id")(next).ServeHTTP
 }
 
 // GetOrganizationsScoped returns organizations filtered by tenant when the caller is tenant_admin or operator.

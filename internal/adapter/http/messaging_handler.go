@@ -27,7 +27,7 @@ func NewMessagingHandler(manager domain.MessageQueueSREManager) *MessagingHandle
 func (h *MessagingHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/kafka/consumer-groups", h.InspectKafkaConsumerGroups)
 	r.Get("/rabbitmq/health", h.AuditRabbitMQ)
-	r.Get("/tenants/{tenantId}/backlog-alerts", h.GetTenantBacklogAlerts)
+	r.With(middleware.RequireTenantParam("tenantId")).Get("/tenants/{tenantId}/backlog-alerts", h.GetTenantBacklogAlerts)
 
 	r.With(middleware.RBACMiddleware("platform_admin", "tenant_admin")).Group(func(mut chi.Router) {
 		mut.Post("/kafka/consumer-groups/{groupId}/enforce-cooperative", h.EnforceKafkaCooperativePolicy)

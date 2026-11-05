@@ -18,7 +18,10 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 
+	chimw "github.com/go-chi/chi/v5/middleware"
+
 	"github.com/datdt/k8sselfhost/internal/pkg/logger"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 var (
@@ -61,7 +64,9 @@ func init() {
 
 type responseWriter struct {
 	http.ResponseWriter
-	statusCode int
+	statusCode  int
+	wroteHeader bool
+	hijacked    bool
 }
 
 func newResponseWriter(w http.ResponseWriter) *responseWriter {
@@ -69,8 +74,18 @@ func newResponseWriter(w http.ResponseWriter) *responseWriter {
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
+	if !rw.wroteHeader && !rw.hijacked {
+		rw.statusCode = code
+		rw.wroteHeader = true
+		rw.ResponseWriter.WriteHeader(code)
+	}
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	if !rw.wroteHeader && !rw.hijacked {
+		rw.wroteHeader = true
+	}
+	return rw.ResponseWriter.Write(b)
 }
 
 func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
@@ -78,12 +93,37 @@ func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("hijack not supported")
 	}
-	return hijacker.Hijack()
+	conn, rwBuf, err := hijacker.Hijack()
+	if err == nil {
+		rw.hijacked = true
+		rw.wroteHeader = true
+	}
+	return conn, rwBuf, err
 }
 
 func (rw *responseWriter) Flush() {
 	if flusher, ok := rw.ResponseWriter.(http.Flusher); ok {
 		flusher.Flush()
+	}
+}
+
+func (rw *responseWriter) Unwrap() http.ResponseWriter {
+	return rw.ResponseWriter
+}
+
+// RequestBodyLimitWithSkipPrefixes limits the size of incoming HTTP request bodies while skipping configured URL path prefixes.
+func RequestBodyLimitWithSkipPrefixes(maxBytes int64, skipPrefixes ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			for _, prefix := range skipPrefixes {
+				if strings.HasPrefix(r.URL.Path, prefix) {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+			next.ServeHTTP(w, r)
+		})
 	}
 }
 
@@ -192,19 +232,38 @@ func Tracing(next http.Handler) http.Handler {
 // StructuredLogger logs HTTP requests using zap structured logging.
 func StructuredLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, meta := tenancy.EnsureRequestMeta(r.Context())
 		start := time.Now()
 		rw := newResponseWriter(w)
 
-		next.ServeHTTP(rw, r)
+		next.ServeHTTP(rw, r.WithContext(ctx))
 
-		logger.Get().Info("http request",
+		fields := []zap.Field{
 			zap.String("method", r.Method),
 			zap.String("path", r.URL.Path),
 			zap.Int("status", rw.statusCode),
 			zap.Duration("duration", time.Since(start)),
 			zap.String("remote_addr", r.RemoteAddr),
 			zap.String("user_agent", r.UserAgent()),
-		)
+		}
+
+		if reqID := chimw.GetReqID(ctx); reqID != "" {
+			fields = append(fields, zap.String("request_id", reqID))
+		}
+		if uid := meta.UserID(); uid != "" {
+			fields = append(fields, zap.String("user_id", uid))
+		}
+		if tid := meta.TenantID(); tid != "" {
+			fields = append(fields, zap.String("tenant_id", tid))
+		}
+		if role := meta.UserRole(); role != "" {
+			fields = append(fields, zap.String("user_role", role))
+		}
+		if authMethod := meta.AuthMethod(); authMethod != "" {
+			fields = append(fields, zap.String("auth_method", authMethod))
+		}
+
+		logger.Get().Info("http request", fields...)
 	})
 }
 
