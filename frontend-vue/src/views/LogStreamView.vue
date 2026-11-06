@@ -36,9 +36,12 @@ const showErrorRadar = ref(false)
 const {
   dynamicHostNodes,
   getDiscoveredServicesForNode,
+  canViewJournalctl,
 } = useLogTargets({ modelValue: selectedTarget.value, logs: logStore.logs, cluster: activeClusterId.value }, (_event, target) => {
   selectedTarget.value = target
 })
+
+const isSelectedNodeOffline = computed<boolean>(() => isTargetOffline.value)
 
 const {
   mode, selectedTimeRange, queryError, selectedHistoricalLimit, timeRanges,
@@ -268,7 +271,8 @@ function handleInspectErrorGroup(group: ErrorRadarGroup, radarRange?: string) {
       v-model:selected-time-range="selectedTimeRange" v-model:selected-historical-limit="selectedHistoricalLimit"
       v-model:wrap-lines="wrapLines" v-model:show-histogram="showHistogram" v-model:show-error-radar="showErrorRadar"
       v-model:selected-node="selectedNode" :nodes="dynamicHostNodes" :services="availableServiceNames"
-      :is-node-offline="isTargetOffline" :selected-target="selectedTarget" :time-ranges="timeRanges"
+      :is-node-offline="isTargetOffline" :show-journalctl="canViewJournalctl && !isSelectedNodeOffline"
+      :selected-target="selectedTarget" :time-ranges="timeRanges"
       :is-historical-loading="logStore.isHistoricalLoading" :has-more-historical="logStore.hasMoreHistorical"
       :total-historical-count="logStore.totalHistoricalCount" :current-logs-count="logStore.logs.length"
       :auto-scroll="autoScroll" :is-scroll-locked="isScrollLocked" :active-service="activeServiceSubFilter"
@@ -309,10 +313,12 @@ function handleInspectErrorGroup(group: ErrorRadarGroup, radarRange?: string) {
           :auto-scroll="autoScroll" :is-scroll-locked="isScrollLocked" :target-name="selectedTarget.name"
           :latency="latency" :wrap-lines="wrapLines" :hover-pause-enabled="hoverPauseEnabled"
           :hide-service-badge="Boolean(effectiveService)" :is-target-offline="isTargetOffline" :mode="mode"
+          :show-journalctl="canViewJournalctl && !isSelectedNodeOffline" :active-service="activeServiceSubFilter"
           @switch-to-history="handleSwitchToHistoryFromOffline" @scroll="handleScroll" @scroll-to-bottom="scrollToBottom"
           @register-terminal="setTerminalRef" @open-trace="logStore.openTraceDrawer" @open-context="logStore.openContextModal"
           @filter-service="handleFilterServiceFromRow" @mute-service="handleToggleMuteService"
           @hover-change="isHoverPaused = $event && hoverPauseEnabled"
+          @select-journalctl="activeServiceSubFilter = 'journalctl'"
         />
       </div>
     </div>

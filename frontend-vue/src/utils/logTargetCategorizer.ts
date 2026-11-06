@@ -26,6 +26,69 @@ export const OS_NOISE_NAMES: ReadonlySet<string> = new Set([
   'vmware-network',
 ])
 
+export const HOST_OR_SYSTEM_NAMES: ReadonlySet<string> = new Set([
+  'journalctl',
+  'systemd-journal',
+  'auth',
+  'authpriv',
+  'kern',
+  'syslog',
+  'daemon',
+  'cron',
+  'crontab',
+  'multipath',
+  'vmware-vmsvc-root',
+  'vmware-vmtoolsd-root',
+  'modemmanager',
+  'networkmanager',
+  'dbus',
+  'packagekit',
+  'rsyslog',
+  'sshd',
+  'sudo',
+  'polkit',
+  'kubelet',
+  'containerd',
+  'dockerd',
+])
+
+export const SYSTEMD_UNIT_SUFFIXES: readonly string[] = [
+  '.service',
+  '.socket',
+  '.timer',
+  '.scope',
+  '.slice',
+  '.target',
+  '.mount',
+]
+
+/**
+ * Slice 76B: Client-side guard matching systemd unit suffixes, journal targets,
+ * and known host OS syslog daemon noise.
+ */
+export function isHostOrSystemUnit(name?: string | null): boolean {
+  if (!name) return false
+  const lower = name.trim().toLowerCase()
+  if (!lower) return false
+  if (SYSTEMD_UNIT_SUFFIXES.some((suffix) => lower.endsWith(suffix))) {
+    return true
+  }
+  if (HOST_OR_SYSTEM_NAMES.has(lower)) {
+    return true
+  }
+  if (
+    lower.startsWith('systemd-') ||
+    lower.startsWith('systemd_') ||
+    lower.startsWith('dbus-') ||
+    lower === 'systemd' ||
+    lower === 'journald' ||
+    lower === 'kernel'
+  ) {
+    return true
+  }
+  return false
+}
+
 /**
  * Determines whether a given log target or file name is rotated OS noise or maintenance file noise.
  */

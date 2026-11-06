@@ -23,12 +23,15 @@ interface Props {
   hideServiceBadge?: boolean
   isTargetOffline?: boolean
   mode?: 'live' | 'historical'
+  showJournalctl?: boolean
+  activeService?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   isConnected: true, isPaused: false, autoScroll: true, isScrollLocked: false,
   targetName: 'cluster', latency: 0, wrapLines: true, rowHeight: 24,
   hoverPauseEnabled: true, hideServiceBadge: false, isTargetOffline: false, mode: 'live',
+  showJournalctl: false, activeService: undefined,
 })
 
 const emit = defineEmits<{
@@ -41,6 +44,7 @@ const emit = defineEmits<{
   (e: 'muteService', service: string): void
   (e: 'hoverChange', hovering: boolean): void
   (e: 'switchToHistory'): void
+  (e: 'select-journalctl'): void
 }>()
 
 const logStore = useLogStore()
@@ -52,23 +56,16 @@ const {
   isPinnedToBottom, isMobile, isHoverPaused, scrollToBottom,
   handleMouseEnter, handleMouseLeave,
 } = useVirtualLogScroll({
-  autoScroll: computed(() => props.autoScroll),
-  isScrollLocked: computed(() => props.isScrollLocked),
-  hoverPauseEnabled: computed(() => props.hoverPauseEnabled),
-  effectiveRowHeight,
-  logsCount: computed(() => coalescedLogs.value.length),
-  emitScroll: (e) => emit('scroll', e),
-  emitScrollToBottom: () => emit('scrollToBottom'),
-  emitHoverChange: (h) => emit('hoverChange', h),
+  autoScroll: computed(() => props.autoScroll), isScrollLocked: computed(() => props.isScrollLocked),
+  hoverPauseEnabled: computed(() => props.hoverPauseEnabled), effectiveRowHeight,
+  logsCount: computed(() => coalescedLogs.value.length), emitScroll: (e) => emit('scroll', e),
+  emitScrollToBottom: () => emit('scrollToBottom'), emitHoverChange: (h) => emit('hoverChange', h),
   emitRegisterTerminal: (el) => emit('registerTerminal', el),
 })
 
 const expandedStackTraces = ref<Record<number, boolean>>({})
 const expandedRowIndex = ref<number | null>(null)
-
-function toggleRowExpand(index: number) {
-  expandedRowIndex.value = expandedRowIndex.value === index ? null : index
-}
+function toggleRowExpand(index: number) { expandedRowIndex.value = expandedRowIndex.value === index ? null : index }
 
 function formatLevelBadge(lvl: string): string {
   const upper = (lvl || '').toUpperCase()
@@ -105,9 +102,7 @@ const visibleItems = computed(() => {
   })
 })
 
-function toggleStackTrace(index: number) {
-  expandedStackTraces.value[index] = !expandedStackTraces.value[index]
-}
+function toggleStackTrace(index: number) { expandedStackTraces.value[index] = !expandedStackTraces.value[index] }
 
 function handleTargetClick(e: MouseEvent | KeyboardEvent, log: LogEntry) {
   const svc = log.service || log.pod || log.container
@@ -133,6 +128,8 @@ function handleContextClick(entry: LogEntry) {
   emit('openContext', entry)
   logStore.openContextModal(entry)
 }
+
+function handleSelectJournalctl() { emit('select-journalctl') }
 
 defineExpose({
   scrollToBottom,
@@ -264,7 +261,10 @@ defineExpose({
         :mode="mode"
         :target-name="targetName"
         :is-connected="isConnected"
+        :show-journalctl="showJournalctl"
+        :active-service="activeService"
         @switch-to-history="emit('switchToHistory')"
+        @select-journalctl="handleSelectJournalctl"
       />
     </div>
 

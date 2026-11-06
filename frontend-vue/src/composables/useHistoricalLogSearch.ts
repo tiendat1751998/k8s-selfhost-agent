@@ -3,7 +3,7 @@ import type { Ref } from 'vue'
 import type { LogTarget } from './useLogTargets'
 import type { LogFilterParams } from '../api/logging'
 import type { useLogStore, LogEntry } from '../stores/logStore'
-import { isNoiseLog, isSystemdService } from '../utils/logTargetCategorizer'
+import { isNoiseLog, isSystemdService, isHostOrSystemUnit } from '../utils/logTargetCategorizer'
 import { matchesTarget } from '../stores/logStore'
 import { cleanLogMessage } from '../components/logs/virtualLogUtils'
 
@@ -174,8 +174,10 @@ export function useHistoricalLogSearch(
       if (svc && mutedLower.includes(svc.toLowerCase())) return false
 
       // 3. Category filtering (Apps Only vs SystemD Only)
-      if (cat === 'app' && isSystemdService(svc)) return false
-      if (cat === 'systemd' && !isSystemdService(svc)) return false
+      if (!effService) {
+        if (cat === 'app' && (isSystemdService(svc) || isHostOrSystemUnit(svc))) return false
+        if (cat === 'systemd' && !isSystemdService(svc)) return false
+      }
 
       // 4. Effective Node matching
       if (effNode) {
@@ -186,6 +188,8 @@ export function useHistoricalLogSearch(
       // 5. Effective Service matching
       if (effService) {
         if (!matchesTarget(log, { service: effService })) return false
+      } else {
+        if (log.namespace && log.namespace.toLowerCase() === '__host__') return false
       }
 
       // 6. Level matching

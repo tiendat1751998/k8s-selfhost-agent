@@ -30,6 +30,7 @@ interface Props {
   activeService?: string
   hoverPauseEnabled?: boolean
   isHoverPaused?: boolean
+  showJournalctl?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -41,6 +42,7 @@ const props = withDefaults(defineProps<Props>(), {
   showErrorRadar: false,
   hoverPauseEnabled: true,
   isHoverPaused: false,
+  showJournalctl: false,
 })
 
 const emit = defineEmits<{
@@ -102,6 +104,7 @@ function setLevel(val: string) {
           :model-value="activeService"
           :services="services"
           :is-node-offline="isNodeOffline"
+          :show-journalctl="showJournalctl"
           @update:model-value="emit('update:activeService', $event)"
           @select="emit('update:activeService', $event)"
         />
@@ -239,6 +242,7 @@ function setLevel(val: string) {
           :model-value="activeService"
           :services="services"
           :is-node-offline="isNodeOffline"
+          :show-journalctl="showJournalctl"
           @update:model-value="emit('update:activeService', $event)"
           @select="emit('update:activeService', $event)"
         />
