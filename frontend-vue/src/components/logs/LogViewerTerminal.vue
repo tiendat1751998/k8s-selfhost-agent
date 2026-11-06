@@ -16,6 +16,8 @@ interface Props {
   hideServiceBadge?: boolean
   isTargetOffline?: boolean
   mode?: 'live' | 'historical'
+  showJournalctl?: boolean
+  activeService?: string
 }
 
 withDefaults(defineProps<Props>(), {
@@ -27,6 +29,8 @@ withDefaults(defineProps<Props>(), {
   hideServiceBadge: false,
   isTargetOffline: false,
   mode: 'live',
+  showJournalctl: false,
+  activeService: undefined,
 })
 
 
@@ -40,6 +44,8 @@ const emit = defineEmits<{
   (e: 'muteService', service: string): void
   (e: 'hoverChange', hovering: boolean): void
   (e: 'switchToHistory'): void
+  (e: 'selectJournalctl'): void
+  (e: 'select-journalctl'): void
 }>()
 
 const virtualTerminalRef = ref<InstanceType<typeof VirtualLogTerminal> | null>(null)
@@ -47,6 +53,11 @@ const virtualTerminalRef = ref<InstanceType<typeof VirtualLogTerminal> | null>(n
 function scrollToBottom() {
   virtualTerminalRef.value?.scrollToBottom()
   emit('scrollToBottom')
+}
+
+function handleSelectJournalctl() {
+  emit('select-journalctl')
+  emit('selectJournalctl')
 }
 
 defineExpose({
@@ -69,6 +80,8 @@ defineExpose({
     :hide-service-badge="hideServiceBadge"
     :is-target-offline="isTargetOffline"
     :mode="mode"
+    :show-journalctl="showJournalctl"
+    :active-service="activeService"
     @scroll="emit('scroll', $event)"
     @scroll-to-bottom="emit('scrollToBottom')"
     @register-terminal="emit('registerTerminal', $event)"
@@ -78,5 +91,6 @@ defineExpose({
     @mute-service="emit('muteService', $event)"
     @hover-change="emit('hoverChange', $event)"
     @switch-to-history="emit('switchToHistory')"
+    @select-journalctl="handleSelectJournalctl"
   />
 </template>

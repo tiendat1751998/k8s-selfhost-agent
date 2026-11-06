@@ -25,12 +25,20 @@ export async function resolve(specifier, context, nextResolve) {
 }
 `))
 
-interface ComponentMocks {
-  BaseIcon?: any
+function resolveFilePath(relativeFilePath: string): string {
+  const candidates = [
+    path.resolve(process.cwd(), relativeFilePath),
+    path.resolve(process.cwd(), 'frontend-vue', relativeFilePath),
+    path.resolve(process.cwd(), '..', relativeFilePath),
+  ]
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c
+  }
+  return path.resolve(process.cwd(), relativeFilePath)
 }
 
 function loadComponent(relativeFilePath: string, mocks: ComponentMocks = {}) {
-  const fullPath = path.resolve(process.cwd(), relativeFilePath)
+  const fullPath = resolveFilePath(relativeFilePath)
   let source = fs.readFileSync(fullPath, 'utf8')
 
   const { descriptor } = parse(source, { filename: path.basename(fullPath) })
@@ -61,7 +69,7 @@ function loadComponent(relativeFilePath: string, mocks: ComponentMocks = {}) {
   let jsCode = transpiled
   jsCode = jsCode.replace(/import\s+['\"][^'\"]+\.css['\"];?/g, '')
   jsCode = jsCode.replace(/import\s+BaseIcon\s+from\s+['\"][^'\"]+['\"];?/g, '')
-  jsCode = jsCode.replace(/import\s*\{[^}]*isSystemdService[^}]*\}\s*from\s*['\"][^'\"]+['\"];?/g, '')
+  jsCode = jsCode.replace(/import\s*\{[^}]*\}\s*from\s*['\"][^'\"]+logTargetCategorizer['\"];?/g, '')
   jsCode = jsCode.replace(/import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]vue['"];?/g, (_, imports) => {
     const mapped = imports
       .split(',')
@@ -75,10 +83,10 @@ function loadComponent(relativeFilePath: string, mocks: ComponentMocks = {}) {
   })
   jsCode = jsCode.replace(/export\s+default\s+/, 'return ')
 
-  const isSystemdServiceFn = (name?: string | null) => Boolean(name && (name.endsWith('.service') || name.endsWith('.socket')))
+  const isHostOrSystemUnitFn = (name?: string | null) => Boolean(name && (name.endsWith('.service') || name.endsWith('.socket') || name === 'cron.service' || name === 'kubelet.service'))
 
-  const factory = new Function('Vue', 'BaseIcon', 'isSystemdService', jsCode)
-  return factory(vueModule, mocks.BaseIcon || BaseIconStub, isSystemdServiceFn)
+  const factory = new Function('Vue', 'BaseIcon', 'isHostOrSystemUnit', jsCode)
+  return factory(vueModule, mocks.BaseIcon || BaseIconStub, isHostOrSystemUnitFn)
 }
 
 describe('Slice 75B: Compact Toolbar Node and App Selectors', () => {
@@ -208,10 +216,10 @@ describe('Slice 75B: Compact Toolbar Node and App Selectors', () => {
 
       const instance = vnode.component?.exposed || vnode.component?.setupState
       assert.ok(instance?.searchQuery !== undefined, 'Must expose searchQuery')
-      instance.searchQuery.value = 'cron'
+      instance.searchQuery.value = 'front'
       const filtered = instance.filteredServices.value || instance.filteredServices
       assert.equal(filtered.length, 1)
-      assert.equal(filtered[0], 'cron.service')
+      assert.equal(filtered[0], 'frontend-app')
     })
 
     it('5. Renders "Node offline" when node is offline and services list is empty', async () => {
@@ -225,7 +233,7 @@ describe('Slice 75B: Compact Toolbar Node and App Selectors', () => {
       assert.ok(html.includes('Node offline'), 'Must show "Node offline" empty message')
     })
 
-    it('6. Sorts regular apps before .service daemons', async () => {
+    it('6. Purges .service daemons and sorts regular apps alphabetically', async () => {
       const vnode = h(LogServiceCombobox, {
         modelValue: '',
         services: ['kubelet.service', 'postgres', 'cron.service', 'auth-api'],
@@ -234,7 +242,7 @@ describe('Slice 75B: Compact Toolbar Node and App Selectors', () => {
 
       const instance = vnode.component?.exposed || vnode.component?.setupState
       const sorted = instance.sortedServices.value || instance.sortedServices
-      assert.deepEqual(sorted, ['auth-api', 'postgres', 'cron.service', 'kubelet.service'])
+      assert.deepEqual(sorted, ['auth-api', 'postgres'])
     })
   })
 
@@ -243,35 +251,34 @@ describe('Slice 75B: Compact Toolbar Node and App Selectors', () => {
     type LogEntry = import('../src/stores/logStore.ts').LogEntry
     type LogTarget = import('../src/composables/useLogTargets.ts').LogTarget
 
-    it('1. Retains all discovered node services even when logs filter down to a single service (cron.service)', () => {
+    it('1. Retains all discovered pure node services even when logs filter down to a single service (redis-app)', () => {
       const target: LogTarget = { type: 'node', id: 'k8sworker', name: 'k8sworker' }
       const initialLogs: LogEntry[] = [
         { time: '2026-10-23T01:00:00Z', level: 'INFO', node: 'k8sworker', service: 'kubelet.service', msg: 'kubelet ready' },
         { time: '2026-10-23T01:00:01Z', level: 'INFO', node: 'k8sworker', service: 'k8s-agent.service', msg: 'agent started' },
-        { time: '2026-10-23T01:00:02Z', level: 'INFO', node: 'k8sworker', service: 'cron.service', msg: 'cron tick' },
-        { time: '2026-10-23T01:00:03Z', level: 'INFO', node: 'k8sworker', service: 'redis-server', msg: 'redis up' },
+        { time: '2026-10-23T01:00:02Z', level: 'INFO', node: 'k8sworker', service: 'redis-app', msg: 'redis up' },
+        { time: '2026-10-23T01:00:03Z', level: 'INFO', node: 'k8sworker', service: 'nginx-ingress', msg: 'ready' },
       ]
 
       const targets = useLogTargets({ modelValue: target, logs: initialLogs }, () => {})
-      const initialServices = targets.getNodeServices('k8sworker').map(s => s.name)
+      const initialServices = targets.getDiscoveredServicesForNode('k8sworker')
 
-      assert.ok(initialServices.includes('kubelet.service'), 'Must include kubelet.service')
-      assert.ok(initialServices.includes('cron.service'), 'Must include cron.service')
-      assert.ok(initialServices.includes('redis-server'), 'Must include redis-server')
+      assert.ok(!initialServices.includes('kubelet.service'), 'Must purge kubelet.service')
+      assert.ok(initialServices.includes('redis-app'), 'Must include redis-app')
+      assert.ok(initialServices.includes('nginx-ingress'), 'Must include nginx-ingress')
 
-      // Now simulate user selecting cron.service, which filters logStore.logs down to ONLY cron.service!
+      // Now simulate user selecting redis-app, which filters logStore.logs down to ONLY redis-app!
       const filteredLogs: LogEntry[] = [
-        { time: '2026-10-23T01:00:02Z', level: 'INFO', node: 'k8sworker', service: 'cron.service', msg: 'cron tick' },
+        { time: '2026-10-23T01:00:02Z', level: 'INFO', node: 'k8sworker', service: 'redis-app', msg: 'redis up' },
       ]
 
       const targetsAfterFilter = useLogTargets({ modelValue: target, logs: filteredLogs }, () => {})
-      const servicesAfterFilter = targetsAfterFilter.getNodeServices('k8sworker').map(s => s.name)
+      const servicesAfterFilter = targetsAfterFilter.getDiscoveredServicesForNode('k8sworker')
 
-      // CRITICAL ASSERTION: Zero wipe-out! All discovered services must remain!
-      assert.ok(servicesAfterFilter.includes('kubelet.service'), 'kubelet.service MUST NOT be wiped out!')
-      assert.ok(servicesAfterFilter.includes('k8s-agent.service'), 'k8s-agent.service MUST NOT be wiped out!')
-      assert.ok(servicesAfterFilter.includes('redis-server'), 'redis-server MUST NOT be wiped out!')
-      assert.ok(servicesAfterFilter.includes('cron.service'), 'cron.service must remain present!')
+      // CRITICAL ASSERTION: Zero wipe-out! All discovered pure services must remain!
+      assert.ok(servicesAfterFilter.includes('redis-app'), 'redis-app must remain present!')
+      assert.ok(servicesAfterFilter.includes('nginx-ingress'), 'nginx-ingress MUST NOT be wiped out!')
+      assert.ok(!servicesAfterFilter.includes('kubelet.service'), 'kubelet.service must remain purged!')
     })
 
     it('2. Does not leak services from other nodes to an offline node without services', () => {

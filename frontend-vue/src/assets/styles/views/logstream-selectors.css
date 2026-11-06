@@ -168,6 +168,11 @@
   color: var(--color-badge-agent-text);
   font-weight: 600;
 }
+.log-service-combobox-trigger.is-journalctl {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border-strong);
+  color: var(--color-endpoint-syntax);
+}
 .combobox-trigger-label {
   max-width: 130px;
   overflow: hidden;
@@ -276,3 +281,33 @@
 .combobox-option-item .opt-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .combobox-option-item .opt-check { color: var(--color-primary); flex-shrink: 0; }
 .combobox-empty-msg { padding: 12px 8px; text-align: center; font-size: 11px; color: var(--color-muted); }
+.combobox-divider {
+  height: 1px;
+  background: var(--color-border-subtle);
+  margin: 3px 6px;
+}
+.combobox-option-item .opt-badge {
+  font-size: 10px;
+  line-height: 1.2;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-muted);
+  font-weight: 500;
+  margin-left: auto;
+  margin-right: 4px;
+}
+.combobox-option-item.item-journalctl {
+  font-weight: 600;
+}
+.combobox-option-item .text-terminal {
+  color: var(--color-endpoint-syntax);
+}
+.combobox-no-apps-note {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--color-muted);
+  text-align: center;
+  font-style: italic;
+}

@@ -23,12 +23,15 @@ interface Props {
   hideServiceBadge?: boolean
   isTargetOffline?: boolean
   mode?: 'live' | 'historical'
+  showJournalctl?: boolean
+  activeService?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   isConnected: true, isPaused: false, autoScroll: true, isScrollLocked: false,
   targetName: 'cluster', latency: 0, wrapLines: true, rowHeight: 24,
   hoverPauseEnabled: true, hideServiceBadge: false, isTargetOffline: false, mode: 'live',
+  showJournalctl: false, activeService: undefined,
 })
 
 const emit = defineEmits<{
@@ -41,6 +44,8 @@ const emit = defineEmits<{
   (e: 'muteService', service: string): void
   (e: 'hoverChange', hovering: boolean): void
   (e: 'switchToHistory'): void
+  (e: 'selectJournalctl'): void
+  (e: 'select-journalctl'): void
 }>()
 
 const logStore = useLogStore()
@@ -132,6 +137,11 @@ function handleTraceClick(traceId: string) {
 function handleContextClick(entry: LogEntry) {
   emit('openContext', entry)
   logStore.openContextModal(entry)
+}
+
+function handleSelectJournalctl() {
+  emit('select-journalctl')
+  emit('selectJournalctl')
 }
 
 defineExpose({
@@ -264,7 +274,10 @@ defineExpose({
         :mode="mode"
         :target-name="targetName"
         :is-connected="isConnected"
+        :show-journalctl="showJournalctl"
+        :active-service="activeService"
         @switch-to-history="emit('switchToHistory')"
+        @select-journalctl="handleSelectJournalctl"
       />
     </div>
 

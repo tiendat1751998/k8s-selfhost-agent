@@ -1,12 +1,16 @@
 import { ref, computed, watch, onMounted } from 'vue'
+import { getActivePinia } from 'pinia'
 import type { LogEntry } from '../stores/logStore'
+import { useAuthStore } from '../stores/authStore'
 import { useInfraHosts } from './useInfraHosts'
 import { api } from '../api/client'
 import { getLogServices } from '../api/logging'
 import { dockerApi } from '../api/docker'
 import { k8sApi } from '../api/k8s'
-import { isNoiseLog, classifyLogTarget } from '../utils/logTargetCategorizer'
+import { isNoiseLog, classifyLogTarget, isHostOrSystemUnit } from '../utils/logTargetCategorizer'
 import { cleanLogMessage } from '../components/logs/virtualLogUtils'
+
+export { isHostOrSystemUnit } from '../utils/logTargetCategorizer'
 
 export interface LogTarget {
   type: 'service' | 'node' | 'all'
@@ -95,14 +99,14 @@ export function useLogTargets(
     const workloads: TargetWorkloadItem[] = []
 
     function addService(name?: string | null, defaultType?: string) {
-      if (!name || isNoiseLog(name) || foundNames.has(name.toLowerCase())) return
+      if (!name || isNoiseLog(name) || isHostOrSystemUnit(name) || foundNames.has(name.toLowerCase())) return
       foundNames.add(name.toLowerCase())
       const c = classifyLogTarget(name, defaultType)
       items.push({ id: name, name, icon: c.icon, type: c.type, category: c.category })
     }
 
     function addWorkload(name?: string | null, kind = 'Deployment', namespace?: string) {
-      if (!name || isNoiseLog(name)) return
+      if (!name || isNoiseLog(name) || isHostOrSystemUnit(name)) return
       const key = `wl:${name.toLowerCase()}`
       if (foundNames.has(key)) return
       foundNames.add(key)
@@ -119,7 +123,7 @@ export function useLogTargets(
             discoveredServicesByNode.value[nLower] = new Set()
           }
           for (const s of svcs) {
-            if (!isNoiseLog(s)) {
+            if (!isNoiseLog(s) && !isHostOrSystemUnit(s)) {
               discoveredServicesByNode.value[nLower].add(s)
               globalDiscoveredServices.value.add(s)
               addService(s)
@@ -129,7 +133,7 @@ export function useLogTargets(
       }
       if (res.services && Array.isArray(res.services)) {
         for (const s of res.services) {
-          if (!isNoiseLog(s)) {
+          if (!isNoiseLog(s) && !isHostOrSystemUnit(s)) {
             globalDiscoveredServices.value.add(s)
             addService(s)
           }
@@ -141,7 +145,7 @@ export function useLogTargets(
         const rawList = Array.isArray(res) ? res : (res?.targets || res?.services || [])
         for (const item of rawList) {
           const s = typeof item === 'string' ? item : (item as { name?: string })?.name || String(item)
-          if (!isNoiseLog(s)) {
+          if (!isNoiseLog(s) && !isHostOrSystemUnit(s)) {
             globalDiscoveredServices.value.add(s)
             addService(s)
           }
@@ -254,7 +258,9 @@ export function useLogTargets(
   }
 
   function getDiscoveredServicesForNode(nodeId?: string): string[] {
-    return getNodeServices(nodeId || '').map(s => s.name)
+    return getNodeServices(nodeId || '')
+      .map(s => s.name)
+      .filter(name => !isHostOrSystemUnit(name))
   }
 
   const dynamicServices = computed<TargetServiceItem[]>(() => getNodeServices('all'))
@@ -359,6 +365,18 @@ export function useLogTargets(
     return nodeServiceCounts.value.get(`${nodeId.toLowerCase()}::${serviceId.toLowerCase()}`) || 0
   }
 
+  const canViewJournalctl = computed(() => {
+    try {
+      if (!getActivePinia()) return false
+      return useAuthStore().user?.role === 'platform_admin'
+    } catch {
+      return false
+    }
+  })
+  const availableAppServices = computed<string[]>(() => {
+    return getDiscoveredServicesForNode(props.modelValue?.node || props.modelValue?.id || 'all')
+  })
+
   function autoSelectDefaultTarget() {
     if (props.modelValue && props.modelValue.type !== 'all' && props.modelValue.id && props.modelValue.id !== 'all') {
       return
@@ -401,5 +419,8 @@ export function useLogTargets(
     dynamicHostNodes,
     discoveredServicesByNode,
     globalDiscoveredServices,
+    canViewJournalctl,
+    availableAppServices,
+    isHostOrSystemUnit,
   }
 }
