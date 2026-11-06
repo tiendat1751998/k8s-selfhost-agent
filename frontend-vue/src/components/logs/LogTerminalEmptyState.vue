@@ -27,7 +27,6 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   (e: 'switchToHistory'): void
   (e: 'switch-to-history'): void
-  (e: 'selectJournalctl'): void
   (e: 'select-journalctl'): void
 }>()
 
@@ -41,7 +40,6 @@ function onSwitchToHistory() {
 }
 
 function onSwitchToJournalctl() {
-  emit('selectJournalctl')
   emit('select-journalctl')
 }
 

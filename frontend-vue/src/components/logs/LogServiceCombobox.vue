@@ -41,7 +41,7 @@ const matchesAllApps = computed(() => {
 const matchesJournalctl = computed(() => {
   if (!props.showJournalctl) return false
   const q = searchQuery.value.trim().toLowerCase()
-  return !q || 'journalctl'.includes(q) || 'system journal'.includes(q) || 'systemd'.includes(q) || 'system'.includes(q)
+  return !q || 'journalctl'.includes(q) || 'system journal'.includes(q) || q.includes('system') || q.includes('journal')
 })
 
 interface ComboboxOption {

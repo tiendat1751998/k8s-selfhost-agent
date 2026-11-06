@@ -12,6 +12,7 @@ import { parseWebSocketFrame, mapRawToLogEntry } from '../utils/logBatchParser'
 import { inferEffectiveLevel } from '../components/logs/virtualLogUtils'
 import { api } from '../api/client'
 import { useAuthStore } from './authStore'
+import { isHostOrSystemUnit } from '../utils/logTargetCategorizer'
 
 export interface LogEntry {
   time: string
@@ -46,8 +47,16 @@ export function matchesTarget(entry: LogEntry, opts: LogFilterOptions): boolean 
     if (!n.includes(q)) return false
   }
   const q = (opts.service || opts.container || opts.pod || '').toLowerCase()
-  if (!q) return true
+  if (!q) {
+    if ((entry.namespace && entry.namespace.toLowerCase() === '__host__') || ('service' in opts && isHostOrSystemUnit(entry.service || ''))) {
+      return false
+    }
+    return true
+  }
   const s = (entry.service || entry.container || '').toLowerCase()
+  if (q === 'journalctl' || q === 'systemd-journal') {
+    return (entry.namespace && entry.namespace.toLowerCase() === '__host__') || isHostOrSystemUnit(s) || s === 'journalctl'
+  }
   if (q === 'postgres_db' || q === 'postgres') {
     return s === 'postgres_db' || s === 'postgres' || s.startsWith('postgres')
   }

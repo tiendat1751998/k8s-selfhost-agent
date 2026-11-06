@@ -44,7 +44,6 @@ const emit = defineEmits<{
   (e: 'muteService', service: string): void
   (e: 'hoverChange', hovering: boolean): void
   (e: 'switchToHistory'): void
-  (e: 'selectJournalctl'): void
   (e: 'select-journalctl'): void
 }>()
 
@@ -57,7 +56,6 @@ function scrollToBottom() {
 
 function handleSelectJournalctl() {
   emit('select-journalctl')
-  emit('selectJournalctl')
 }
 
 defineExpose({

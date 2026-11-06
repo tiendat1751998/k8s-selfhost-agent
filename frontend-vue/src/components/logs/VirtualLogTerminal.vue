@@ -44,7 +44,6 @@ const emit = defineEmits<{
   (e: 'muteService', service: string): void
   (e: 'hoverChange', hovering: boolean): void
   (e: 'switchToHistory'): void
-  (e: 'selectJournalctl'): void
   (e: 'select-journalctl'): void
 }>()
 
@@ -57,23 +56,16 @@ const {
   isPinnedToBottom, isMobile, isHoverPaused, scrollToBottom,
   handleMouseEnter, handleMouseLeave,
 } = useVirtualLogScroll({
-  autoScroll: computed(() => props.autoScroll),
-  isScrollLocked: computed(() => props.isScrollLocked),
-  hoverPauseEnabled: computed(() => props.hoverPauseEnabled),
-  effectiveRowHeight,
-  logsCount: computed(() => coalescedLogs.value.length),
-  emitScroll: (e) => emit('scroll', e),
-  emitScrollToBottom: () => emit('scrollToBottom'),
-  emitHoverChange: (h) => emit('hoverChange', h),
+  autoScroll: computed(() => props.autoScroll), isScrollLocked: computed(() => props.isScrollLocked),
+  hoverPauseEnabled: computed(() => props.hoverPauseEnabled), effectiveRowHeight,
+  logsCount: computed(() => coalescedLogs.value.length), emitScroll: (e) => emit('scroll', e),
+  emitScrollToBottom: () => emit('scrollToBottom'), emitHoverChange: (h) => emit('hoverChange', h),
   emitRegisterTerminal: (el) => emit('registerTerminal', el),
 })
 
 const expandedStackTraces = ref<Record<number, boolean>>({})
 const expandedRowIndex = ref<number | null>(null)
-
-function toggleRowExpand(index: number) {
-  expandedRowIndex.value = expandedRowIndex.value === index ? null : index
-}
+function toggleRowExpand(index: number) { expandedRowIndex.value = expandedRowIndex.value === index ? null : index }
 
 function formatLevelBadge(lvl: string): string {
   const upper = (lvl || '').toUpperCase()
@@ -110,9 +102,7 @@ const visibleItems = computed(() => {
   })
 })
 
-function toggleStackTrace(index: number) {
-  expandedStackTraces.value[index] = !expandedStackTraces.value[index]
-}
+function toggleStackTrace(index: number) { expandedStackTraces.value[index] = !expandedStackTraces.value[index] }
 
 function handleTargetClick(e: MouseEvent | KeyboardEvent, log: LogEntry) {
   const svc = log.service || log.pod || log.container
@@ -139,10 +129,7 @@ function handleContextClick(entry: LogEntry) {
   logStore.openContextModal(entry)
 }
 
-function handleSelectJournalctl() {
-  emit('select-journalctl')
-  emit('selectJournalctl')
-}
+function handleSelectJournalctl() { emit('select-journalctl') }
 
 defineExpose({
   scrollToBottom,
