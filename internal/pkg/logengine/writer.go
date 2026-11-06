@@ -238,6 +238,12 @@ func (w *Writer) drainToBuilderLocked(batch []Entry) int {
 	var lastSvcID uint16
 	for i := 0; i < n; i++ {
 		e := &batch[i]
+		if w.redactor != nil {
+			e.Message = w.redactor.MaskString(e.Message)
+			if e.Raw != "" {
+				e.Raw = w.redactor.MaskString(e.Raw)
+			}
+		}
 		var svcID uint16
 		if e.Service == lastSvc && lastSvc != "" {
 			svcID = lastSvcID
@@ -278,6 +284,9 @@ func (w *Writer) Write(entry Entry) error {
 
 	if w.redactor != nil {
 		entry.Message = w.redactor.MaskString(entry.Message)
+		if entry.Raw != "" {
+			entry.Raw = w.redactor.MaskString(entry.Raw)
+		}
 	}
 	if w.ringBuf.Push(entry) {
 		return nil
@@ -304,6 +313,9 @@ func (w *Writer) WriteBatch(entries []Entry) error {
 		entry := entries[i]
 		if w.redactor != nil {
 			entry.Message = w.redactor.MaskString(entry.Message)
+			if entry.Raw != "" {
+				entry.Raw = w.redactor.MaskString(entry.Raw)
+			}
 		}
 		if !w.ringBuf.Push(entry) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -467,21 +479,3 @@ func (w *Writer) flushCurrentBlock() error {
 	return nil
 }
 
-// Close flushes all remaining items in the ring buffer, writes the final block, and stops flusher.
-func (w *Writer) Close() error {
-	w.closedMu.Lock()
-	if w.closed {
-		w.closedMu.Unlock()
-		return nil
-	}
-	w.closed = true
-	close(w.closeCh)
-	w.closedMu.Unlock()
-
-	w.wg.Wait()
-
-	w.closedMu.Lock()
-	w.sealActivePartLocked()
-	w.closedMu.Unlock()
-	return w.LastError()
-}

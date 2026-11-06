@@ -12,6 +12,7 @@ import (
 	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 	docker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 	infraLogging "github.com/datdt/k8sselfhost/internal/infrastructure/logging"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 // DistributedAgentLogRepo implements domainLogging.LogRepository by scattering queries
@@ -66,13 +67,7 @@ func (r *DistributedAgentLogRepo) TailLogs(ctx context.Context, filter domainLog
 func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLogging.LogFilter) (*domainLogging.LogSearchResult, error) {
 	var hosts []docker.ComputeHost
 	if r.hostRepo != nil {
-		var err error
-		if filter.TenantID != "" {
-			hosts, err = r.hostRepo.List(ctx, filter.TenantID)
-		}
-		if len(hosts) == 0 || err != nil {
-			hosts, _ = r.hostRepo.ListAll(ctx)
-		}
+		hosts, _ = resolveCandidateHosts(ctx, r.hostRepo, filter.TenantID)
 	}
 
 	// When filter.Attributes["node"] or filter.Attributes["node_name"] is specified,
@@ -125,19 +120,27 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 		searchReq.Limit += filter.Offset
 	}
 
-	if filter.Namespace != "" || filter.PodName != "" {
+	reqApp := filter.ContainerName
+	if reqApp == "" {
+		reqApp = filter.PodName
+	}
+	if reqApp == "" {
+		reqApp = filter.ServiceName
+	}
+
+	if domainLogging.IsJournalctlAlias(reqApp) {
+		// When querying journalctl, query edge agent unfiltered so all host units return
+		searchReq.App = ""
+		searchReq.PodName = ""
+		searchReq.ContainerName = ""
+		searchReq.Namespace = ""
+	} else if filter.Namespace != "" || filter.PodName != "" {
 		searchReq.Namespace = filter.Namespace
 		searchReq.PodName = filter.PodName
 		searchReq.ContainerName = filter.ContainerName
 	} else {
 		// Non-K8s systemd/docker nodes: preserve App fallback
-		searchReq.App = filter.ContainerName
-		if searchReq.App == "" {
-			searchReq.App = filter.PodName
-		}
-		if searchReq.App == "" {
-			searchReq.App = filter.ServiceName
-		}
+		searchReq.App = reqApp
 	}
 
 	var clusterEntries []domainLogging.LogEntry
@@ -211,6 +214,7 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 	allEntries := make([]domainLogging.LogEntry, 0, len(clusterEntries)+len(memEntries))
 	allEntries = append(allEntries, clusterEntries...)
 	allEntries = append(allEntries, memEntries...)
+	allEntries = filterSecurityLogEntries(ctx, allEntries, reqApp, filter.TenantID)
 
 	seen := make(map[string]bool, len(allEntries))
 	deduped := make([]domainLogging.LogEntry, 0, len(allEntries))
@@ -356,7 +360,7 @@ func (r *DistributedAgentLogRepo) ListServicesCatalog(ctx context.Context) ([]st
 	var hosts []docker.ComputeHost
 	if r.hostRepo != nil {
 		var err error
-		hosts, err = r.hostRepo.ListAll(ctx)
+		hosts, err = resolveCandidateHosts(ctx, r.hostRepo, tenancy.TenantIDFromContext(ctx))
 		if err != nil {
 			return []string{}, make(map[string][]string), nil
 		}
@@ -375,6 +379,7 @@ func (r *DistributedAgentLogRepo) ListServicesCatalog(ctx context.Context) ([]st
 
 	// Filter candidate hosts: must be online, have an endpoint, and not be in backoff cooldown
 	var candidates []docker.ComputeHost
+	onlineNodeKeys := make([]string, 0, len(hosts))
 	for _, h := range hosts {
 		endpoint := strings.TrimSpace(h.Endpoint)
 		if endpoint == "" { continue }
@@ -385,19 +390,23 @@ func (r *DistributedAgentLogRepo) ListServicesCatalog(ctx context.Context) ([]st
 		}
 		if r.logClient != nil && r.logClient.IsHostUnreachable(endpoint) { continue }
 		candidates = append(candidates, h)
+		hostKey := strings.TrimSpace(h.Name)
+		if hostKey == "" { hostKey = strings.TrimSpace(h.ID) }
+		if hostKey == "" { hostKey = strings.TrimSpace(h.Endpoint) }
+		onlineNodeKeys = append(onlineNodeKeys, hostKey)
 	}
 
 	if len(candidates) == 0 {
-		return []string{}, byNode, nil
+		services, nodeMap := sanitizeCatalogServices(ctx, byNode, nil)
+		return services, nodeMap, nil
 	}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
 	var (
-		mu         sync.Mutex
-		serviceSet = make(map[string]struct{})
-		wg         sync.WaitGroup
+		mu sync.Mutex
+		wg sync.WaitGroup
 	)
 
 	for _, h := range candidates {
@@ -446,20 +455,14 @@ func (r *DistributedAgentLogRepo) ListServicesCatalog(ctx context.Context) ([]st
 
 			mu.Lock()
 			byNode[hostKey] = cleaned
-			for _, s := range cleaned { serviceSet[s] = struct{}{} }
 			mu.Unlock()
 		}()
 	}
 
 	wg.Wait()
 
-	result := make([]string, 0, len(serviceSet))
-	for s := range serviceSet {
-		result = append(result, s)
-	}
-	sort.Strings(result)
-
-	return result, byNode, nil
+	services, nodeMap := sanitizeCatalogServices(ctx, byNode, onlineNodeKeys)
+	return services, nodeMap, nil
 }
 
 // ListServices queries active compute hosts via ListServicesCatalog,

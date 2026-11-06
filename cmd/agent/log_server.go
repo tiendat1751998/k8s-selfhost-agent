@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
 )
 
@@ -232,6 +233,11 @@ func (s *LogServer) HandleLogsErrors(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	app := q.Get("app")
 	if app == "" { app = q.Get("service") }
+	if domainLogging.IsSensitiveOSLogSource(app, "", "") {
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{"groups": []any{}, "count": 0})
+		return
+	}
 	level, limit := q.Get("level"), 100
 	if lStr := q.Get("limit"); lStr != "" {
 		if l, err := strconv.Atoi(lStr); err == nil && l > 0 { limit = l }
@@ -254,8 +260,15 @@ func (s *LogServer) HandleLogsErrors(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	filteredGroups := make([]logengine.ErrorGroup, 0, len(groups))
+	for _, g := range groups {
+		if !domainLogging.IsSensitiveOSLogSource(g.Service, "", "") {
+			filteredGroups = append(filteredGroups, g)
+		}
+	}
+
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]any{"groups": groups, "count": len(groups)})
+	_ = json.NewEncoder(w).Encode(map[string]any{"groups": filteredGroups, "count": len(filteredGroups)})
 }
 
 // ListServices returns all unique service names available across all log sources.
@@ -272,7 +285,7 @@ func (s *LogServer) ListServices(ctx context.Context) ([]string, error) {
 		}
 		for _, svc := range services {
 			svc = strings.TrimSpace(svc)
-			if svc != "" {
+			if svc != "" && !domainLogging.IsSensitiveOSLogSource(svc, "", "") {
 				serviceSet[svc] = true
 			}
 		}

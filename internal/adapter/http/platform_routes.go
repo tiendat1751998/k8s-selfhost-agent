@@ -210,8 +210,10 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 	}
 
 	// 8. Log Engine & Centralized Streaming
+	logReadRoles := mw.RBACMiddleware("platform_admin", "tenant_admin", "operator", "developer", "viewer", "logs:read", "logs:write")
+	logMutRoles := mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator", "logs:write")
 	if platform.CentralizedLogs != nil {
-		r.With(mw.RequestBodyLimit(10 << 20)).With(mw.RequireRolesForMutations("platform_admin", "tenant_admin", "operator", "logs:write")).Route("/logs", func(sub chi.Router) {
+		r.With(mw.RequestBodyLimit(10 << 20)).With(logReadRoles).With(logMutRoles).Route("/logs", func(sub chi.Router) {
 			if platform.LogStream != nil {
 				platform.CentralizedLogs.RegisterRoutes(skipStreamRouter{Router: sub})
 				sub.Get("/stream", platform.LogStream.ServeHTTP)
@@ -220,7 +222,7 @@ func RegisterPlatformRoutes(r chi.Router, platform *PlatformHandlers) {
 			}
 		})
 	} else if platform.LogStream != nil {
-		r.Get("/logs/stream", platform.LogStream.ServeHTTP)
+		r.With(logReadRoles).Get("/logs/stream", platform.LogStream.ServeHTTP)
 	}
 
 	// 9. SRE Resilience Suites & Mesh

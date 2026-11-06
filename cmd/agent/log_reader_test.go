@@ -136,6 +136,8 @@ func TestIsIgnoredLogFile(t *testing.T) {
 		{"btmp", true},
 		{"vmware-network.log", true},
 		{"vmware-network", true},
+		{"auth.log", true},
+		{"auth", true},
 
 		// Case variations
 		{"DPKG.LOG", true},
@@ -146,7 +148,6 @@ func TestIsIgnoredLogFile(t *testing.T) {
 		{"api-server.log", false},
 		{"web-frontend.log", false},
 		{"order-processing.log", false},
-		{"auth.log", false},
 		{"nginx.log", false},
 		{"postgres.log", false},
 		{"redis.log", false},

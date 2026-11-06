@@ -193,7 +193,7 @@ func TestLogStreamHandler_RemoteAgentRelay_ExtractsServiceTagWhenTargetServiceEm
 	aggregator := logging.NewLogAggregator(100)
 	streamer := &mockRemoteStreamer{
 		linesToEmit: []string{
-			"2026-09-14T10:15:30.123456789Z [user@1000.service] [INFO] Started Session 1 of user datdt.",
+			"2026-09-14T10:15:30.123456789Z [order-api] [INFO] Started Session 1 of user datdt.",
 		},
 	}
 
@@ -227,9 +227,9 @@ func TestLogStreamHandler_RemoteAgentRelay_ExtractsServiceTagWhenTargetServiceEm
 		if err := json.Unmarshal(msg, &entry); err == nil {
 			if strings.Contains(entry.Message, "Started Session 1 of user datdt.") {
 				foundEntry = true
-				assert.Equal(t, "user@1000.service", entry.Service)
-				assert.Equal(t, "user@1000.service", entry.Pod)
-				assert.Equal(t, "user@1000.service", entry.Container)
+				assert.Equal(t, "order-api", entry.Service)
+				assert.Equal(t, "order-api", entry.Pod)
+				assert.Equal(t, "order-api", entry.Container)
 				assert.Equal(t, "INFO", entry.Level)
 				assert.Equal(t, "http://remote-agent:9100", entry.Node)
 				break

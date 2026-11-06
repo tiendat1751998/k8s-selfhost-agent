@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
 )
 
@@ -58,6 +59,7 @@ type journalJSONEntry struct {
 	SystemdUnit       string `json:"_SYSTEMD_UNIT"`
 	SystemdUserUnit   string `json:"_SYSTEMD_USER_UNIT"`
 	SyslogIdentifier  string `json:"SYSLOG_IDENTIFIER"`
+	SyslogFacility    string `json:"SYSLOG_FACILITY"`
 	Comm              string `json:"_COMM"`
 	Priority          string `json:"PRIORITY"`
 }
@@ -158,6 +160,7 @@ func (j *JournalTailer) readStream(ctx context.Context, r io.Reader) {
 				Level:     entry.Level,
 				Message:   entry.Message,
 				Raw:       entry.Raw,
+				Namespace: domainLogging.HostNamespace,
 			})
 		}
 	}
@@ -170,6 +173,11 @@ func (j *JournalTailer) parseJournalLine(line string) (LogEntry, bool) {
 			strings.TrimSpace(je.SystemdUserUnit) == "k8s-agent.service" ||
 			strings.TrimSpace(je.SyslogIdentifier) == "k8s-agent" ||
 			strings.TrimSpace(je.Comm) == "k8s-agent" {
+			return LogEntry{}, false
+		}
+
+		if domainLogging.IsSensitiveOSLogSource(je.SystemdUnit, je.SyslogIdentifier, je.SyslogFacility) ||
+			domainLogging.IsSensitiveOSLogSource(je.SystemdUserUnit, je.Comm, je.SyslogFacility) {
 			return LogEntry{}, false
 		}
 
@@ -194,6 +202,10 @@ func (j *JournalTailer) parseJournalLine(line string) (LogEntry, bool) {
 			svc = "journald"
 		}
 
+		if domainLogging.IsSensitiveOSLogSource(svc, "", je.SyslogFacility) {
+			return LogEntry{}, false
+		}
+
 		lvl := priorityToLevel(je.Priority)
 		if lvl == "info" {
 			detected := detectLogLevel(je.Message)
@@ -202,16 +214,24 @@ func (j *JournalTailer) parseJournalLine(line string) (LogEntry, bool) {
 			}
 		}
 
-		return LogEntry{
+		humanEntry := LogEntry{
 			Timestamp: ts,
 			Service:   svc,
 			Level:     lvl,
 			Message:   je.Message,
-			Raw:       line,
-		}, true
+			Namespace: domainLogging.HostNamespace,
+		}
+		humanEntry.Raw = formatLogEntry(humanEntry)
+
+		return humanEntry, true
 	}
 
-	return parseLogLine(line, "journald"), true
+	fallback := parseLogLine(line, "journald")
+	if domainLogging.IsSensitiveOSLogSource(fallback.Service, "", "") {
+		return LogEntry{}, false
+	}
+	fallback.Namespace = domainLogging.HostNamespace
+	return fallback, true
 }
 
 func priorityToLevel(p string) string {

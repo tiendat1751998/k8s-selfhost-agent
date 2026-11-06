@@ -15,6 +15,9 @@ const (
 	PatternAPIKey           SecretPatternType = "API_KEY"
 	PatternPasswordKeyValue SecretPatternType = "PASSWORD_KEY_VALUE"
 	PatternPrivateKey       SecretPatternType = "PRIVATE_KEY"
+	PatternCLIFlag          SecretPatternType = "CLI_FLAG"
+	PatternCLIPFlag         SecretPatternType = "CLI_P_FLAG"
+	PatternCLICurl          SecretPatternType = "CLI_CURL"
 )
 
 // RedactionRule holds a pre-compiled regex and its replacement for stream masking.
@@ -36,7 +39,7 @@ type InStreamRedactor struct {
 // NewInStreamRedactor constructs an InStreamRedactor with pre-compiled automata rules.
 func NewInStreamRedactor() *InStreamRedactor {
 	r := &InStreamRedactor{
-		rules:      make([]RedactionRule, 0, 8),
+		rules:      make([]RedactionRule, 0, 12),
 		triggerMap: make(map[byte][]int),
 	}
 	defaultRules := []RedactionRule{
@@ -45,6 +48,9 @@ func NewInStreamRedactor() *InStreamRedactor {
 		{Type: PatternAPIKey, Regex: regexp.MustCompile(`(?i)(sk_live_|ghp_|glpat-|xoxb-)[a-zA-Z0-9_\-]{16,}`), Replacement: []byte(`$1[REDACTED_API_KEY]`), triggers: []string{"sk_live_", "ghp_", "glpat-", "xoxb-"}},
 		{Type: PatternPasswordKeyValue, Regex: regexp.MustCompile(`(?i)("(?:password|secret|token|api_key|access_key)"\s*:\s*")[^"]+(")`), Replacement: []byte(`$1[REDACTED_SECRET]$2`), triggers: []string{"\"password\"", "\"secret\"", "\"token\"", "\"api_key\"", "\"access_key\""}},
 		{Type: PatternPrivateKey, Regex: regexp.MustCompile(`(?s)-----BEGIN [A-Z ]+PRIVATE KEY-----.*?-----END [A-Z ]+PRIVATE KEY-----`), Replacement: []byte(`[REDACTED_PRIVATE_KEY]`), triggers: []string{"BEGIN"}},
+		{Type: PatternCLIFlag, Regex: regexp.MustCompile(`(?i)(--(?:password|passwd|token|secret|api-key|client-secret)[=\s]+)\S+`), Replacement: []byte(`$1[REDACTED_SECRET]`), triggers: []string{"--password", "--passwd", "--token", "--secret", "--api-key", "--client-secret"}},
+		{Type: PatternCLIPFlag, Regex: regexp.MustCompile(`(^|\s)(-p\s+)\S+`), Replacement: []byte(`$1$2[REDACTED_SECRET]`), triggers: []string{"-p"}},
+		{Type: PatternCLICurl, Regex: regexp.MustCompile(`(?i)(curl\s+.*?-u\s+)[^\s"']+`), Replacement: []byte(`$1[REDACTED_SECRET]`), triggers: []string{"curl"}},
 	}
 	for _, rule := range defaultRules {
 		r.AddRule(rule)
@@ -98,7 +104,7 @@ func (r *InStreamRedactor) MaskBytes(line []byte) []byte {
 	if len(line) == 0 {
 		return line
 	}
-	var matchedIndices [16]int
+	var matchedIndices [32]int
 	matchCount := 0
 	for i := range r.rules {
 		if ruleTriggeredBytes(&r.rules[i], line) {

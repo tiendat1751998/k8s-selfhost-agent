@@ -205,6 +205,11 @@ func (h *LogHandler) HandleSearch(w http.ResponseWriter, r *http.Request) {
 		filter.Attributes["node"] = nodeParam
 	}
 
+	if code, msg := CheckLogAccessRBAC(r.Context(), filter.Namespace, filter.ServiceName); code != 0 {
+		writeError(w, code, msg, nil)
+		return
+	}
+
 	if aliases := getContainerAliases(filter.ContainerName); len(aliases) > 1 {
 		writeJSON(w, http.StatusOK, queryAliases(r.Context(), h.service, filter, aliases))
 		return
@@ -265,6 +270,10 @@ func (h *LogHandler) HandleHistogram(w http.ResponseWriter, r *http.Request) {
 		if filter.Attributes == nil { filter.Attributes = make(map[string]string) }
 		filter.Attributes["node"] = nodeParam
 	}
+	if code, msg := CheckLogAccessRBAC(r.Context(), filter.Namespace, filter.ServiceName); code != 0 {
+		writeError(w, code, msg, nil)
+		return
+	}
 	buckets, err := h.service.GetHistogram(r.Context(), filter, intervalSeconds)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to get histogram", err)
@@ -280,6 +289,12 @@ func (h *LogHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "logging service unavailable", nil)
 		return
 	}
+	q := r.URL.Query()
+	streamSvc := firstNonEmpty(q.Get("service"), q.Get("app"), q.Get("container_name"), q.Get("container"))
+	if code, msg := CheckLogAccessRBAC(r.Context(), q.Get("namespace"), streamSvc); code != 0 {
+		writeError(w, code, msg, nil)
+		return
+	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logger.Get().Error("failed to upgrade websocket connection", zap.Error(err))
@@ -290,7 +305,6 @@ func (h *LogHandler) HandleStream(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	q := r.URL.Query()
 	logLevel, _ := parseLogLevelParam(q, "log_level")
 	filter := logging.LogFilter{
 		TenantID:      resolveTenant(r.Context(), r),
@@ -371,19 +385,8 @@ func (h *LogHandler) HandleGetServices(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list services", err)
 		return
 	}
-	if allServices == nil {
-		allServices = []string{}
-	}
-	if byNode == nil {
-		byNode = make(map[string][]string)
-	}
-	for k, v := range byNode {
-		if v == nil {
-			byNode[k] = []string{}
-		}
-	}
 
-	services := allServices
+	services, byNode := SanitizeServicesCatalog(r.Context(), allServices, byNode)
 	node := strings.TrimSpace(r.URL.Query().Get("node"))
 	if node != "" && !strings.EqualFold(node, "all") {
 		matched := false
@@ -417,6 +420,10 @@ func (h *LogHandler) HandleSurroundingContext(w http.ResponseWriter, r *http.Req
 	}
 	q := r.URL.Query()
 	service := firstNonEmpty(q.Get("service"), q.Get("container"), q.Get("pod"))
+	if code, msg := CheckLogAccessRBAC(r.Context(), "", service); code != 0 {
+		writeError(w, code, msg, nil)
+		return
+	}
 	tsStr := q.Get("timestamp")
 	if tsStr == "" {
 		writeError(w, http.StatusBadRequest, "timestamp parameter is required", nil)

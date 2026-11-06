@@ -268,7 +268,7 @@ func TestDistributedAgentLogRepo_SummarizeErrors_KlogSeverityNormalization(t *te
 	}
 
 	repo := agent.NewDistributedAgentLogRepo(hostRepo, mockClient)
-	groups, err := repo.SummarizeErrors(context.Background(), domainLogging.LogFilter{Limit: 10})
+	groups, err := repo.SummarizeErrors(context.Background(), domainLogging.LogFilter{Limit: 10, ContainerName: "kubelet"})
 	if err != nil {
 		t.Fatalf("SummarizeErrors failed: %v", err)
 	}
@@ -357,7 +357,7 @@ func TestDistributedAgentLogRepo_SummarizeErrors_KlogGroupingAndFingerprinting(t
 	}
 
 	repo := agent.NewDistributedAgentLogRepo(hostRepo, client)
-	groups, err := repo.SummarizeErrors(context.Background(), domainLogging.LogFilter{Limit: 20})
+	groups, err := repo.SummarizeErrors(context.Background(), domainLogging.LogFilter{Limit: 20, ContainerName: "kubelet.service"})
 	if err != nil {
 		t.Fatalf("SummarizeErrors failed: %v", err)
 	}

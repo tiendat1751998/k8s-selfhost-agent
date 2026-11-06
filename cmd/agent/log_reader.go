@@ -21,6 +21,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 
+	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 	"github.com/datdt/k8sselfhost/internal/pkg/logengine"
 )
 
@@ -185,6 +186,9 @@ func isIgnoredLogFile(name string) bool {
 		return true
 	}
 	base := strings.TrimSuffix(clean, ".log")
+	if domainLogging.IsSensitiveOSLogSource(base, "", "") || domainLogging.IsSensitiveOSLogSource(clean, "", "") {
+		return true
+	}
 	if _, ok := ignoredOSServices[base]; ok {
 		return true
 	}
@@ -290,7 +294,7 @@ func (f *FileLogSource) IngestToWriter(ctx context.Context, w *logengine.Writer)
 			for _, line := range lines {
 				entry := parseLogLine(line, svcName)
 				if err := w.Write(logengine.Entry{
-					Timestamp: entry.Timestamp, Service: entry.Service, Level: entry.Level, Message: entry.Message, Raw: entry.Raw,
+					Timestamp: entry.Timestamp, Service: entry.Service, Level: entry.Level, Message: entry.Message, Raw: entry.Raw, Namespace: domainLogging.HostNamespace,
 				}); err != nil {
 					writeErrors++
 				}
@@ -344,7 +348,7 @@ func newJournalctlLogSource() *JournalctlLogSource {
 func (j *JournalctlLogSource) ListServices(_ context.Context) ([]string, error) { return nil, nil }
 
 func (j *JournalctlLogSource) GetLogs(ctx context.Context, app string, tail int, sinceTime, untilTime *time.Time, query string, level string) ([]LogEntry, error) {
-	if !j.available || app == "" {
+	if !j.available || app == "" || domainLogging.IsSensitiveOSLogSource(app, "", "") {
 		return nil, nil
 	}
 	args := []string{"-u", app, "--no-pager", "-o", "short-iso"}

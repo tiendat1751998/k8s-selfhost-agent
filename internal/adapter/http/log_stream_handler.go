@@ -180,6 +180,19 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	level := query.Get("level")
 	keyword := firstNonEmpty(query.Get("keyword"), query.Get("query"), query.Get("search_text"), query.Get("q"))
 
+	targetService := service
+	if targetService == "" {
+		targetService = container
+	}
+	if targetService == "" {
+		targetService = pod
+	}
+
+	if code, msg := CheckLogAccessRBAC(r.Context(), namespace, targetService); code != 0 {
+		http.Error(w, msg, code)
+		return
+	}
+
 	tenantID := resolveTenant(r.Context(), r)
 	if tenancy.UserRoleFromContext(r.Context()) == "platform_admin" {
 		reqTenant := firstNonEmpty(r.Header.Get("X-Tenant-ID"), query.Get("tenant_id"), query.Get("tenant"))
@@ -206,14 +219,6 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
-
-	targetService := service
-	if targetService == "" {
-		targetService = container
-	}
-	if targetService == "" {
-		targetService = pod
-	}
 
 	filter := logging.LogFilter{
 		TenantID:  tenantID,
@@ -261,10 +266,21 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 					cleanMsg = rest
 				}
+				if domainLogging.IsSensitiveOSLogSource(svc, "", "") {
+					return
+				}
+				entryTenantID := tenantID
+				entryNS := namespace
+				if domainLogging.IsHostSystemLog(namespace, svc) {
+					if entryNS == "" { entryNS = domainLogging.HostNamespace }
+					if !isPlatformAdmin(r.Context()) {
+						entryTenantID = ""
+					}
+				}
 				h.aggregator.Ingest(logging.LogEntry{
 					Timestamp: entryTS,
-					TenantID:  tenantID,
-					Namespace: namespace,
+					TenantID:  entryTenantID,
+					Namespace: entryNS,
 					Pod:       svc,
 					Container: svc,
 					Service:   svc,
