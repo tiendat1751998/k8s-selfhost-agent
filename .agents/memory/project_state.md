@@ -1,7 +1,8 @@
-# Project State — Checkpoint 2026-11-05 (Task 075: Full-Width Logs Terminal & Compact Toolbar `[Node ▾]` + Searchable `[App ▾]` Combobox Completed)
+# Project State — Checkpoint 2026-11-06 (Task 076: Multi-Tenant Log Security Hardening & Admin-Only `journalctl` Consolidation Completed)
 
 ## Branch: `feat/declone-sre-ux`
 ## Completed Tasks:
+- [`.agents/tasks/076-journalctl-consolidation-and-log-security-hardening.md`](../tasks/076-journalctl-consolidation-and-log-security-hardening.md) (`COMPLETED` — `73c899ec`)
 - [`.agents/tasks/075-logs-compact-toolbar-selectors.md`](../tasks/075-logs-compact-toolbar-selectors.md) (`COMPLETED` — `86c7ef65`)
 - [`.agents/tasks/074-logs-pipeline-and-ui-remediation.md`](../tasks/074-logs-pipeline-and-ui-remediation.md) (`COMPLETED` — `a1a2b726`)
 - [`.agents/tasks/073-zero-blindspot-16-screen-polish.md`](../tasks/073-zero-blindspot-16-screen-polish.md) (`COMPLETED` — `6b1c3e85`)
@@ -14,17 +15,14 @@
 ---
 
 ## 0. Runtime & Deployment Reality
-- **Physical Fleet State (`2026-11-05`)**: `10.10.10.133` (`k8smater133`, `46` services) and `10.10.10.80` (`k8sworker`, `39` services) are online (`:9100` LogEngine + PostgreSQL `10.10.10.133:5432` healthy); `10.10.10.60` (`k8smasterdeb`) VM is physically powered off and gracefully fast-failed in `<= 10ms` (`15s` `HostBackoffManager` cooldown, `"k8smasterdeb": []` in `/logs/services`).
-- **Active Local Ports**: Central Server (`bin/standalone.exe` at `86c7ef65` serving freshly built `frontend-vue/dist`) running on `:8080`, Frontend Vite Dev running on `:3000`.
-- **Binding 5-Gate Zero-Theater DoD (`LES-012` & `LES-013`)**: `463/463` genuine behavioral frontend tests pass across `151` suites (`0` `fs.readFileSync` regex theater) + Go HTTP/middleware/agent/logging/logengine suites `100%` PASS.
+- **Physical Fleet State (`2026-11-06`)**: `10.10.10.133` (`k8smater133`, 8 pure app containers + `journalctl`) and `10.10.10.80` (`k8sworker`, bare-metal K8s worker with `journalctl`) are online (`:9100` LogEngine + PostgreSQL `10.10.10.133:5432` healthy); `10.10.10.60` (`k8smasterdeb`) VM is physically powered off and gracefully fast-failed via `HostBackoffManager`. Static Linux `./k8s-agent` binary is freshly built (`9.96 MB`) for `./deploy-agent.sh <user>@<ip>` when operator SSH keys are loaded; control-plane read/stream filters enforce 100% security & compatibility even against pre-rollout `:9100` agents.
+- **Active Local Ports**: Central Server (`bin/standalone.exe` serving freshly built `frontend-vue/dist`) running on `:8080`, Frontend Vite Dev running on `:3000`.
+- **Binding 5-Gate Zero-Theater DoD (`LES-012`..`LES-014`)**: `492/492` genuine behavioral frontend tests pass across `165` suites (`0` `fs.readFileSync` regex theater) + Go `domain/logging`, `pkg/logengine`, `infrastructure/logging`, `infrastructure/agent`, `adapter/http`, `cmd/agent` suites `100%` PASS.
 
 ---
 
-## 1. Security, Middleware & Log Pipeline Status (`reviewer` & `security-engineer` APPROVED)
-- **GitHub-Grade Middleware & Spoof-Safe Streaming (`1ccf0647` + `a688949d`)**: `isVerifiedStreamingEndpoint(r)` enforces `GET` + verified streaming routes, blocking header-spoofed rate-limit bypasses (`429`); `POST /api/v1/logs/ingest` & `/api/v1/metrics/ingest` are exempted via exact path match and accept `AGENT_AUTH_TOKEN`.
-- **Node-Scoped Service Discovery & `klog` Normalization (`a688949d` + `46f9bc35` + `714a5011`)**: `GET /api/v1/logs/services` returns per-node `by_node` map and supports `?node=<host>` without cross-node leakage; `NormalizeLogLevel` & `FingerprintError` classify and group Google `klog` (`E\d{4}` / `F\d{4}`) errors across `Search`, `Stream`, `Histogram`, and `Blind Error Radar`.
-
----
-
-## 2. Full-Width `/logs` Toolbar UX (`86c7ef65`)
-- **Zero Sidebar Bloat & Zero Service Wipe-Out**: Purged `LogTargetTree.vue`, `LogTargetServicesSection.vue`, `LogTargetItem.vue`, and `logstream-tree.css` (`-44.5 kB` CSS), reclaiming 100% screen width for `VirtualLogTerminal.vue`. Replaced with compact 32px toolbar `LogNodeDropdown.vue` (`[Node ▾]`) and searchable `LogServiceCombobox.vue` (`[App ▾]` with instant substring search, keyboard navigation, 1-click `×` clear, and persistent per-node catalog in `useLogTargets.ts` so selecting `cron.service` never hides sibling services).
+## 1. Log Security, Multi-Tenant RBAC & `journalctl` Consolidation (`73c899ec` — `security-engineer` & `reviewer` APPROVED)
+- **Zero OS Auth/Kernel Log Exposure**: `internal/domain/logging/source_policy.go` (`IsSensitiveOSLogSource`) unconditionally blocks `auth`, `auth.log`, `authpriv`, `secure`, `sshd`, `sudo`, `su`, `polkit`, `shadow`, `pam`, `systemd-logind`, `kern`, `kern.log`, `dmesg`, `auditd`, `btmp`, `wtmp`, `lastlog`, `faillog` (`403 Forbidden` for ALL roles including `platform_admin`, dropped at both edge ingest and control-plane read/WebSocket layers).
+- **Strict `platform_admin` Gating & Zero Tenant Laundering**: `internal/adapter/http/log_rbac.go` + `distributed_log_filter.go` restrict `journalctl`, `__host__`, and all host `systemd`/OS daemons (`*.service`, `kubelet`, `dockerd-rootless.sh`, `fwupd`, etc.) strictly to `platform_admin` (`403 Forbidden` for `viewer`/`developer`/`operator`/`tenant_admin`); eliminated `hostRepo.ListAll(ctx)` fallback and `TenantID` re-stamping for non-admin tenants.
+- **Dual `Message` + `Raw` + CLI Credential Redaction**: `internal/pkg/logengine/redact.go` & `writer.go` + `processRemoteStreamLine` redact secrets across `Message`, `Raw`, and live WebSocket frames (including `-p`, `--password=`, `--token=`, `--secret=`, `--api-key=`, `curl -u user:pass`).
+- **Pure `[All Apps ▾]` + Single Admin-Only `[journalctl · System Journal]`**: Consolidated 35+ host systemd units into 1 separated `journalctl` option in `LogServiceCombobox.vue` (shown only to `platform_admin`), preserved `[unit.service]` badges on `journalctl` rows, added bounded pure-app backfill (`backfillPureAppLogs` + `seedRecentLogs`) so noisy daemons never starve quiet containers (`db`, `my-nginx`, `nats`, `tiki_redis`), and preserved `/deployments` `Daemon Logs` for `platform_admin`.

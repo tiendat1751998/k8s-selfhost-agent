@@ -378,7 +378,7 @@ export function useLogTargets(
   })
 
   function autoSelectDefaultTarget() {
-    if (props.modelValue && props.modelValue.type !== 'all' && props.modelValue.id && props.modelValue.id !== 'all') {
+    if (props.modelValue && props.modelValue.id) {
       return
     }
     if (dynamicWorkloads.value.length > 0) {
