@@ -124,7 +124,7 @@ func TestLogServer_HandleTailLogs_StreamsFromEngine(t *testing.T) {
 
 	_ = engineSrc.Writer().Write(logengine.Entry{
 		Timestamp: time.Now().UTC(),
-		Service:   "user@1000.service",
+		Service:   "order-api",
 		Level:     "info",
 		Message:   "Engine stream tail test",
 	})
@@ -134,7 +134,7 @@ func TestLogServer_HandleTailLogs_StreamsFromEngine(t *testing.T) {
 
 	t.Run("streams SSE for specific service from engine", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		req := httptest.NewRequest(http.MethodGet, "/logs/tail?service=user@1000.service&tail=10", nil).WithContext(ctx)
+		req := httptest.NewRequest(http.MethodGet, "/logs/tail?service=order-api&tail=10", nil).WithContext(ctx)
 		rec := httptest.NewRecorder()
 
 		// Cancel after short delay to break polling loop
@@ -148,7 +148,7 @@ func TestLogServer_HandleTailLogs_StreamsFromEngine(t *testing.T) {
 			t.Errorf("expected Content-Type text/event-stream, got %q", ct)
 		}
 		body := rec.Body.String()
-		if !contains(body, "user@1000.service") || !contains(body, "Engine stream tail test") {
+		if !contains(body, "order-api") || !contains(body, "Engine stream tail test") {
 			t.Errorf("expected body to contain service and message, got: %s", body)
 		}
 	})

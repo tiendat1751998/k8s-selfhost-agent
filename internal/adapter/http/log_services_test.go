@@ -100,11 +100,11 @@ func TestLogHandler_ServicesRoute_CatalogAndNodeFiltering(t *testing.T) {
 			t.Fatalf("expected non-nil fields in response, got services=%v, targets=%v, by_node=%v", resp.Services, resp.Targets, resp.ByNode)
 		}
 
-		if len(resp.Services) != 5 {
-			t.Errorf("expected 5 services, got %d: %v", len(resp.Services), resp.Services)
+		if len(resp.Services) != 2 {
+			t.Errorf("expected 2 services for viewer, got %d: %v", len(resp.Services), resp.Services)
 		}
-		if len(resp.Targets) != 5 {
-			t.Errorf("expected 5 targets, got %d: %v", len(resp.Targets), resp.Targets)
+		if len(resp.Targets) != 2 {
+			t.Errorf("expected 2 targets for viewer, got %d: %v", len(resp.Targets), resp.Targets)
 		}
 		if len(resp.ByNode) != 3 {
 			t.Errorf("expected 3 nodes in by_node, got %d: %v", len(resp.ByNode), resp.ByNode)
@@ -114,8 +114,8 @@ func TestLogHandler_ServicesRoute_CatalogAndNodeFiltering(t *testing.T) {
 		}
 	})
 
-	// 2. GET /api/v1/logs/services?node=k8sworker -> scoped to k8sworker
-	t.Run("Scoped services for k8sworker", func(t *testing.T) {
+	// 2. GET /api/v1/logs/services?node=k8sworker -> scoped to k8sworker (host units stripped for viewer)
+	t.Run("Scoped services for k8sworker (viewer has 0 app services on k8sworker)", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/logs/services?node=k8sworker", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		w := httptest.NewRecorder()
@@ -130,14 +130,11 @@ func TestLogHandler_ServicesRoute_CatalogAndNodeFiltering(t *testing.T) {
 			t.Fatalf("failed decoding json: %v", err)
 		}
 
-		if len(resp.Services) != 3 {
-			t.Fatalf("expected 3 services for k8sworker, got %d: %v", len(resp.Services), resp.Services)
+		if len(resp.Services) != 0 {
+			t.Fatalf("expected 0 services for k8sworker for viewer (all were host units), got %d: %v", len(resp.Services), resp.Services)
 		}
-		if resp.Services[0] != "cron.service" || resp.Services[1] != "k8s-agent.service" || resp.Services[2] != "kubelet.service" {
-			t.Errorf("unexpected services for k8sworker: %v", resp.Services)
-		}
-		if len(resp.Targets) != 3 {
-			t.Errorf("expected 3 targets for k8sworker, got %d: %v", len(resp.Targets), resp.Targets)
+		if len(resp.Targets) != 0 {
+			t.Errorf("expected 0 targets for k8sworker for viewer, got %d: %v", len(resp.Targets), resp.Targets)
 		}
 		if len(resp.ByNode) != 3 {
 			t.Errorf("expected full by_node catalog retained, got %d", len(resp.ByNode))
@@ -177,8 +174,8 @@ func TestLogHandler_ServicesRoute_CatalogAndNodeFiltering(t *testing.T) {
 		}
 	})
 
-	// 4. GET /api/v1/logs/services?node=all -> returns merged
-	t.Run("Explicit node=all returns all services", func(t *testing.T) {
+	// 4. GET /api/v1/logs/services?node=all -> returns merged apps for viewer
+	t.Run("Explicit node=all returns pure app services for viewer", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/logs/services?node=all", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		w := httptest.NewRecorder()
@@ -193,15 +190,16 @@ func TestLogHandler_ServicesRoute_CatalogAndNodeFiltering(t *testing.T) {
 			t.Fatalf("failed decoding json: %v", err)
 		}
 
-		if len(resp.Services) != 5 {
-			t.Errorf("expected 5 services for node=all, got %d", len(resp.Services))
+		if len(resp.Services) != 2 {
+			t.Errorf("expected 2 app services for node=all, got %d: %v", len(resp.Services), resp.Services)
 		}
 	})
 
-	// 5. GET /api/v1/logs/targets?node=k8sworker -> verifies /targets alias
-	t.Run("Targets route alias supports node param", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/logs/targets?node=k8sworker", nil)
-		req.Header.Set("Authorization", "Bearer "+token)
+	// 5. Platform Admin sees consolidated journalctl once
+	t.Run("Platform admin sees journalctl consolidated target", func(t *testing.T) {
+		adminToken, _ := middleware.GenerateAccessToken("admin-user", "platform_admin", "tenant-1")
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/logs/services", nil)
+		req.Header.Set("Authorization", "Bearer "+adminToken)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -214,11 +212,22 @@ func TestLogHandler_ServicesRoute_CatalogAndNodeFiltering(t *testing.T) {
 			t.Fatalf("failed decoding json: %v", err)
 		}
 
-		if len(resp.Targets) != 3 || len(resp.Services) != 3 {
-			t.Errorf("expected 3 targets/services for /targets?node=k8sworker, got %d/%d", len(resp.Targets), len(resp.Services))
+		// auth-svc, cart-svc, journalctl
+		if len(resp.Services) != 3 {
+			t.Errorf("expected 3 services for platform_admin (including journalctl), got %d: %v", len(resp.Services), resp.Services)
 		}
-		if len(resp.ByNode) != 3 {
-			t.Errorf("expected by_node returned on /targets route")
+		hasJournalctl := false
+		for _, s := range resp.Services {
+			if s == "journalctl" {
+				hasJournalctl = true
+				break
+			}
+		}
+		if !hasJournalctl {
+			t.Errorf("expected journalctl in services for platform_admin")
+		}
+		if len(resp.ByNode["k8sworker"]) != 1 || resp.ByNode["k8sworker"][0] != "journalctl" {
+			t.Errorf("expected k8sworker to have [journalctl] for platform_admin, got: %v", resp.ByNode["k8sworker"])
 		}
 	})
 }

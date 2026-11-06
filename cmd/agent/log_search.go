@@ -12,8 +12,40 @@ import (
 	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 )
 
+// filterEntrySecurity drops sensitive OS sources, filters host logs for All Apps, and retains host logs for journalctl.
+func filterEntrySecurity(entries []LogEntry, app string) []LogEntry {
+	filtered := make([]LogEntry, 0, len(entries))
+	isJournalctl := domainLogging.IsJournalctlAlias(app)
+	isAllApps := strings.TrimSpace(app) == ""
+
+	for _, e := range entries {
+		if domainLogging.IsSensitiveOSLogSource(e.Service, "", "") ||
+			domainLogging.IsSensitiveOSLogSource(e.ContainerName, "", "") {
+			continue
+		}
+		if isJournalctl {
+			if domainLogging.IsHostSystemLog(e.Namespace, e.Service) {
+				filtered = append(filtered, e)
+			}
+			continue
+		}
+		if isAllApps {
+			if !domainLogging.IsHostSystemLog(e.Namespace, e.Service) {
+				filtered = append(filtered, e)
+			}
+			continue
+		}
+		filtered = append(filtered, e)
+	}
+	return filtered
+}
+
 // QueryLogs queries logs across sources matching the given filters.
 func (s *LogServer) QueryLogs(ctx context.Context, app string, tail int, sinceStr, untilStr, query, level string, k8sMeta ...string) ([]LogEntry, error) {
+	if domainLogging.IsSensitiveOSLogSource(app, "", "") {
+		return nil, nil
+	}
+
 	s.mu.RLock()
 	eng := s.engineSrc
 	sources := s.sources
@@ -35,9 +67,14 @@ func (s *LogServer) QueryLogs(ctx context.Context, app string, tail int, sinceSt
 		return nil, fmt.Errorf("invalid until parameter: %w", err)
 	}
 
+	queryApp := app
+	if domainLogging.IsJournalctlAlias(app) {
+		queryApp = ""
+	}
+
 	// Instant retrieval via embedded columnar engine using Bloom filter & sparse primary index
 	if eng != nil {
-		entries, err := eng.GetLogsWithK8s(ctx, app, tail, sinceTime, untilTime, query, level, ns, pod, cont, stream)
+		entries, err := eng.GetLogsWithK8s(ctx, queryApp, tail, sinceTime, untilTime, query, level, ns, pod, cont, stream)
 		if err == nil {
 			hasOtherSources := false
 			for _, src := range sources {
@@ -47,6 +84,7 @@ func (s *LogServer) QueryLogs(ctx context.Context, app string, tail int, sinceSt
 				}
 			}
 			if len(entries) > 0 || eng.HasBlocks() || !hasOtherSources {
+				entries = filterEntrySecurity(entries, app)
 				sort.SliceStable(entries, func(i, j int) bool {
 					return entries[i].Timestamp.Before(entries[j].Timestamp)
 				})
@@ -63,12 +101,14 @@ func (s *LogServer) QueryLogs(ctx context.Context, app string, tail int, sinceSt
 		if eng != nil && src == eng {
 			continue
 		}
-		entries, err := src.GetLogs(ctx, app, tail, sinceTime, untilTime, query, level)
+		entries, err := src.GetLogs(ctx, queryApp, tail, sinceTime, untilTime, query, level)
 		if err != nil {
 			continue
 		}
 		allEntries = append(allEntries, entries...)
 	}
+
+	allEntries = filterEntrySecurity(allEntries, app)
 
 	if ns != "" || pod != "" || cont != "" || stream != "" {
 		filtered := make([]LogEntry, 0, len(allEntries))

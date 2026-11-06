@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
@@ -24,6 +25,20 @@ func (h *LogHandler) HandleErrorsRadar(w http.ResponseWriter, r *http.Request) {
 
 	node := firstNonEmpty(q.Get("node"), q.Get("node_name"), q.Get("host"))
 	service := firstNonEmpty(q.Get("service"), q.Get("app"), q.Get("container_name"), q.Get("container"))
+	namespace := q.Get("namespace")
+
+	if code, msg := CheckLogAccessRBAC(r.Context(), namespace, service); code != 0 {
+		writeJSON(w, code, map[string]string{"error": msg})
+		return
+	}
+
+	tenantID := resolveTenant(r.Context(), r)
+	if isPlatformAdmin(r.Context()) {
+		if reqTenant := firstNonEmpty(r.Header.Get("X-Tenant-ID"), q.Get("tenant_id"), q.Get("tenant")); reqTenant != "" {
+			tenantID = strings.TrimSpace(reqTenant)
+		}
+	}
+
 	level := firstNonEmpty(q.Get("level"), q.Get("log_level"))
 	limit := 50
 	if lStr := q.Get("limit"); lStr != "" {
@@ -51,6 +66,8 @@ func (h *LogHandler) HandleErrorsRadar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filter := domainLogging.LogFilter{
+		TenantID:      tenantID,
+		Namespace:     namespace,
 		ContainerName: service,
 		ServiceName:   service,
 		StartTime:     startTime,
@@ -128,6 +145,30 @@ func (h *LogHandler) HandleErrorsRadar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if groups == nil { groups = []agent.ErrorRadarGroup{} }
+
+	filtered := make([]agent.ErrorRadarGroup, 0, len(groups))
+	isJournalctl := domainLogging.IsJournalctlAlias(service)
+	isAllApps := strings.TrimSpace(service) == ""
+
+	for _, g := range groups {
+		if domainLogging.IsSensitiveOSLogSource(g.Service, "", "") {
+			continue
+		}
+		if isJournalctl {
+			if domainLogging.IsHostSystemLog("", g.Service) {
+				filtered = append(filtered, g)
+			}
+			continue
+		}
+		if isAllApps {
+			if !domainLogging.IsHostSystemLog("", g.Service) {
+				filtered = append(filtered, g)
+			}
+			continue
+		}
+		filtered = append(filtered, g)
+	}
+	groups = filtered
 
 	totalOccurrences := 0
 	for _, g := range groups { totalOccurrences += g.Count }

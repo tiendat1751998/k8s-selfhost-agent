@@ -7,6 +7,7 @@ import (
 
 	docker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/agent"
+	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type catalogMockLogClient struct {
@@ -53,7 +54,7 @@ func (m *catalogMockLogClient) IsHostUnreachable(hostEndpoint string) bool {
 }
 
 func TestDistributedAgentLogRepo_ListServicesCatalog(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenancy.WithUserRole(context.Background(), tenancy.PlatformAdminRole)
 	hosts := []docker.ComputeHost{
 		{ID: "node-1", Name: "k8smater133", Endpoint: "http://10.10.10.133:9100", Status: "connected", Labels: map[string]string{"auth_token": "tok-1"}},
 		{ID: "node-2", Name: "k8sworker", Endpoint: "http://10.10.10.134:9100", Status: "connected", Labels: map[string]string{"auth_token": "tok-2"}},
@@ -86,11 +87,11 @@ func TestDistributedAgentLogRepo_ListServicesCatalog(t *testing.T) {
 		t.Errorf("ListServicesCatalog took too long (%v), expected fast execution", duration)
 	}
 
-	if len(allServices) != 5 {
-		t.Fatalf("expected 5 merged services, got %d: %v", len(allServices), allServices)
+	// For platform_admin: individual host units are consolidated into "journalctl"
+	expectedServices := []string{"auth-svc", "cart-svc", "journalctl"}
+	if len(allServices) != len(expectedServices) {
+		t.Fatalf("expected %d merged services (%v), got %d: %v", len(expectedServices), expectedServices, len(allServices), allServices)
 	}
-
-	expectedServices := []string{"auth-svc", "cart-svc", "cron.service", "k8s-agent.service", "kubelet.service"}
 	for i, exp := range expectedServices {
 		if allServices[i] != exp {
 			t.Errorf("service mismatch at %d: expected %s, got %s", i, exp, allServices[i])
@@ -105,16 +106,16 @@ func TestDistributedAgentLogRepo_ListServicesCatalog(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected k8sworker in byNode")
 	}
-	if len(workerServices) != 3 || workerServices[0] != "cron.service" || workerServices[1] != "k8s-agent.service" || workerServices[2] != "kubelet.service" {
-		t.Errorf("unexpected k8sworker services: %v", workerServices)
+	if len(workerServices) != 1 || workerServices[0] != "journalctl" {
+		t.Errorf("unexpected k8sworker services (expected [journalctl]): %v", workerServices)
 	}
 
 	materServices, ok := byNode["k8smater133"]
 	if !ok {
 		t.Fatalf("expected k8smater133 in byNode")
 	}
-	if len(materServices) != 2 || materServices[0] != "auth-svc" || materServices[1] != "cart-svc" {
-		t.Errorf("unexpected k8smater133 services: %v", materServices)
+	if len(materServices) != 3 || materServices[0] != "auth-svc" || materServices[1] != "cart-svc" || materServices[2] != "journalctl" {
+		t.Errorf("unexpected k8smater133 services (expected [auth-svc, cart-svc, journalctl]): %v", materServices)
 	}
 
 	masterServices, ok := byNode["k8smasterdeb"]
@@ -144,10 +145,29 @@ func TestDistributedAgentLogRepo_ListServicesCatalog(t *testing.T) {
 	if len(legacyServices) != len(allServices) {
 		t.Errorf("ListServices mismatch: got %d services, expected %d", len(legacyServices), len(allServices))
 	}
+
+	// Non-platform admin verification
+	viewerCtx := tenancy.WithUserRole(context.Background(), "viewer")
+	viewerServices, viewerByNode, vErr := repo.ListServicesCatalog(viewerCtx)
+	if vErr != nil {
+		t.Fatalf("viewer ListServicesCatalog error: %v", vErr)
+	}
+	for _, s := range viewerServices {
+		if s == "journalctl" || s == "kubelet.service" || s == "cron.service" {
+			t.Errorf("viewer should not see host service %q", s)
+		}
+	}
+	for _, svcs := range viewerByNode {
+		for _, s := range svcs {
+			if s == "journalctl" || s == "kubelet.service" || s == "cron.service" {
+				t.Errorf("viewer node should not contain host service %q", s)
+			}
+		}
+	}
 }
 
 func TestDistributedAgentLogRepo_ListServicesCatalog_SupplementRecentLogs(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenancy.WithUserRole(context.Background(), tenancy.PlatformAdminRole)
 	hosts := []docker.ComputeHost{
 		{ID: "node-1", Name: "k8sworker", Endpoint: "http://10.10.10.134:9100", Status: "connected"},
 	}
@@ -159,9 +179,9 @@ func TestDistributedAgentLogRepo_ListServicesCatalog_SupplementRecentLogs(t *tes
 		},
 		recentLogs: map[string][]agent.LogSearchResult{
 			"http://10.10.10.134:9100": {
+				{Service: "order-api"},
 				{Service: "kubelet.service"},
 				{Service: "cron.service"},
-				{Service: "kubelet.service"},
 			},
 		},
 	}
@@ -172,8 +192,9 @@ func TestDistributedAgentLogRepo_ListServicesCatalog_SupplementRecentLogs(t *tes
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(allServices) != 2 || allServices[0] != "cron.service" || allServices[1] != "kubelet.service" {
-		t.Errorf("expected supplemented services [cron.service, kubelet.service], got %v", allServices)
+	// For platform_admin: order-api is kept, kubelet/cron consolidated to journalctl
+	if len(allServices) != 2 || allServices[0] != "journalctl" || allServices[1] != "order-api" {
+		t.Errorf("expected supplemented services [journalctl, order-api], got %v", allServices)
 	}
 
 	if s := byNode["k8sworker"]; len(s) != 2 {

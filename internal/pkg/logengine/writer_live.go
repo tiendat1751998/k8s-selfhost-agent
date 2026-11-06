@@ -77,5 +77,25 @@ func (w *Writer) setLastError(err error) {
 	w.closedMu.Unlock()
 }
 
+// Close flushes all remaining items in the ring buffer, writes the final block, and stops flusher.
+func (w *Writer) Close() error {
+	w.closedMu.Lock()
+	if w.closed {
+		w.closedMu.Unlock()
+		return nil
+	}
+	w.closed = true
+	close(w.closeCh)
+	w.closedMu.Unlock()
+
+	w.wg.Wait()
+
+	w.closedMu.Lock()
+	w.sealActivePartLocked()
+	w.closedMu.Unlock()
+	return w.LastError()
+}
+
+
 
 

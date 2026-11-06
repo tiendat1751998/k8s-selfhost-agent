@@ -33,8 +33,7 @@ type ErrorRadarGroup struct {
 func (r *DistributedAgentLogRepo) SummarizeErrors(ctx context.Context, filter domainLogging.LogFilter) ([]ErrorRadarGroup, error) {
 	var hosts []docker.ComputeHost
 	if r.hostRepo != nil {
-		if filter.TenantID != "" { hosts, _ = r.hostRepo.List(ctx, filter.TenantID) }
-		if len(hosts) == 0 { hosts, _ = r.hostRepo.ListAll(ctx) }
+		hosts, _ = resolveCandidateHosts(ctx, r.hostRepo, filter.TenantID)
 	}
 
 	targetNode := ""
@@ -81,6 +80,16 @@ func (r *DistributedAgentLogRepo) SummarizeErrors(ctx context.Context, filter do
 
 	addEntry := func(node, svc, lvl, msg string, ts time.Time) {
 		if isNoiseService(svc) { return }
+		if domainLogging.IsSensitiveOSLogSource(svc, "", "") { return }
+		isJournalctl := domainLogging.IsJournalctlAlias(service)
+		isAllApps := strings.TrimSpace(service) == ""
+		isHostLog := domainLogging.IsHostSystemLog("", svc)
+		if isJournalctl && !isHostLog {
+			return
+		}
+		if isAllApps && isHostLog {
+			return
+		}
 		normLvl := string(domainLogging.NormalizeLogLevel(lvl, msg))
 		if !isErrorSeverity(normLvl) && !isErrorSeverity(lvl) {
 			return
@@ -150,8 +159,13 @@ func (r *DistributedAgentLogRepo) SummarizeErrors(ctx context.Context, filter do
 				fetchLimit = limit
 			}
 
+			appQuery := service
+			if domainLogging.IsJournalctlAlias(service) {
+				appQuery = ""
+			}
+
 			reqErr := SearchLogsRequest{
-				App:           service,
+				App:           appQuery,
 				Level:         levelOrError,
 				Since:         sinceStr,
 				Until:         untilStr,
@@ -162,7 +176,7 @@ func (r *DistributedAgentLogRepo) SummarizeErrors(ctx context.Context, filter do
 				Query:         filter.SearchText,
 			}
 			reqAll := SearchLogsRequest{
-				App:           service,
+				App:           appQuery,
 				Level:         "",
 				Since:         sinceStr,
 				Until:         untilStr,
@@ -247,6 +261,18 @@ func (r *DistributedAgentLogRepo) SummarizeErrors(ctx context.Context, filter do
 								mu.Lock()
 								for _, g := range parsed.Groups {
 									if isNoiseService(g.Service) {
+										continue
+									}
+									if domainLogging.IsSensitiveOSLogSource(g.Service, "", "") {
+										continue
+									}
+									isJournalctl := domainLogging.IsJournalctlAlias(service)
+									isAllApps := strings.TrimSpace(service) == ""
+									isHostLog := domainLogging.IsHostSystemLog("", g.Service)
+									if isJournalctl && !isHostLog {
+										continue
+									}
+									if isAllApps && isHostLog {
 										continue
 									}
 									gLevel := string(domainLogging.NormalizeLogLevel(g.Level, g.SampleMessage))
