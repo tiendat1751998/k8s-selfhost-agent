@@ -8,6 +8,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 )
 
 type LogEntry struct {
@@ -177,7 +179,9 @@ type LogFilter struct {
 
 func (f *LogFilter) Matches(entry LogEntry) bool {
 	if f.TenantID != "" && entry.TenantID != f.TenantID {
-		return false
+		if (!domainLogging.IsJournalctlAlias(f.Service) && entry.Namespace != domainLogging.HostNamespace) || entry.TenantID != "" {
+			return false
+		}
 	}
 	if f.Namespace != "" && entry.Namespace != f.Namespace {
 		return false
@@ -196,10 +200,20 @@ func (f *LogFilter) Matches(entry LogEntry) bool {
 		}
 	}
 	if f.Service != "" {
-		matchService := strings.EqualFold(entry.Service, f.Service) ||
-			strings.EqualFold(entry.Container, f.Service) ||
-			strings.Contains(strings.ToLower(entry.Pod), strings.ToLower(f.Service))
-		if !matchService {
+		if domainLogging.IsJournalctlAlias(f.Service) {
+			if !domainLogging.IsHostSystemLog(entry.Namespace, entry.Service) && entry.Namespace != domainLogging.HostNamespace {
+				return false
+			}
+		} else {
+			matchService := strings.EqualFold(entry.Service, f.Service) ||
+				strings.EqualFold(entry.Container, f.Service) ||
+				strings.Contains(strings.ToLower(entry.Pod), strings.ToLower(f.Service))
+			if !matchService {
+				return false
+			}
+		}
+	} else if f.Namespace != domainLogging.HostNamespace {
+		if domainLogging.IsHostSystemLog(entry.Namespace, entry.Service) || entry.Namespace == domainLogging.HostNamespace {
 			return false
 		}
 	}

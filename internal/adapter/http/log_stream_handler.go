@@ -106,65 +106,6 @@ func isLocalNode(target string) bool {
 	return t == "standalone-host" || t == "local" || t == "localhost" || t == "127.0.0.1" || t == ""
 }
 
-func parseStreamLogLine(line string) (time.Time, string) {
-	if idx := strings.IndexByte(line, ' '); idx >= 19 && idx <= 35 {
-		rawTS := line[:idx]
-		if t, err := time.Parse(time.RFC3339Nano, rawTS); err == nil {
-			return t.UTC(), strings.TrimSpace(line[idx+1:])
-		}
-		if t, err := time.Parse(time.RFC3339, rawTS); err == nil {
-			return t.UTC(), strings.TrimSpace(line[idx+1:])
-		}
-	}
-	return time.Now().UTC(), line
-}
-
-func extractStreamServiceTag(msg string) (string, string) {
-	trimmed := strings.TrimSpace(msg)
-	if !strings.HasPrefix(trimmed, "[") {
-		return "", msg
-	}
-	endIdx := strings.IndexByte(trimmed, ']')
-	if endIdx <= 1 {
-		return "", msg
-	}
-	candidate := trimmed[1:endIdx]
-	upper := strings.ToUpper(candidate)
-	if upper == "INFO" || upper == "WARN" || upper == "WARNING" || upper == "ERROR" || upper == "DEBUG" || upper == "FATAL" || upper == "TRACE" || upper == "PANIC" {
-		return "", msg
-	}
-	rest := strings.TrimSpace(trimmed[endIdx+1:])
-	if strings.HasPrefix(rest, "[") {
-		if lvlEnd := strings.IndexByte(rest, ']'); lvlEnd > 1 {
-			lvl := strings.ToUpper(rest[1:lvlEnd])
-			if lvl == "INFO" || lvl == "WARN" || lvl == "WARNING" || lvl == "ERROR" || lvl == "DEBUG" || lvl == "FATAL" || lvl == "TRACE" || lvl == "PANIC" {
-				rest = strings.TrimSpace(rest[lvlEnd+1:])
-			}
-		}
-	}
-	if rest == "" {
-		rest = msg
-	}
-	return candidate, rest
-}
-
-func detectStreamLogLevel(msg string) string {
-	if inferred := domainLogging.InferSeverityFromMessage(msg); inferred != "" {
-		return strings.ToUpper(string(inferred))
-	}
-	u := strings.ToUpper(msg)
-	switch {
-	case strings.Contains(u, "ERROR") || strings.Contains(u, "FATAL") || strings.Contains(u, "PANIC"):
-		return "ERROR"
-	case strings.Contains(u, "WARN"):
-		return "WARN"
-	case strings.Contains(u, "DEBUG") || strings.Contains(u, "TRACE"):
-		return "DEBUG"
-	default:
-		return "INFO"
-	}
-}
-
 func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.aggregator == nil {
 		http.Error(w, "log aggregator unavailable", http.StatusServiceUnavailable)
@@ -230,6 +171,11 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Level:     level,
 		Keyword:   keyword,
 	}
+	if domainLogging.IsJournalctlAlias(targetService) {
+		filter.Service = "journalctl"
+		filter.Container = ""
+		filter.Pod = ""
+	}
 
 	replayLines := 1000
 	if s := query.Get("replay_lines"); s != "" {
@@ -255,40 +201,17 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		streamCtx, cancelStream := context.WithCancel(r.Context())
 		defer cancelStream()
 
+		remoteTarget := targetService
+		if domainLogging.IsJournalctlAlias(targetService) {
+			remoteTarget = ""
+		}
+		isAdmin := isPlatformAdmin(r.Context())
+
 		go func() {
-			if err := h.streamer.StreamLogs(streamCtx, agentURL, targetService, func(line string) {
-				entryTS, msg := parseStreamLogLine(line)
-				svc := targetService
-				cleanMsg := msg
-				if extractedSvc, rest := extractStreamServiceTag(msg); extractedSvc != "" {
-					if svc == "" {
-						svc = extractedSvc
-					}
-					cleanMsg = rest
+			if err := h.streamer.StreamLogs(streamCtx, agentURL, remoteTarget, func(line string) {
+				if entry := processRemoteStreamLine(line, targetService, namespace, node, tenantID, isAdmin, h.maskLogMessage); entry != nil {
+					h.aggregator.Ingest(*entry)
 				}
-				if domainLogging.IsSensitiveOSLogSource(svc, "", "") {
-					return
-				}
-				entryTenantID := tenantID
-				entryNS := namespace
-				if domainLogging.IsHostSystemLog(namespace, svc) {
-					if entryNS == "" { entryNS = domainLogging.HostNamespace }
-					if !isPlatformAdmin(r.Context()) {
-						entryTenantID = ""
-					}
-				}
-				h.aggregator.Ingest(logging.LogEntry{
-					Timestamp: entryTS,
-					TenantID:  entryTenantID,
-					Namespace: entryNS,
-					Pod:       svc,
-					Container: svc,
-					Service:   svc,
-					Node:      node,
-					Stream:    "stdout",
-					Level:     detectStreamLogLevel(msg),
-					Message:   cleanMsg,
-				})
 			}); err != nil && streamCtx.Err() == nil {
 				logger.Get().Warn("remote agent log stream failed",
 					zap.String("agent_url", agentURL),
