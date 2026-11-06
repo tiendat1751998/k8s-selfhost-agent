@@ -13,7 +13,7 @@ import LogContextModal from '../components/logs/LogContextModal.vue'
 import LogStreamToolbar from '../components/logs/LogStreamToolbar.vue'
 import LogErrorRadarPanel from '../components/logs/LogErrorRadarPanel.vue'
 import BaseIcon from '../components/ui/BaseIcon.vue'
-import type { LogFilterParams, ErrorRadarGroup } from '../api/logging'
+import type { ErrorRadarGroup } from '../api/logging'
 import { exportLogsToTextFile } from '../components/logs/virtualLogUtils'
 import '../assets/styles/views/logstream.css'
 
@@ -104,24 +104,17 @@ function handleSwitchToHistoryFromOffline() {
   runHistoricalQuery()
 }
 
-async function preloadRecentLogs(target: LogTarget) {
+function preloadRecentLogs(target: LogTarget) {
   if (!target || !target.id) return
-  try {
-    const kw = searchKeyword.value.trim()
-    const ns = target.namespace || (route.query.namespace ? String(route.query.namespace) : undefined)
-    const effNode = effectiveNode.value
-    const effService = effectiveService.value
-    const filter: LogFilterParams = {
-      limit: 50, query: kw || undefined, service: effService, container: effService, container_name: effService,
-      namespace: ns, node: effNode, attributes: effNode ? { node: effNode } : undefined,
-      cluster_id: activeClusterId.value || undefined,
-      log_level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
-    }
-    await logStore.fetchHistoricalLogs(filter, false)
-    logStore.logs = logStore.logs.filter((l) => l.msg !== '-- No entries --' && l.msg.trim() !== '-- No entries --')
-  } catch {
-    // Gracefully ignore if offline or no historical logs
-  }
+  const kw = searchKeyword.value.trim()
+  const ns = target.namespace || (route.query.namespace ? String(route.query.namespace) : undefined)
+  logStore.seedRecentLogs({
+    node: effectiveNode.value,
+    service: effectiveService.value,
+    namespace: ns,
+    query: kw || undefined,
+    level: (selectedLevel.value && selectedLevel.value !== 'ALL') ? selectedLevel.value : undefined,
+  })
 }
 
 function connectTarget(target: LogTarget) {
@@ -312,7 +305,7 @@ function handleInspectErrorGroup(group: ErrorRadarGroup, radarRange?: string) {
           :logs="targetFilteredLogs" :is-connected="mode === 'live' ? isConnected : true" :is-paused="isPaused"
           :auto-scroll="autoScroll" :is-scroll-locked="isScrollLocked" :target-name="selectedTarget.name"
           :latency="latency" :wrap-lines="wrapLines" :hover-pause-enabled="hoverPauseEnabled"
-          :hide-service-badge="Boolean(effectiveService)" :is-target-offline="isTargetOffline" :mode="mode"
+          :hide-service-badge="Boolean(effectiveService && effectiveService !== 'journalctl')" :is-target-offline="isTargetOffline" :mode="mode"
           :show-journalctl="canViewJournalctl && !isSelectedNodeOffline" :active-service="activeServiceSubFilter"
           @switch-to-history="handleSwitchToHistoryFromOffline" @scroll="handleScroll" @scroll-to-bottom="scrollToBottom"
           @register-terminal="setTerminalRef" @open-trace="logStore.openTraceDrawer" @open-context="logStore.openContextModal"

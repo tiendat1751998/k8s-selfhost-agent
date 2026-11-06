@@ -419,39 +419,49 @@ export const useLogStore = defineStore('log', () => {
     }
   }
 
+  let liveSeedRequestId = 0
+
+  async function seedRecentLogs(opts: LogFilterOptions = {}): Promise<void> {
+    const currentReq = ++liveSeedRequestId
+    try {
+      const effSvc = opts.service && opts.service !== 'all' ? opts.service : undefined
+      const params: LogFilterParams = {
+        limit: 100,
+        node: opts.node || undefined,
+        service: effSvc,
+        container: effSvc,
+        container_name: effSvc,
+        namespace: opts.namespace || undefined,
+        query: opts.query || opts.keyword || undefined,
+        log_level: (opts.level && opts.level !== 'ALL') ? opts.level : undefined,
+      }
+      const res = await searchLogs(params)
+      if (currentReq !== liveSeedRequestId) return
+      const raw = res.entries || []
+      const mapped: LogEntry[] = []
+      for (let i = 0; i < raw.length; i++) {
+        const item = mapRawToLogEntry(raw[i], opts.namespace || 'default', opts.service)
+        if (item && matchesTarget(item, opts)) mapped.push(item)
+      }
+      if (currentReq !== liveSeedRequestId || mapped.length === 0) return
+      const existingFps = new Set(logs.value.map(getLogFingerprint))
+      const toAdd = mapped.filter((entry) => !existingFps.has(getLogFingerprint(entry)))
+      if (toAdd.length > 0) {
+        const combined = [...logs.value, ...toAdd]
+        combined.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+        logs.value = combined.slice(-maxBufferSize.value)
+      }
+    } catch {
+      // Non-blocking backfill
+    }
+  }
+
   return {
-    logs,
-    isConnected,
-    isPaused,
-    reconnectAttempts,
-    activeFilter,
-    maxBufferSize,
-    setMaxBufferSize,
-    traceDrawerOpen,
-    selectedTraceId,
-    contextModalOpen,
-    contextTargetEntry,
-    droppedLogsCount,
-    streamRate,
-    histogram,
-    isHistoricalLoading,
-    isHistogramLoading,
-    totalHistoricalCount,
-    hasMoreHistorical,
-    connect,
-    setFilter,
-    disconnect,
-    addLogEntry,
-    appendLog,
-    appendLogBatch,
-    clear,
-    togglePause,
-    openTraceDrawer,
-    closeTraceDrawer,
-    openContextModal,
-    closeContextModal,
-    resetDroppedLogsCount,
-    fetchHistoricalLogs,
-    fetchHistogram,
+    logs, isConnected, isPaused, reconnectAttempts, activeFilter, maxBufferSize, setMaxBufferSize,
+    traceDrawerOpen, selectedTraceId, contextModalOpen, contextTargetEntry, droppedLogsCount, streamRate,
+    histogram, isHistoricalLoading, isHistogramLoading, totalHistoricalCount, hasMoreHistorical,
+    connect, setFilter, disconnect, addLogEntry, appendLog, appendLogBatch, clear, togglePause,
+    openTraceDrawer, closeTraceDrawer, openContextModal, closeContextModal, resetDroppedLogsCount,
+    fetchHistoricalLogs, fetchHistogram, seedRecentLogs,
   }
 })

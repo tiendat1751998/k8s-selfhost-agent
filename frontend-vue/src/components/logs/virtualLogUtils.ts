@@ -34,6 +34,44 @@ export function getTargetBadge(log: LogEntry, currentTarget?: string): string {
   return log.namespace || 'system'
 }
 
+export function formatLevelBadge(lvl: string): string {
+  const upper = (lvl || '').toUpperCase()
+  if (upper === 'ERROR' || upper === 'ERR') return 'ERR'
+  if (upper === 'WARNING' || upper === 'WARN') return 'WARN'
+  if (upper === 'INFO') return 'INFO'
+  if (upper === 'DEBUG' || upper === 'DBG') return 'DBG'
+  return upper.slice(0, 4)
+}
+
+export function getRowUnitBadge(log: LogEntry): string {
+  const isInvalid = (s?: string) => {
+    if (!s) return true
+    const l = s.trim().toLowerCase()
+    return !l || l === 'journalctl' || l === 'systemd-journal' || l === 'unknown' || l === 'system'
+  }
+  if (log.container && !isInvalid(log.container)) return log.container
+  if (log.service && !isInvalid(log.service)) return log.service
+  if (log.pod && !isInvalid(log.pod)) return log.pod
+  return ''
+}
+
+export function getBadgeLabel(log: LogEntry, currentTarget?: string, activeService?: string): string {
+  if (activeService === 'journalctl' || !activeService) {
+    return getRowUnitBadge(log) || getTargetBadge(log, currentTarget)
+  }
+  return getTargetBadge(log, currentTarget)
+}
+
+export function shouldShowBadge(log: LogEntry, hideServiceBadge?: boolean, activeService?: string, currentTarget?: string): boolean {
+  const label = getBadgeLabel(log, currentTarget, activeService)
+  if (!label) return false
+  if (activeService === 'journalctl' || !activeService) {
+    const l = label.toLowerCase()
+    return l !== 'journalctl' && l !== 'systemd-journal' && l !== 'unknown' && l !== 'system'
+  }
+  return !hideServiceBadge
+}
+
 /**
  * Strips leading wildcard/concrete timestamp noise, UTC labels, and bracketed worker/PID tags
  * from error fingerprint patterns so titles read cleanly in Error Radar.
