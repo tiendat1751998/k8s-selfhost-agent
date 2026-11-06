@@ -50,17 +50,23 @@ describe('Slice 76B: Admin-Only Journalctl Target & Pure App Catalog Security', 
   describe('1. isHostOrSystemUnit Client-Side Guard Specification', () => {
     it('correctly classifies systemd units, suffixes, and OS syslog daemons as host units', () => {
       const units = [
+        'dockerd-rootless.sh', 'dockerd-rootless', 'dockerd', 'containerd', 'containerd-shim',
+        'containerd-shim-runc-v2', 'runc', 'crio', 'kubelet', 'kube-proxy', 'etcd', 'systemd',
+        'dbus-daemon', 'fwupd', 'multipathd', 'networkd-dispatcher', 'rsyslogd', 'cron', 'crond',
+        'atd', 'irqbalance', 'acpid', 'avahi-daemon', 'accounts-daemon', 'rtkit-daemon', 'udisksd',
+        'upowerd', 'modemmanager', 'wpa_supplicant', 'unattended-upgrades', 'packagekitd', 'snapd',
+        'lxcfs', 'vmware-vmsvc', 'vmtoolsd', 'qemu-ga', 'chronyd', 'ntpd',
         'kubelet.service', 'cron.service', 'systemd-journal.service', 'docker.socket', 'systemd-tmpfiles-clean.timer',
         'user-1000.slice', 'session-1.scope', 'multi-user.target', 'proc-sys-fs-binfmt_misc.mount', 'journalctl',
-        'systemd-journal', 'auth', 'authpriv', 'kern', 'syslog', 'daemon', 'cron', 'crontab', 'multipath',
+        'systemd-journal', 'auth', 'authpriv', 'kern', 'syslog', 'daemon', 'crontab', 'multipath',
         'vmware-vmsvc-root', 'vmware-vmtoolsd-root', 'ModemManager', 'NetworkManager', 'dbus', 'packagekit',
-        'rsyslog', 'sshd', 'sudo', 'polkit', 'kubelet', 'containerd', 'dockerd',
+        'rsyslog', 'sshd', 'sudo', 'polkit',
       ]
       for (const u of units) assert.equal(isHostOrSystemUnit(u), true, `Expected "${u}" to be host unit`)
     })
 
     it('preserves legitimate application, container, and pod workloads', () => {
-      const apps = ['my-nginx', 'db', 'postgres', 'tiki_redis', 'auth-api', 'frontend-ui', 'checkout-service', 'worker-queue']
+      const apps = ['db', 'my-nginx', 'mysql-temp', 'nats', 'registry', 'tiki_drone', 'tiki_proxysql', 'tiki_redis', 'postgres', 'auth-api', 'frontend-ui', 'checkout-service', 'worker-queue']
       for (const a of apps) assert.equal(isHostOrSystemUnit(a), false, `Expected "${a}" to NOT be host unit`)
     })
   })
@@ -215,6 +221,197 @@ describe('Slice 76B: Admin-Only Journalctl Target & Pure App Catalog Security', 
       assert.ok(appServices.includes('postgres_db'), 'Must retain pure app postgres_db')
       assert.ok(!appServices.includes('kubelet.service'), 'Must exclude kubelet.service from All Apps')
       assert.ok(!appServices.includes('cron.service'), 'Must exclude cron.service from All Apps')
+    })
+  })
+
+  describe('6. VirtualLogTerminal.vue Unit Tag Badge Rendering (journalctl and All Apps)', async () => {
+    const virtUtils = await import('../src/components/logs/virtualLogUtils.ts')
+    const { calculateVirtualWindow } = await import('../src/utils/virtualWindow.ts')
+    const { detectStackTrace } = await import('../src/utils/stackTraceParser.ts')
+    const { useVirtualLogScroll } = await import('../src/components/logs/useVirtualLogScroll.ts')
+
+    function loadVirtualTerminal() {
+      const fullPath = resolveFilePath('src/components/logs/VirtualLogTerminal.vue')
+      const source = fs.readFileSync(fullPath, 'utf8')
+      const { descriptor } = parse(source, { filename: path.basename(fullPath) })
+      const compiled = compileScript(descriptor, { id: 'test-vterm-' + Math.random().toString(36).slice(2), inlineTemplate: true })
+      const transpiled = ts.transpileModule(compiled.content, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+
+      const js = transpiled
+        .replace(/import\s+['\"][^'\"]+\.css['\"];?/g, '')
+        .replace(/import\s+BaseIcon\s+from\s+['\"][^'\"]+['\"];?/g, '')
+        .replace(/import\s+LogTerminalEmptyState\s+from\s+['\"][^'\"]+['\"];?/g, '')
+        .replace(/import\s*\{[^}]*\}\s*from\s*['\"][^'\"]+logStore['\"];?/g, '')
+        .replace(/import\s*\{[^}]*\}\s*from\s*['\"][^'\"]+virtualWindow['\"];?/g, '')
+        .replace(/import\s*\{[^}]*\}\s*from\s*['\"][^'\"]+stackTraceParser['\"];?/g, '')
+        .replace(/import\s*\{[^}]*\}\s*from\s*['\"][^'\"]+virtualLogUtils['\"];?/g, '')
+        .replace(/import\s*\{[^}]*\}\s*from\s*['\"][^'\"]+useVirtualLogScroll['\"];?/g, '')
+        .replace(/import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]vue['"];?/g, (_, imp) => {
+          const mapped = imp.split(',').map((i: string) => { const p = i.trim().split(/\s+as\s+/); return p.length === 2 ? `${p[0].trim()}: ${p[1].trim()}` : p[0].trim() }).filter(Boolean).join(', ')
+          return `const { ${mapped} } = Vue;`
+        })
+        .replace(/export\s+default\s+/, 'return ')
+
+      const BaseIconStub = defineComponent({
+        props: ['name', 'size', 'class'],
+        render() { return h('svg', { class: ['base-icon', `base-icon-${this.name}`, this.class], 'data-icon': this.name }) },
+      })
+      const EmptyStub = defineComponent({ render() { return null } })
+      const useLogStoreStub = () => ({ logs: [], openTraceDrawer: () => {}, openContextModal: () => {} })
+
+      return new Function(
+        'Vue', 'BaseIcon', 'LogTerminalEmptyState', 'useLogStore',
+        'calculateVirtualWindow', 'detectStackTrace', 'useVirtualLogScroll',
+        'formatTime', 'formatLevelBadge', 'getTargetBadge', 'getRowUnitBadge', 'getBadgeLabel', 'shouldShowBadge',
+        'cleanLogMessage', 'coalesceLogEntries',
+        js
+      )(
+        vueModule, BaseIconStub, EmptyStub, useLogStoreStub,
+        calculateVirtualWindow, detectStackTrace, useVirtualLogScroll,
+        virtUtils.formatTime, virtUtils.formatLevelBadge, virtUtils.getTargetBadge, virtUtils.getRowUnitBadge, virtUtils.getBadgeLabel, virtUtils.shouldShowBadge,
+        virtUtils.cleanLogMessage, virtUtils.coalesceLogEntries
+      )
+    }
+
+    const VirtualLogTerminal = loadVirtualTerminal()
+    type LogEntry = import('../src/stores/logStore.ts').LogEntry
+
+    it('getRowUnitBadge correctly extracts unit name and discards redundant labels', () => {
+      assert.equal(virtUtils.getRowUnitBadge({ time: '', level: 'INFO', msg: '', service: 'kubelet.service', namespace: '__host__' }), 'kubelet.service')
+      assert.equal(virtUtils.getRowUnitBadge({ time: '', level: 'INFO', msg: '', service: 'cron.service', namespace: '__host__' }), 'cron.service')
+      assert.equal(virtUtils.getRowUnitBadge({ time: '', level: 'INFO', msg: '', service: 'dockerd-rootless.sh', namespace: '__host__' }), 'dockerd-rootless.sh')
+      assert.equal(virtUtils.getRowUnitBadge({ time: '', level: 'INFO', msg: '', container: 'my-nginx', service: 'my-nginx', namespace: 'default', pod: 'my-nginx-pod' }), 'my-nginx')
+      assert.equal(virtUtils.getRowUnitBadge({ time: '', level: 'INFO', msg: '', container: 'db', namespace: 'default', pod: 'db-pod' }), 'db')
+      assert.equal(virtUtils.getRowUnitBadge({ time: '', level: 'INFO', msg: '', service: 'journalctl', namespace: '__host__' }), '')
+      assert.equal(virtUtils.getRowUnitBadge({ time: '', level: 'INFO', msg: '', service: 'unknown', namespace: 'default' }), '')
+    })
+
+    it('renders [<unit>] badge for each row when viewing journalctl', async () => {
+      const logs: LogEntry[] = [
+        { time: '2026-11-06T04:26:00Z', level: 'ERR', service: 'kubelet.service', msg: 'E1106 kubelet failed to sync node status', namespace: '__host__' },
+        { time: '2026-11-06T04:26:01Z', level: 'INFO', service: 'cron.service', msg: 'cron info tick', namespace: '__host__' },
+        { time: '2026-11-06T04:26:02Z', level: 'INFO', service: 'dockerd-rootless.sh', msg: 'dockerd running rootless', namespace: '__host__' },
+      ]
+      const html = await renderToString(h(VirtualLogTerminal, { logs, activeService: 'journalctl', hideServiceBadge: false }))
+      assert.ok(html.includes('[kubelet.service]'), 'Must render [kubelet.service] badge')
+      assert.ok(html.includes('[cron.service]'), 'Must render [cron.service] badge')
+      assert.ok(html.includes('[dockerd-rootless.sh]'), 'Must render [dockerd-rootless.sh] badge')
+      assert.ok(!html.includes('[journalctl]'), 'Must not render redundant [journalctl] badge')
+    })
+
+    it('renders [<app>] badge for each row when viewing All Apps ("")', async () => {
+      const logs: LogEntry[] = [
+        { time: '2026-11-06T04:26:00Z', level: 'INFO', container: 'db', service: 'db', msg: 'database ready', namespace: 'prod' },
+        { time: '2026-11-06T04:26:01Z', level: 'INFO', container: 'my-nginx', service: 'my-nginx', msg: 'nginx started', namespace: 'prod' },
+      ]
+      const html = await renderToString(h(VirtualLogTerminal, { logs, activeService: '', hideServiceBadge: false }))
+      assert.ok(html.includes('[db]'), 'Must render [db] badge in All Apps')
+      assert.ok(html.includes('[my-nginx]'), 'Must render [my-nginx] badge in All Apps')
+    })
+  })
+
+  describe('7. logStore.ts seedRecentLogs Live Backfill Specification', async () => {
+    const { useLogStore } = await import('../src/stores/logStore.ts')
+    const { api } = await import('../src/api/client.ts')
+    const { setActivePinia, createPinia } = await import('pinia')
+
+    it('defines seedRecentLogs on logStore and backfills logs matching target', async () => {
+      setActivePinia(createPinia())
+      const store = useLogStore()
+      assert.equal(typeof store.seedRecentLogs, 'function', 'Must export seedRecentLogs function')
+    })
+
+    it('queries /logs/search with limit: 100, maps entries, and deduplicates against live stream', async () => {
+      setActivePinia(createPinia())
+      const store = useLogStore()
+
+      let requestedParams: any = null
+      const origGet = api.get
+      api.get = (async (endpoint: string, params: any) => {
+        if (endpoint === '/logs/search') {
+          requestedParams = params
+          return {
+            total_count: 2,
+            has_more: false,
+            entries: [
+              { timestamp: '2026-11-06T04:00:00Z', log_level: 'INFO', message: 'seed log 1', service: 'db', node: 'node-1' },
+              { timestamp: '2026-11-06T04:00:01Z', log_level: 'INFO', message: 'seed log 2', service: 'db', node: 'node-1' },
+            ],
+          }
+        }
+        return origGet.call(api, endpoint, params)
+      }) as any
+
+      try {
+        // Pre-populate with live entry identical to seed log 1
+        store.logs = [
+          { time: '2026-11-06T04:00:00Z', level: 'INFO', msg: 'seed log 1', service: 'db', node: 'node-1', namespace: 'default', pod: 'db' },
+        ]
+
+        await store.seedRecentLogs({ node: 'node-1', service: 'db' })
+
+        assert.equal(requestedParams.limit, 100, 'Must query with limit: 100')
+        assert.equal(requestedParams.service, 'db', 'Must pass service filter')
+        assert.equal(requestedParams.node, 'node-1', 'Must pass node filter')
+
+        // Must have deduplicated seed log 1 and added seed log 2 -> total length 2, not 3
+        assert.equal(store.logs.length, 2, 'Must deduplicate and retain only 2 unique entries')
+        assert.equal(store.logs[1].msg, 'seed log 2')
+      } finally {
+        api.get = origGet
+      }
+    })
+
+    it('cancels/ignores stale responses when target changes rapidly', async () => {
+      setActivePinia(createPinia())
+      const store = useLogStore()
+
+      let resolveSlowReq: ((val: any) => void) | null = null
+      const origGet = api.get
+      api.get = (async (endpoint: string, params: any) => {
+        if (params?.service === 'slow-svc') {
+          return new Promise((resolve) => { resolveSlowReq = resolve })
+        }
+        if (params?.service === 'fast-svc') {
+          return {
+            total_count: 1,
+            has_more: false,
+            entries: [
+              { timestamp: '2026-11-06T04:10:00Z', log_level: 'INFO', message: 'fast log', service: 'fast-svc', node: 'node-1' },
+            ],
+          }
+        }
+        return { total_count: 0, has_more: false, entries: [] }
+      }) as any
+
+      try {
+        store.logs = []
+
+        // Req 1: slow target
+        const slowPromise = store.seedRecentLogs({ node: 'node-1', service: 'slow-svc' })
+        // Req 2: fast target fires immediately after
+        const fastPromise = store.seedRecentLogs({ node: 'node-1', service: 'fast-svc' })
+
+        await fastPromise
+        assert.equal(store.logs.length, 1)
+        assert.equal(store.logs[0].service, 'fast-svc')
+
+        // Now slow request resolves later
+        resolveSlowReq?.({
+          total_count: 1,
+          has_more: false,
+          entries: [
+            { timestamp: '2026-11-06T04:05:00Z', log_level: 'INFO', message: 'slow stale log', service: 'slow-svc', node: 'node-1' },
+          ],
+        })
+        await slowPromise
+
+        // Must STILL only contain fast-svc log; slow-svc log must be discarded!
+        assert.equal(store.logs.length, 1, 'Stale slow-svc logs must not overwrite newer target logs')
+        assert.equal(store.logs[0].service, 'fast-svc')
+      } finally {
+        api.get = origGet
+      }
     })
   })
 })

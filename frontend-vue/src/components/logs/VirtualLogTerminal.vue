@@ -4,7 +4,9 @@ import type { LogEntry } from '../../stores/logStore'
 import { useLogStore } from '../../stores/logStore'
 import { calculateVirtualWindow } from '../../utils/virtualWindow'
 import { detectStackTrace, type StackTraceInfo } from '../../utils/stackTraceParser'
-import { formatTime, getTargetBadge, cleanLogMessage, coalesceLogEntries } from './virtualLogUtils'
+import {
+  formatTime, formatLevelBadge, getBadgeLabel, shouldShowBadge, cleanLogMessage, coalesceLogEntries,
+} from './virtualLogUtils'
 import { useVirtualLogScroll } from './useVirtualLogScroll'
 import LogTerminalEmptyState from './LogTerminalEmptyState.vue'
 import BaseIcon from '../ui/BaseIcon.vue'
@@ -67,15 +69,6 @@ const expandedStackTraces = ref<Record<number, boolean>>({})
 const expandedRowIndex = ref<number | null>(null)
 function toggleRowExpand(index: number) { expandedRowIndex.value = expandedRowIndex.value === index ? null : index }
 
-function formatLevelBadge(lvl: string): string {
-  const upper = (lvl || '').toUpperCase()
-  if (upper === 'ERROR' || upper === 'ERR') return 'ERR'
-  if (upper === 'WARNING' || upper === 'WARN') return 'WARN'
-  if (upper === 'INFO') return 'INFO'
-  if (upper === 'DEBUG' || upper === 'DBG') return 'DBG'
-  return upper.slice(0, 4)
-}
-
 const windowResult = computed(() =>
   calculateVirtualWindow({
     totalCount: coalescedLogs.value.length,
@@ -105,7 +98,7 @@ const visibleItems = computed(() => {
 function toggleStackTrace(index: number) { expandedStackTraces.value[index] = !expandedStackTraces.value[index] }
 
 function handleTargetClick(e: MouseEvent | KeyboardEvent, log: LogEntry) {
-  const svc = log.service || log.pod || log.container
+  const svc = getBadgeLabel(log, props.targetName, props.activeService) || log.service || log.pod || log.container
   if (!svc) return
   if ('altKey' in e && e.altKey) {
     emit('muteService', svc)
@@ -115,7 +108,7 @@ function handleTargetClick(e: MouseEvent | KeyboardEvent, log: LogEntry) {
 }
 
 function handleMuteClick(log: LogEntry) {
-  const svc = log.service || log.pod || log.container
+  const svc = getBadgeLabel(log, props.targetName, props.activeService) || log.service || log.pod || log.container
   if (svc) emit('muteService', svc)
 }
 
@@ -167,16 +160,16 @@ defineExpose({
               {{ formatLevelBadge(item.log.level) }}
             </span>
             <span
-              v-if="!hideServiceBadge"
+              v-if="shouldShowBadge(item.log, hideServiceBadge, activeService, targetName)"
               class="virtual-badge-target"
               role="button"
               tabindex="0"
-              :title="`Click to isolate ${item.log.service || item.log.pod || 'service'} • Alt+Click to mute`"
+              :title="`Click to isolate ${getBadgeLabel(item.log, targetName, activeService)} • Alt+Click to mute`"
               @click.stop="handleTargetClick($event, item.log)"
               @keydown.enter="handleTargetClick($event, item.log)"
               @keydown.space.prevent="handleTargetClick($event, item.log)"
             >
-              <span>[{{ getTargetBadge(item.log, targetName) }}]</span>
+              <span>[{{ getBadgeLabel(item.log, targetName, activeService) }}]</span>
               <button
                 type="button"
                 class="virtual-target-mute-btn"
