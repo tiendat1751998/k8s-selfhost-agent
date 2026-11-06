@@ -4,6 +4,8 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 	docker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
@@ -167,3 +169,215 @@ func sanitizeCatalogServices(ctx context.Context, byNode map[string][]string, on
 
 	return resultServices, cleanedByNode
 }
+
+// mapClusterResultsToLogEntries transforms agent search results into domain LogEntry models.
+func mapClusterResultsToLogEntries(results []LogSearchResult, filter domainLogging.LogFilter) []domainLogging.LogEntry {
+	entries := make([]domainLogging.LogEntry, 0, len(results))
+	for _, res := range results {
+		lvl := domainLogging.NormalizeLogLevel(res.Level, res.Message)
+		ns := res.Namespace
+		if ns == "" {
+			ns = filter.Namespace
+		}
+		pod := res.PodName
+		if pod == "" {
+			pod = res.Service
+		}
+		cont := res.ContainerName
+		if cont == "" {
+			cont = res.Service
+		}
+		stream := res.Stream
+		if stream == "" {
+			stream = "stdout"
+		}
+		entries = append(entries, domainLogging.LogEntry{
+			Timestamp:     res.Timestamp,
+			TenantID:      filter.TenantID,
+			ClusterID:     filter.ClusterID,
+			Namespace:     ns,
+			PodName:       pod,
+			ContainerName: cont,
+			Stream:        stream,
+			LogLevel:      lvl,
+			Message:       res.Message,
+			Attributes: map[string]string{
+				"node_id":   res.NodeID,
+				"node_name": res.NodeName,
+				"raw":       res.Raw,
+				"namespace": ns,
+				"pod":       pod,
+				"container": cont,
+				"stream":    stream,
+			},
+		})
+	}
+	return entries
+}
+
+// fetchPureAppNames discovers pure user application/container names on candidate hosts,
+// filtering out host system daemons, journalctl, and sensitive OS log sources.
+// Results are sorted and capped to max 12 unique names.
+func (r *DistributedAgentLogRepo) fetchPureAppNames(ctx context.Context, hosts []docker.ComputeHost) []string {
+	if r.logClient == nil || len(hosts) == 0 {
+		return nil
+	}
+
+	var candidates []docker.ComputeHost
+	for _, h := range hosts {
+		endpoint := strings.TrimSpace(h.Endpoint)
+		if endpoint == "" {
+			continue
+		}
+		if strings.EqualFold(h.Status, "disconnected") || strings.EqualFold(h.Status, "disabled") ||
+			strings.EqualFold(h.Status, "down") || strings.EqualFold(h.Status, "offline") ||
+			strings.EqualFold(h.Status, "stopped") || strings.EqualFold(h.Status, "unhealthy") {
+			continue
+		}
+		if r.logClient.IsHostUnreachable(endpoint) {
+			continue
+		}
+		candidates = append(candidates, h)
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
+	var (
+		mu   sync.Mutex
+		wg   sync.WaitGroup
+		apps = make(map[string]struct{})
+	)
+
+	for _, h := range candidates {
+		host := h
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			token := ""
+			if host.Labels != nil {
+				if t, ok := host.Labels["auth_token"]; ok && t != "" {
+					token = t
+				} else if t, ok := host.Labels["token"]; ok && t != "" {
+					token = t
+				}
+			}
+
+			services, err := r.logClient.GetNodeServices(timeoutCtx, host.Endpoint, token)
+			if err != nil {
+				return
+			}
+
+			if len(services) == 0 {
+				if recentLogs, sErr := r.logClient.SearchNodeLogs(timeoutCtx, host.Endpoint, token, SearchLogsRequest{Limit: 20}); sErr == nil {
+					for _, l := range recentLogs {
+						if s := strings.TrimSpace(l.Service); s != "" {
+							services = append(services, s)
+						}
+					}
+				}
+			}
+
+			mu.Lock()
+			for _, s := range services {
+				s = strings.TrimSpace(s)
+				if s == "" || domainLogging.IsSensitiveOSLogSource(s, "", "") ||
+					domainLogging.IsHostSystemLog("", s) || domainLogging.IsJournalctlAlias(s) {
+					continue
+				}
+				apps[s] = struct{}{}
+			}
+			mu.Unlock()
+		}()
+	}
+
+	wg.Wait()
+
+	if len(apps) == 0 {
+		return nil
+	}
+
+	res := make([]string, 0, len(apps))
+	for a := range apps {
+		res = append(res, a)
+	}
+	sort.Strings(res)
+	if len(res) > 12 {
+		res = res[:12]
+	}
+	return res
+}
+
+// backfillPureAppLogs queries logs for specific pure app containers concurrently when
+// an unfiltered "All Apps" query yielded fewer than limit entries due to noisy host daemons.
+func (r *DistributedAgentLogRepo) backfillPureAppLogs(
+	ctx context.Context,
+	hosts []docker.ComputeHost,
+	baseReq SearchLogsRequest,
+	filter domainLogging.LogFilter,
+	existingCount int,
+) []domainLogging.LogEntry {
+	if r.logClient == nil || len(hosts) == 0 {
+		return nil
+	}
+
+	pureApps := r.fetchPureAppNames(ctx, hosts)
+	if len(pureApps) == 0 {
+		return nil
+	}
+
+	perAppLimit := 50
+	var (
+		mu         sync.Mutex
+		wg         sync.WaitGroup
+		backfilled []domainLogging.LogEntry
+		sem        = make(chan struct{}, 4)
+	)
+
+	for _, appName := range pureApps {
+		app := appName
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-ctx.Done():
+				return
+			}
+
+			appReq := SearchLogsRequest{
+				App:    app,
+				Query:  baseReq.Query,
+				Level:  baseReq.Level,
+				Since:  baseReq.Since,
+				Until:  baseReq.Until,
+				Stream: baseReq.Stream,
+				Limit:  perAppLimit,
+			}
+			if filter.Namespace != "" {
+				appReq.Namespace = filter.Namespace
+			}
+
+			results, err := r.logClient.SearchClusterLogs(ctx, hosts, appReq)
+			if err != nil || len(results) == 0 {
+				return
+			}
+
+			entries := mapClusterResultsToLogEntries(results, filter)
+			entries = filterSecurityLogEntries(ctx, entries, app, filter.TenantID)
+			if len(entries) > 0 {
+				mu.Lock()
+				backfilled = append(backfilled, entries...)
+				mu.Unlock()
+			}
+		}()
+	}
+
+	wg.Wait()
+	return backfilled
+}
+

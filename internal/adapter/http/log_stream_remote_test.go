@@ -21,21 +21,29 @@ import (
 )
 
 type mockRemoteStreamer struct {
-	mu           sync.Mutex
-	lastAgentURL string
-	lastService  string
-	called       bool
-	linesToEmit  []string
-	errToReturn  error
+	mu            sync.Mutex
+	lastAgentURL  string
+	lastService   string
+	allAgentURLs  []string
+	called        bool
+	linesToEmit   []string
+	linesPerAgent map[string][]string
+	errToReturn   error
 }
 
 func (m *mockRemoteStreamer) StreamLogs(ctx context.Context, agentURL, service string, onLine func(line string)) error {
 	m.mu.Lock()
 	m.lastAgentURL = agentURL
 	m.lastService = service
+	m.allAgentURLs = append(m.allAgentURLs, agentURL)
 	m.called = true
 	retErr := m.errToReturn
-	lines := append([]string(nil), m.linesToEmit...)
+	var lines []string
+	if m.linesPerAgent != nil && len(m.linesPerAgent[agentURL]) > 0 {
+		lines = append([]string(nil), m.linesPerAgent[agentURL]...)
+	} else {
+		lines = append([]string(nil), m.linesToEmit...)
+	}
 	m.mu.Unlock()
 
 	for _, line := range lines {
@@ -353,4 +361,5 @@ func TestLogStreamHandler_RemoteAgent_AllAppsIsolation(t *testing.T) {
 	assert.Equal(t, "nginx", entry.Service)
 	assert.Equal(t, "GET /index.html 200", entry.Message)
 }
+
 

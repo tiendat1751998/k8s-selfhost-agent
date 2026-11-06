@@ -128,6 +128,12 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 		reqApp = filter.ServiceName
 	}
 
+	if reqApp == "" || domainLogging.IsJournalctlAlias(reqApp) {
+		if searchReq.Limit < 2000 {
+			searchReq.Limit = 2000
+		}
+	}
+
 	if domainLogging.IsJournalctlAlias(reqApp) {
 		// When querying journalctl, query edge agent unfiltered so all host units return
 		searchReq.App = ""
@@ -147,45 +153,7 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 	if len(hosts) > 0 && r.logClient != nil {
 		clusterResults, err := r.logClient.SearchClusterLogs(ctx, hosts, searchReq)
 		if err == nil {
-			for _, res := range clusterResults {
-				lvl := domainLogging.NormalizeLogLevel(res.Level, res.Message)
-				ns := res.Namespace
-				if ns == "" {
-					ns = filter.Namespace
-				}
-				pod := res.PodName
-				if pod == "" {
-					pod = res.Service
-				}
-				cont := res.ContainerName
-				if cont == "" {
-					cont = res.Service
-				}
-				stream := res.Stream
-				if stream == "" {
-					stream = "stdout"
-				}
-				clusterEntries = append(clusterEntries, domainLogging.LogEntry{
-					Timestamp:     res.Timestamp,
-					TenantID:      filter.TenantID,
-					ClusterID:     filter.ClusterID,
-					Namespace:     ns,
-					PodName:       pod,
-					ContainerName: cont,
-					Stream:        stream,
-					LogLevel:      lvl,
-					Message:       res.Message,
-					Attributes: map[string]string{
-						"node_id":   res.NodeID,
-						"node_name": res.NodeName,
-						"raw":       res.Raw,
-						"namespace": ns,
-						"pod":       pod,
-						"container": cont,
-						"stream":    stream,
-					},
-				})
-			}
+			clusterEntries = mapClusterResultsToLogEntries(clusterResults, filter)
 		}
 	}
 
@@ -215,6 +183,15 @@ func (r *DistributedAgentLogRepo) QueryLogs(ctx context.Context, filter domainLo
 	allEntries = append(allEntries, clusterEntries...)
 	allEntries = append(allEntries, memEntries...)
 	allEntries = filterSecurityLogEntries(ctx, allEntries, reqApp, filter.TenantID)
+
+	// If querying "All Apps" (reqApp == "") and host logs saturated edge query leaving < filter.Limit pure app entries,
+	// discover pure app containers on hosts and backfill them concurrently.
+	if reqApp == "" && r.logClient != nil && len(hosts) > 0 && len(allEntries) < filter.Limit {
+		backfilled := r.backfillPureAppLogs(ctx, hosts, searchReq, filter, len(allEntries))
+		if len(backfilled) > 0 {
+			allEntries = append(allEntries, backfilled...)
+		}
+	}
 
 	seen := make(map[string]bool, len(allEntries))
 	deduped := make([]domainLogging.LogEntry, 0, len(allEntries))

@@ -2,18 +2,23 @@ package agent_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
+	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
 	docker "github.com/datdt/k8sselfhost/internal/domain/provider/docker"
 	"github.com/datdt/k8sselfhost/internal/infrastructure/agent"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
 type catalogMockLogClient struct {
+	mu           sync.Mutex
 	hostServices map[string][]string
 	unreachable  map[string]bool
 	recentLogs   map[string][]agent.LogSearchResult
+	clusterLogs  map[string][]agent.LogSearchResult
+	clusterCalls []agent.SearchLogsRequest
 }
 
 func (m *catalogMockLogClient) GetNodeLogs(ctx context.Context, hostEndpoint, authToken, app, tail, since, until, q, level string, k8sMeta ...string) (string, error) {
@@ -28,6 +33,12 @@ func (m *catalogMockLogClient) SearchNodeLogs(ctx context.Context, hostEndpoint,
 }
 
 func (m *catalogMockLogClient) SearchClusterLogs(ctx context.Context, hosts []docker.ComputeHost, req agent.SearchLogsRequest) ([]agent.LogSearchResult, error) {
+	m.mu.Lock()
+	m.clusterCalls = append(m.clusterCalls, req)
+	m.mu.Unlock()
+	if m.clusterLogs != nil {
+		return m.clusterLogs[req.App], nil
+	}
 	return nil, nil
 }
 
@@ -201,3 +212,69 @@ func TestDistributedAgentLogRepo_ListServicesCatalog_SupplementRecentLogs(t *tes
 		t.Errorf("expected 2 services for k8sworker, got %v", s)
 	}
 }
+
+func TestDistributedAgentLogRepo_AllApps_HostLogStarvationBackfill(t *testing.T) {
+	ctx := tenancy.WithUserRole(context.Background(), tenancy.PlatformAdminRole)
+	hosts := []docker.ComputeHost{
+		{ID: "node-1", Name: "k8smater133", Endpoint: "http://10.10.10.133:9100", Status: "connected", Labels: map[string]string{"auth_token": "tok-1"}},
+	}
+	hostRepo := &mockComputeHostRepo{hosts: hosts}
+
+	now := time.Now().UTC()
+	client := &catalogMockLogClient{
+		hostServices: map[string][]string{
+			"http://10.10.10.133:9100": {"db", "my-nginx", "dockerd-rootless.sh", "fwupd", "cron.service"},
+		},
+		clusterLogs: map[string][]agent.LogSearchResult{
+			"": {
+				{Service: "dockerd-rootless.sh", Message: "noisy dockerd line", Timestamp: now.Add(-1 * time.Second)},
+				{Service: "fwupd", Message: "fwupd check", Timestamp: now.Add(-2 * time.Second)},
+				{Service: "cron.service", Message: "cron tick", Timestamp: now.Add(-3 * time.Second)},
+			},
+			"db": {
+				{Service: "db", Message: "PostgreSQL database ready to accept connections", Timestamp: now.Add(-10 * time.Second)},
+			},
+			"my-nginx": {
+				{Service: "my-nginx", Message: "GET /index.html 200", Timestamp: now.Add(-5 * time.Second)},
+			},
+		},
+	}
+
+	repo := agent.NewDistributedAgentLogRepo(hostRepo, client)
+
+	// Query All Apps with Limit 10
+	res, err := repo.QueryLogs(ctx, domainLogging.LogFilter{
+		Limit: 10,
+	})
+	if err != nil {
+		t.Fatalf("unexpected QueryLogs error: %v", err)
+	}
+
+	client.mu.Lock()
+	calls := client.clusterCalls
+	client.mu.Unlock()
+
+	if len(calls) == 0 {
+		t.Fatalf("expected SearchClusterLogs to be called")
+	}
+	if calls[0].Limit < 2000 {
+		t.Errorf("expected initial All Apps edge query Limit >= 2000, got %d", calls[0].Limit)
+	}
+
+	if len(res.Entries) != 2 {
+		t.Fatalf("expected 2 backfilled pure app entries (db, my-nginx), got %d entries: %v", len(res.Entries), res.Entries)
+	}
+	var foundDB, foundNginx bool
+	for _, e := range res.Entries {
+		if e.ContainerName == "db" || e.PodName == "db" {
+			foundDB = true
+		}
+		if e.ContainerName == "my-nginx" || e.PodName == "my-nginx" {
+			foundNginx = true
+		}
+	}
+	if !foundDB || !foundNginx {
+		t.Errorf("expected to find db and my-nginx in backfilled entries: %v", res.Entries)
+	}
+}
+

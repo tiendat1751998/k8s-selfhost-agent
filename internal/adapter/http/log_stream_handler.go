@@ -98,6 +98,54 @@ func (h *LogStreamHandler) resolveAgentURL(ctx context.Context, node, service st
 	return endpoint
 }
 
+// resolveOnlineStreamHosts returns active, reachable remote compute hosts for multi-node streaming fan-out:
+// 1. For platform_admin: ListAll online hosts.
+// 2. For non-platform_admin:
+//    - If tenantID != "": List online hosts for this tenant ONLY. Never fall back to ListAll!
+//    - If tenantID == "": Return empty slice (zero tenant laundering).
+// 3. Online hosts have status in {"connected", "online", "healthy"}, non-empty endpoint, and are not local nodes.
+// 4. Returns at most 8 hosts to bound fan-out concurrency.
+func (h *LogStreamHandler) resolveOnlineStreamHosts(ctx context.Context, tenantID string) []docker.ComputeHost {
+	if h.hostRepo == nil {
+		return nil
+	}
+
+	isAdmin := isPlatformAdmin(ctx)
+	var (
+		hosts []docker.ComputeHost
+		err   error
+	)
+
+	if isAdmin {
+		hosts, err = h.hostRepo.ListAll(ctx)
+	} else if tenantID != "" {
+		hosts, err = h.hostRepo.List(ctx, tenantID)
+	} else {
+		return nil
+	}
+
+	if err != nil || len(hosts) == 0 {
+		return nil
+	}
+
+	online := make([]docker.ComputeHost, 0, len(hosts))
+	for _, host := range hosts {
+		endpoint := strings.TrimSpace(host.Endpoint)
+		if endpoint == "" || isLocalNode(endpoint) {
+			continue
+		}
+		status := strings.ToLower(strings.TrimSpace(host.Status))
+		if status == "connected" || status == "online" || status == "healthy" {
+			online = append(online, host)
+		}
+	}
+
+	if len(online) > 8 {
+		online = online[:8]
+	}
+	return online
+}
+
 func isLocalNode(target string) bool {
 	t := strings.ToLower(strings.TrimSpace(target))
 	if strings.Contains(t, "://") || strings.Contains(t, ":") {
@@ -196,8 +244,30 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		batchMode = false
 	}
 
-	// If the target container is on a remote agent, spawn a goroutine using StreamLogs
-	if agentURL != "" && h.streamer != nil {
+	type streamTarget struct {
+		endpoint  string
+		nodeLabel string
+	}
+	var streamTargets []streamTarget
+
+	if agentURL != "" {
+		streamTargets = append(streamTargets, streamTarget{endpoint: agentURL, nodeLabel: node})
+	} else if node == "" && h.streamer != nil && h.hostRepo != nil {
+		onlineHosts := h.resolveOnlineStreamHosts(r.Context(), tenantID)
+		for _, host := range onlineHosts {
+			nodeLabel := strings.TrimSpace(host.Name)
+			if nodeLabel == "" {
+				nodeLabel = strings.TrimSpace(host.IPAddress)
+			}
+			if nodeLabel == "" {
+				nodeLabel = strings.TrimSpace(host.Endpoint)
+			}
+			streamTargets = append(streamTargets, streamTarget{endpoint: host.Endpoint, nodeLabel: nodeLabel})
+		}
+	}
+
+	// If remote agent(s) should be streamed, spawn streamCtx-governed goroutines
+	if len(streamTargets) > 0 && h.streamer != nil {
 		streamCtx, cancelStream := context.WithCancel(r.Context())
 		defer cancelStream()
 
@@ -207,19 +277,22 @@ func (h *LogStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		isAdmin := isPlatformAdmin(r.Context())
 
-		go func() {
-			if err := h.streamer.StreamLogs(streamCtx, agentURL, remoteTarget, func(line string) {
-				if entry := processRemoteStreamLine(line, targetService, namespace, node, tenantID, isAdmin, h.maskLogMessage); entry != nil {
-					h.aggregator.Ingest(*entry)
+		for _, st := range streamTargets {
+			t := st
+			go func() {
+				if err := h.streamer.StreamLogs(streamCtx, t.endpoint, remoteTarget, func(line string) {
+					if entry := processRemoteStreamLine(line, targetService, namespace, t.nodeLabel, tenantID, isAdmin, h.maskLogMessage); entry != nil {
+						h.aggregator.Ingest(*entry)
+					}
+				}); err != nil && streamCtx.Err() == nil {
+					logger.Get().Warn("remote agent log stream failed",
+						zap.String("agent_url", t.endpoint),
+						zap.String("service", targetService),
+						zap.Error(err),
+					)
 				}
-			}); err != nil && streamCtx.Err() == nil {
-				logger.Get().Warn("remote agent log stream failed",
-					zap.String("agent_url", agentURL),
-					zap.String("service", targetService),
-					zap.Error(err),
-				)
-			}
-		}()
+			}()
+		}
 	}
 
 	// Redact historical logs before sending
