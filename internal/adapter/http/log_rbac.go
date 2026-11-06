@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	domainLogging "github.com/datdt/k8sselfhost/internal/domain/logging"
+	"github.com/datdt/k8sselfhost/internal/infrastructure/logging"
 	"github.com/datdt/k8sselfhost/internal/pkg/tenancy"
 )
 
@@ -107,4 +109,144 @@ func SanitizeServicesCatalog(ctx context.Context, allServices []string, byNode m
 
 	return resultServices, cleanedByNode
 }
+
+func parseStreamLogLine(line string) (time.Time, string) {
+	if idx := strings.IndexByte(line, ' '); idx >= 19 && idx <= 35 {
+		rawTS := line[:idx]
+		if t, err := time.Parse(time.RFC3339Nano, rawTS); err == nil {
+			return t.UTC(), strings.TrimSpace(line[idx+1:])
+		}
+		if t, err := time.Parse(time.RFC3339, rawTS); err == nil {
+			return t.UTC(), strings.TrimSpace(line[idx+1:])
+		}
+	}
+	return time.Now().UTC(), line
+}
+
+func extractStreamServiceTag(msg string) (string, string) {
+	trimmed := strings.TrimSpace(msg)
+	if !strings.HasPrefix(trimmed, "[") {
+		return "", msg
+	}
+	endIdx := strings.IndexByte(trimmed, ']')
+	if endIdx <= 1 {
+		return "", msg
+	}
+	candidate := trimmed[1:endIdx]
+	upper := strings.ToUpper(candidate)
+	if upper == "INFO" || upper == "WARN" || upper == "WARNING" || upper == "ERROR" || upper == "DEBUG" || upper == "FATAL" || upper == "TRACE" || upper == "PANIC" {
+		return "", msg
+	}
+	rest := strings.TrimSpace(trimmed[endIdx+1:])
+	if strings.HasPrefix(rest, "[") {
+		if lvlEnd := strings.IndexByte(rest, ']'); lvlEnd > 1 {
+			lvl := strings.ToUpper(rest[1:lvlEnd])
+			if lvl == "INFO" || lvl == "WARN" || lvl == "WARNING" || lvl == "ERROR" || lvl == "DEBUG" || lvl == "FATAL" || lvl == "TRACE" || lvl == "PANIC" {
+				rest = strings.TrimSpace(rest[lvlEnd+1:])
+			}
+		}
+	}
+	if rest == "" {
+		rest = msg
+	}
+	return candidate, rest
+}
+
+func detectStreamLogLevel(msg string) string {
+	if inferred := domainLogging.InferSeverityFromMessage(msg); inferred != "" {
+		return strings.ToUpper(string(inferred))
+	}
+	u := strings.ToUpper(msg)
+	switch {
+	case strings.Contains(u, "ERROR") || strings.Contains(u, "FATAL") || strings.Contains(u, "PANIC"):
+		return "ERROR"
+	case strings.Contains(u, "WARN"):
+		return "WARN"
+	case strings.Contains(u, "DEBUG") || strings.Contains(u, "TRACE"):
+		return "DEBUG"
+	default:
+		return "INFO"
+	}
+}
+
+// processRemoteStreamLine parses a raw line received from a remote agent, applies security/isolation filters,
+// redacts sensitive tokens, and returns a LogEntry to ingest, or nil if the line should be dropped.
+func processRemoteStreamLine(
+	line, targetService, namespace, node, tenantID string,
+	isAdmin bool,
+	maskFunc func(string) string,
+) *logging.LogEntry {
+	entryTS, msg := parseStreamLogLine(line)
+	extractedSvc, rest := extractStreamServiceTag(msg)
+
+	svc := targetService
+	cleanMsg := msg
+	if extractedSvc != "" {
+		if svc == "" {
+			svc = extractedSvc
+		}
+		cleanMsg = rest
+	}
+
+	// Always drop sensitive OS log sources immediately (auth, sudo, sshd, etc.)
+	if domainLogging.IsSensitiveOSLogSource(extractedSvc, "", "") || domainLogging.IsSensitiveOSLogSource(svc, "", "") {
+		return nil
+	}
+
+	entryTenantID := tenantID
+	entryNS := namespace
+
+	if domainLogging.IsJournalctlAlias(targetService) {
+		if extractedSvc != "" {
+			svc = extractedSvc
+		} else {
+			svc = "journalctl"
+		}
+		// Drop non-host container lines (e.g. [nginx], [db])
+		if extractedSvc != "" && !domainLogging.IsHostSystemLog("", extractedSvc) {
+			return nil
+		}
+		entryNS = domainLogging.HostNamespace
+		if domainLogging.IsSensitiveOSLogSource(svc, "", "") {
+			return nil
+		}
+	} else if strings.TrimSpace(targetService) == "" {
+		// All Apps: drop host daemon lines so they never leak over the wire
+		if domainLogging.IsHostSystemLog(entryNS, svc) {
+			return nil
+		}
+	} else {
+		// Specific container requested: drop unexpected host system lines
+		if domainLogging.IsHostSystemLog(entryNS, svc) {
+			return nil
+		}
+	}
+
+	if domainLogging.IsHostSystemLog(entryNS, svc) {
+		if entryNS == "" {
+			entryNS = domainLogging.HostNamespace
+		}
+		if !isAdmin {
+			entryTenantID = ""
+		}
+	}
+
+	if maskFunc != nil {
+		cleanMsg = maskFunc(cleanMsg)
+	}
+
+	return &logging.LogEntry{
+		Timestamp: entryTS,
+		TenantID:  entryTenantID,
+		Namespace: entryNS,
+		Pod:       svc,
+		Container: svc,
+		Service:   svc,
+		Node:      node,
+		Stream:    "stdout",
+		Level:     detectStreamLogLevel(msg),
+		Message:   cleanMsg,
+	}
+}
+
 
